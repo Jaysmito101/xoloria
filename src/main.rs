@@ -12,7 +12,11 @@ fn main() -> anyhow::Result<()> {
 
     let opts = Opts::parse();
 
-    tracing::warn!("Opts: {:?}", opts);
+    let binary = std::fs::read(opts.binary)?;
+
+    let machine = xoloria::MachineBuilder::new("Xoloria/VM")
+        .with_harts(0)?
+        .build()?;
 
     Ok(())
 }

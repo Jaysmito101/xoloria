@@ -1,2 +1,5 @@
-mod errors;
-pub use errors::{Error, Result};
+mod error;
+pub use error::{Error, Result};
+
+mod machine;
+pub use machine::{Machine, MachineBuilder};
