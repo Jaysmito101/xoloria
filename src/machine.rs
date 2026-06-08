@@ -1,9 +1,9 @@
-use crate::Result;
+use crate::{Address, Bus, BusIO, Memory, MemoryManagementUnit, Result};
 
 struct MachineParams {
     harts: usize,
     memory: usize,
-    name: String,
+    _name: String,
 }
 
 pub struct MachineBuilder {
@@ -16,7 +16,7 @@ impl MachineBuilder {
             inner: MachineParams {
                 harts: 1,
                 memory: 1024 * 16,
-                name: name.into(),
+                _name: name.into(),
             },
         }
     }
@@ -42,22 +42,34 @@ impl MachineBuilder {
     }
 
     pub fn build(self) -> Result<Machine> {
-        Ok(Machine::new(self.inner))
+        Machine::new(self.inner)
     }
 }
 
-pub struct Machine {}
+pub struct Machine {
+    bus: Bus,
+    _mmu: MemoryManagementUnit,
+}
 
 impl Machine {
-    fn new(params: MachineParams) -> Self {
-        Self {}
+    fn new(params: MachineParams) -> Result<Self> {
+        let mmu = MemoryManagementUnit::new()?;
+        let mut bus = Bus::new()?;
+
+        bus.map(
+            0x80000000,
+            0x80000000 + params.memory as Address,
+            Memory::new(params.memory)?,
+        )?;
+
+        Ok(Self { bus, _mmu: mmu })
     }
 
-    pub fn load_binary(&mut self, location: usize, binary: &[u8]) -> Result<()> {
-        Ok(())
+    pub fn load_binary(&mut self, location: Address, binary: &[u8]) -> Result<()> {
+        self.bus.write(location, binary)
     }
 
-    pub fn simulate(mut self) -> Result<()> {
+    pub fn simulate(self) -> Result<()> {
         Ok(())
     }
 }

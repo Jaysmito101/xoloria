@@ -1,5 +1,13 @@
+use crate::bus::Address;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Index out of bounds: {0}")]
+    OutOfBounds(Address),
+    #[error("Allocation Failed: {0}")]
+    AllocationFailed(#[from] std::collections::TryReserveError),
+    #[error("Invalid Mapping for Address {0}")]
+    InvalidMapping(Address),
     #[error("Invalid Parameter Error: {0}")]
     InvalidParameter(String),
     #[error("Generic Error : {0}")]
