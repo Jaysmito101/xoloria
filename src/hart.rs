@@ -16,9 +16,7 @@ pub struct RegisterSet {
     pub(crate) csr: [Register; 4096],
 }
 
-pub struct Hart {
-    privilage_mode: PrivilageMode,
-
+pub struct HartRegisters {
     pc: Register,
     x: [Register; 32],
 
@@ -48,51 +46,58 @@ pub struct Hart {
     satp: Register,     // supervisor address translation and protection
 }
 
+pub struct Hart {
+    privilage_mode: PrivilageMode,
+    registers: HartRegisters,
+}
+
 impl Hart {
     pub fn new(id: u64) -> Result<Self> {
         Ok(Self {
             privilage_mode: PrivilageMode::Machine,
 
-            pc: 0x80000000,
-            x: [0; 32],
+            registers: HartRegisters {
+                pc: 0x80000000,
+                x: [0; 32],
 
-            load_reservation_valid: false,
-            load_reservation_address: 0,
+                load_reservation_valid: false,
+                load_reservation_address: 0,
 
-            mhartid: id,
+                mhartid: id,
 
-            misa: Misa::default()
-                .with_xlen(64)
-                .with_extension(ISAExtensions::I)
-                .with_extension(ISAExtensions::M)
-                .with_extension(ISAExtensions::A)
-                .register(),
+                misa: Misa::default()
+                    .with_xlen(64)
+                    .with_extension(ISAExtensions::I)
+                    .with_extension(ISAExtensions::M)
+                    .with_extension(ISAExtensions::A)
+                    .register(),
 
-            mstatus: 0,
-            medeleg: 0,
-            mideleg: 0,
-            mie: 0,
-            mtvec: 0,
-            mscratch: 0,
-            mepc: 0,
-            mcause: 0,
-            mtval: 0,
-            mip: 0,
+                mstatus: 0,
+                medeleg: 0,
+                mideleg: 0,
+                mie: 0,
+                mtvec: 0,
+                mscratch: 0,
+                mepc: 0,
+                mcause: 0,
+                mtval: 0,
+                mip: 0,
 
-            stvec: 0,
-            sscratch: 0,
-            sepc: 0,
-            scause: 0,
-            stval: 0,
-            satp: 0,
+                stvec: 0,
+                sscratch: 0,
+                sepc: 0,
+                scause: 0,
+                stval: 0,
+                satp: 0,
+            },
         })
     }
 
     pub fn id(&self) -> u64 {
-        self.mhartid
+        self.registers.mhartid
     }
 
-    pub fn set_pc(&mut self, pc: Register) {
-        self.pc = pc;
+    pub fn tick(&mut self) -> Result<()> {
+        Ok(())
     }
 }
