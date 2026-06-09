@@ -79,7 +79,11 @@ impl Machine {
         Ok(())
     }
 
-    pub fn simulate(self) -> Result<()> {
-        Ok(())
+    pub fn simulate(mut self) -> Result<()> {
+        loop {
+            for hart in &mut self.harts {
+                hart.tick()?;
+            }
+        }
     }
 }
