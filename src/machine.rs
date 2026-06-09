@@ -1,4 +1,4 @@
-use crate::{Address, Bus, BusIO, Memory, MemoryManagementUnit, Result};
+use crate::{Address, Bus, BusIO, Hart, Memory, MemoryManagementUnit, Result};
 
 struct MachineParams {
     harts: usize,
@@ -49,6 +49,7 @@ impl MachineBuilder {
 pub struct Machine {
     bus: Bus,
     _mmu: MemoryManagementUnit,
+    harts: Vec<Hart>,
 }
 
 impl Machine {
@@ -62,7 +63,15 @@ impl Machine {
             Memory::new(params.memory)?,
         )?;
 
-        Ok(Self { bus, _mmu: mmu })
+        let harts = (0..params.harts)
+            .map(|id| Hart::new(id as u64))
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            bus,
+            _mmu: mmu,
+            harts,
+        })
     }
 
     pub fn load_binary(&mut self, location: Address, binary: &[u8]) -> Result<()> {

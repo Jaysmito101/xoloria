@@ -15,3 +15,5 @@ pub use memory::Memory;
 
 mod hart;
 pub use hart::Hart;
+
+pub mod registers;
