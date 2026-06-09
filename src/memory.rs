@@ -1,4 +1,4 @@
-use crate::bus::BusIO;
+use crate::bus::{BusError, BusIO, BusResult};
 use crate::{Address, Result};
 
 pub struct Memory {
@@ -16,25 +16,35 @@ impl Memory {
 }
 
 impl BusIO for Memory {
-    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> Result<()> {
+    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> BusResult<()> {
         let end = offset
             .checked_add(buffer.len() as u64)
-            .ok_or(crate::Error::OutOfBounds(offset))?;
+            .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
+
         if end > self.data.len() as u64 {
-            return crate::err!(crate::Error::OutOfBounds(offset));
+            return Err(BusError::IndexOutOfBounds(
+                end,
+                0..self.data.len() as Address,
+            ));
         }
+
         buffer.copy_from_slice(&self.data[offset as usize..end as usize]);
         Ok(())
     }
 
-    fn write(&mut self, offset: Address, data: &[u8]) -> Result<()> {
+    fn write(&mut self, offset: Address, buffer: &[u8]) -> BusResult<()> {
         let end = offset
-            .checked_add(data.len() as u64)
-            .ok_or(crate::Error::OutOfBounds(offset))?;
+            .checked_add(buffer.len() as u64)
+            .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
+
         if end > self.data.len() as u64 {
-            return crate::err!(crate::Error::OutOfBounds(offset));
+            return Err(BusError::IndexOutOfBounds(
+                end,
+                0..self.data.len() as Address,
+            ));
         }
-        self.data[offset as usize..end as usize].copy_from_slice(data);
+
+        self.data[offset as usize..end as usize].copy_from_slice(buffer);
         Ok(())
     }
 }

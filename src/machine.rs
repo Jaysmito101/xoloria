@@ -66,7 +66,8 @@ impl Machine {
     }
 
     pub fn load_binary(&mut self, location: Address, binary: &[u8]) -> Result<()> {
-        self.bus.write(location, binary)
+        self.bus.write(location, binary)?;
+        Ok(())
     }
 
     pub fn simulate(self) -> Result<()> {

@@ -9,68 +9,77 @@ pub enum BusDevice {
     Generic(Box<dyn BusIO + Send + Sync>),
 }
 
+#[derive(Debug)]
+pub enum BusError {
+    UnmappedLocation(Address),
+    IndexOutOfBounds(Address, Range<Address>),
+    AddressOverflow(Address, usize),
+}
+
+pub type BusResult<T> = std::result::Result<T, BusError>;
+
 pub trait BusIO {
-    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> Result<()>;
-    fn write(&mut self, offset: Address, data: &[u8]) -> Result<()>;
+    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> BusResult<()>;
+    fn write(&mut self, offset: Address, data: &[u8]) -> BusResult<()>;
 
     #[inline]
-    fn read_u8(&mut self, offset: Address) -> Result<u8> {
+    fn read_u8(&mut self, offset: Address) -> BusResult<u8> {
         let mut buffer = [0u8; 1];
         self.read(offset, &mut buffer)?;
         Ok(buffer[0])
     }
 
     #[inline]
-    fn write_u8(&mut self, offset: Address, data: u8) -> Result<()> {
+    fn write_u8(&mut self, offset: Address, data: u8) -> BusResult<()> {
         self.write(offset, &[data])
     }
 
     #[inline]
-    fn read_u16(&mut self, offset: Address) -> Result<u16> {
+    fn read_u16(&mut self, offset: Address) -> BusResult<u16> {
         let mut buffer = [0u8; 2];
         self.read(offset, &mut buffer)?;
         Ok(u16::from_le_bytes(buffer))
     }
 
     #[inline]
-    fn write_u16(&mut self, offset: Address, data: u16) -> Result<()> {
+    fn write_u16(&mut self, offset: Address, data: u16) -> BusResult<()> {
         self.write(offset, &data.to_le_bytes())
     }
 
     #[inline]
-    fn read_u32(&mut self, offset: Address) -> Result<u32> {
+    fn read_u32(&mut self, offset: Address) -> BusResult<u32> {
         let mut buffer = [0u8; 4];
         self.read(offset, &mut buffer)?;
         Ok(u32::from_le_bytes(buffer))
     }
 
     #[inline]
-    fn write_u32(&mut self, offset: Address, data: u32) -> Result<()> {
+    fn write_u32(&mut self, offset: Address, data: u32) -> BusResult<()> {
         self.write(offset, &data.to_le_bytes())
     }
 
     #[inline]
-    fn read_u64(&mut self, offset: Address) -> Result<u64> {
+    fn read_u64(&mut self, offset: Address) -> BusResult<u64> {
         let mut buffer = [0u8; 8];
         self.read(offset, &mut buffer)?;
         Ok(u64::from_le_bytes(buffer))
     }
 
     #[inline]
-    fn write_u64(&mut self, offset: Address, data: u64) -> Result<()> {
+    fn write_u64(&mut self, offset: Address, data: u64) -> BusResult<()> {
         self.write(offset, &data.to_le_bytes())
     }
 }
 
 impl BusIO for BusDevice {
-    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> Result<()> {
+    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> BusResult<()> {
         match self {
             BusDevice::Memory(memory) => memory.read(offset, buffer),
             BusDevice::Generic(device) => device.read(offset, buffer),
         }
     }
 
-    fn write(&mut self, offset: Address, data: &[u8]) -> Result<()> {
+    fn write(&mut self, offset: Address, data: &[u8]) -> BusResult<()> {
         match self {
             BusDevice::Memory(memory) => memory.write(offset, data),
             BusDevice::Generic(device) => device.write(offset, data),
@@ -152,25 +161,25 @@ impl Bus {
 }
 
 impl BusIO for Bus {
-    fn read(&mut self, location: Address, buffer: &mut [u8]) -> Result<()> {
+    fn read(&mut self, location: Address, buffer: &mut [u8]) -> BusResult<()> {
         let mapping = self
             .mapping_mut(location)
-            .ok_or(crate::Error::InvalidMapping(location))?;
+            .ok_or(BusError::UnmappedLocation(location))?;
 
         if buffer.len() as u64 > mapping.range.end - location {
-            return crate::err!(crate::Error::OutOfBounds(location));
+            return Err(BusError::IndexOutOfBounds(location, mapping.range.clone()));
         }
 
         mapping.handler.read(location - mapping.range.start, buffer)
     }
 
-    fn write(&mut self, location: Address, data: &[u8]) -> Result<()> {
+    fn write(&mut self, location: Address, data: &[u8]) -> BusResult<()> {
         let mapping = self
             .mapping_mut(location)
-            .ok_or(crate::Error::InvalidMapping(location))?;
+            .ok_or(BusError::UnmappedLocation(location))?;
 
         if data.len() as u64 > mapping.range.end - location {
-            return crate::err!(crate::Error::OutOfBounds(location));
+            return Err(BusError::IndexOutOfBounds(location, mapping.range.clone()));
         }
 
         mapping.handler.write(location - mapping.range.start, data)

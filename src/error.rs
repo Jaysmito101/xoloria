@@ -1,9 +1,9 @@
-use crate::bus::Address;
+use crate::bus::{Address, BusError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Index out of bounds: {0}")]
-    OutOfBounds(Address),
+    #[error("Bus Error")]
+    BusError(BusError),
     #[error("Allocation Failed: {0}")]
     AllocationFailed(#[from] std::collections::TryReserveError),
     #[error("Invalid Mapping for Address {0}")]
@@ -24,6 +24,15 @@ impl From<Error> for ErrorReport {
     fn from(value: Error) -> Self {
         Self {
             inner: value,
+            trace: std::backtrace::Backtrace::capture(),
+        }
+    }
+}
+
+impl From<BusError> for ErrorReport {
+    fn from(value: BusError) -> Self {
+        Self {
+            inner: Error::BusError(value),
             trace: std::backtrace::Backtrace::capture(),
         }
     }
