@@ -12,3 +12,6 @@ pub use mmu::MemoryManagementUnit;
 
 mod memory;
 pub use memory::Memory;
+
+mod hart;
+pub use hart::Hart;
