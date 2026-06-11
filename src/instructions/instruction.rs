@@ -752,8 +752,8 @@ pub enum Instruction {
     /// read the CSR and cause any read side effects regardless of rd and rs1 fields.
     Csrrwi {
         rd: GeneralRegisterName,
-        rs1: GeneralRegisterName,
         csr: ControlRegisterName,
+        imm: u8,
     },
 
     /// The CSRRWI, CSRRSI, and CSRRCI variants are similar to CSRRW, CSRRS, and CSRRC respectively,
@@ -764,8 +764,8 @@ pub enum Instruction {
     /// CSR write, nor raise illegal-instruction exceptions on accesses to read-only CSRs.
     Csrrsi {
         rd: GeneralRegisterName,
-        rs1: GeneralRegisterName,
         csr: ControlRegisterName,
+        imm: u8,
     },
 
     /// The CSRRWI, CSRRSI, and CSRRCI variants are similar to CSRRW, CSRRS, and CSRRC respectively,
@@ -776,7 +776,7 @@ pub enum Instruction {
     /// CSR write, nor raise illegal-instruction exceptions on accesses to read-only CSRs.
     Csrrci {
         rd: GeneralRegisterName,
-        rs1: GeneralRegisterName,
         csr: ControlRegisterName,
+        imm: u8,
     },
 }

@@ -234,9 +234,9 @@ impl Display for Instruction {
             Instruction::Csrrw { rd, rs1, csr } => write!(f, "csrrw {}, {}, {}", rd, csr, rs1),
             Instruction::Csrrs { rd, rs1, csr } => write!(f, "csrrs {}, {}, {}", rd, csr, rs1),
             Instruction::Csrrc { rd, rs1, csr } => write!(f, "csrrc {}, {}, {}", rd, csr, rs1),
-            Instruction::Csrrwi { rd, rs1, csr } => write!(f, "csrrwi {}, {}, {}", rd, csr, rs1),
-            Instruction::Csrrsi { rd, rs1, csr } => write!(f, "csrrsi {}, {}, {}", rd, csr, rs1),
-            Instruction::Csrrci { rd, rs1, csr } => write!(f, "csrrci {}, {}, {}", rd, csr, rs1),
+            Instruction::Csrrwi { rd, imm, csr } => write!(f, "csrrwi {}, {}, {}", rd, csr, imm),
+            Instruction::Csrrsi { rd, imm, csr } => write!(f, "csrrsi {}, {}, {}", rd, csr, imm),
+            Instruction::Csrrci { rd, imm, csr } => write!(f, "csrrci {}, {}, {}", rd, csr, imm),
         }
     }
 }
