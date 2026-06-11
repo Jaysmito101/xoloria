@@ -1,7 +1,12 @@
-use crate::bus::{Address, BusError};
+use crate::{
+    bus::{Address, BusError},
+    instructions::InstructionError,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Instruction Error")]
+    InstructionError(InstructionError),
     #[error("Bus Error")]
     BusError(BusError),
     #[error("Allocation Failed: {0}")]
@@ -38,6 +43,15 @@ impl From<BusError> for ErrorReport {
     }
 }
 
+impl From<InstructionError> for ErrorReport {
+    fn from(value: InstructionError) -> Self {
+        Self {
+            inner: Error::InstructionError(value),
+            trace: std::backtrace::Backtrace::capture(),
+        }
+    }
+}
+
 impl std::fmt::Display for ErrorReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -47,10 +61,10 @@ impl std::fmt::Display for ErrorReport {
             match self.trace.status() {
                 std::backtrace::BacktraceStatus::Captured => format!("{}", self.trace),
                 std::backtrace::BacktraceStatus::Unsupported =>
-                    "Backtrace unsupported on this platform".into(),
+                "Backtrace unsupported on this platform".into(),
                 std::backtrace::BacktraceStatus::Disabled =>
-                    "Backtrace capture is disabled, enable RUST_BACKTRACE=1 to capture backtraces"
-                        .into(),
+                "Backtrace capture is disabled, enable RUST_BACKTRACE=1 to capture backtraces"
+                .into(),
                 _ => "Unknown backtrace status".into(),
             }
         )
@@ -69,7 +83,7 @@ pub type Result<T> = std::result::Result<T, ErrorReport>;
 
 #[macro_export]
 macro_rules! err {
-    ( $x:expr ) => {
+    ($x:expr) => {
         Err($x.into())
     };
 }
