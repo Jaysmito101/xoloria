@@ -23,6 +23,14 @@ _start:
     xor a5, a4, a1         # a5 = 5 ^ 25 = 28
     or a6, a4, a5          # a6 = 5 | 28 = 29
     andi a7, a6, 0xF       # a7 = 29 & 15 = 13
+
+    slliw s0, a0, 0          # slliw s0, a0, 0 (should be 15)
+    srliw s1, a0, 1          # srliw s1, a0, 1 (should be 7)
+    sraiw s2, a0, 1          # sraiw s2, a0, 1 (should be 7)
+
+    addiw s0, a0, 0          # addiw s0, a0, 0 (should be 15)
+
+    addw s1, a0, a1          # addw s1, a0, a1 (should be 40)
     
     # Shifts
     slli s0, a0, 2         # s0 = 15 << 2 = 60
