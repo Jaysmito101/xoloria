@@ -260,6 +260,46 @@ impl Instruction {
                 rs1: raw.rs1,
                 rs2: raw.rs2,
             }),
+            (0, 1) => Ok(Self::Mul {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (1, 1) => Ok(Self::Mulh {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (2, 1) => Ok(Self::Mulhsu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (3, 1) => Ok(Self::Mulhu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (4, 1) => Ok(Self::Div {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (5, 1) => Ok(Self::Divu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (6, 1) => Ok(Self::Rem {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (7, 1) => Ok(Self::Remu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
