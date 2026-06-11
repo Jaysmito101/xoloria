@@ -420,7 +420,7 @@ pub enum Instruction {
     Sllw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        rs2: GeneralRegisterName,
     },
 
     /// Shifts by a constant are encoded as a specialization of the I-type format using the same
@@ -432,7 +432,7 @@ pub enum Instruction {
     Srlw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        rs2: GeneralRegisterName,
     },
 
     /// Shifts by a constant are encoded as a specialization of the I-type format using the same
@@ -444,7 +444,7 @@ pub enum Instruction {
     Sraw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        rs2: GeneralRegisterName,
     },
 
     // M extension

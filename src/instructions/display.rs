@@ -67,9 +67,9 @@ impl Display for Instruction {
             Instruction::Sraiw { rd, rs1, imm } => write!(f, "sraiw {}, {}, {}", rd, rs1, imm),
             Instruction::Addw { rd, rs1, rs2 } => write!(f, "addw {}, {}, {}", rd, rs1, rs2),
             Instruction::Subw { rd, rs1, rs2 } => write!(f, "subw {}, {}, {}", rd, rs1, rs2),
-            Instruction::Sllw { rd, rs1, imm } => write!(f, "sllw {}, {}, {}", rd, rs1, imm),
-            Instruction::Srlw { rd, rs1, imm } => write!(f, "srlw {}, {}, {}", rd, rs1, imm),
-            Instruction::Sraw { rd, rs1, imm } => write!(f, "sraw {}, {}, {}", rd, rs1, imm),
+            Instruction::Sllw { rd, rs1, rs2 } => write!(f, "sllw {}, {}, {}", rd, rs1, rs2),
+            Instruction::Srlw { rd, rs1, rs2 } => write!(f, "srlw {}, {}, {}", rd, rs1, rs2),
+            Instruction::Sraw { rd, rs1, rs2 } => write!(f, "sraw {}, {}, {}", rd, rs1, rs2),
 
             Instruction::Mul { rd, rs1, rs2 } => write!(f, "mul {}, {}, {}", rd, rs1, rs2),
             Instruction::Mulh { rd, rs1, rs2 } => write!(f, "mulh {}, {}, {}", rd, rs1, rs2),
