@@ -4,4 +4,4 @@ mod misa;
 pub use misa::{ISAExtensions, Misa};
 
 mod names;
-pub use names::{ControlRegisterNames, GeneralRegisterNames};
+pub use names::{ControlRegisterName, GeneralRegisterName};

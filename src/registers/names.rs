@@ -1,4 +1,5 @@
-pub enum GeneralRegisterNames {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GeneralRegisterName {
     Zero = 0,
     Ra = 1,
     Sp = 2,
@@ -33,7 +34,8 @@ pub enum GeneralRegisterNames {
     T6 = 31,
 }
 
-pub enum ControlRegisterNames {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ControlRegisterName {
     Mhartid = 0xF14,
 
     Mstatus = 0x300,
