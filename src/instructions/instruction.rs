@@ -370,7 +370,7 @@ pub enum Instruction {
     Slliw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        imm: u8,
     },
 
     /// SLLIW, SRLIW, and SRAIW are RV64I-only instructions that are analogously defined but
@@ -379,7 +379,7 @@ pub enum Instruction {
     Srliw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        imm: u8,
     },
 
     /// SLLIW, SRLIW, and SRAIW are RV64I-only instructions that are analogously defined but
@@ -388,7 +388,7 @@ pub enum Instruction {
     Sraiw {
         rd: GeneralRegisterName,
         rs1: GeneralRegisterName,
-        imm: i32,
+        imm: u8,
     },
 
     /// ADDW and SUBW are RV64I-only instructions that are defined analogously to ADD and SUB
