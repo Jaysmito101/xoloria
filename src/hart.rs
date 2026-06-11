@@ -1,5 +1,6 @@
 use crate::{
     Bus, BusIO, Result,
+    instructions::Instruction,
     registers::{ISAExtensions, Misa, Register},
 };
 
@@ -99,6 +100,17 @@ impl Hart {
 
     pub fn tick(&mut self, bus: &mut Bus) -> Result<()> {
         // TODO: first ideally, clear interutps
+        let instruction_value = bus.read_u32(self.registers.pc)?;
+        let instruction = Instruction::try_from(instruction_value)?;
+        // show pc as hex
+        tracing::info!(
+            "[{}] [{:#010x}] Executing instruction: {}",
+            self.id(),
+            self.registers.pc,
+            instruction
+        );
+
+        self.registers.pc += 4;
 
         Ok(())
     }
