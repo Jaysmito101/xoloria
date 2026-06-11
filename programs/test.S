@@ -8,6 +8,9 @@ _start:
 
     lb t2, 5(t0)            # Load Byte from address in t0 (should be 0)
     sd t3, 8(t0)            # Store Doubleword to address in t0 + 8
+    slli t4, t2, 3         # Shift left logical: t4 = t2 << 3 (should be 0)
+    srai t5, t2, 1         # Shift right arithmetic: t5 = t2 >> 1 (should be 0)
+    srli t6, t2, 1         # Shift right logical: t6 = t2 >> 1 (should be 0)
 
     # --- 2. I-Type and R-Type ALU Instructions ---
     li a0, 15              # addi a0, zero, 15
