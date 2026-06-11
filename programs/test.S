@@ -37,6 +37,11 @@ _start:
     srl s1, s0, a4         # s1 = 60 >> 5 = 1  (Logical)
     sra s2, s0, a4         # s2 = 60 >> 5 = 1  (Arithmetic)
 
+    srlw s3, a0, zero          # s3 = 15
+    sllw s4, a0, t1          # s4 = 15 << 1 = 30
+    sraw s5, a0, t1          # s5 = 15 >> 1 = 7 (Arithmetic)
+    ecall
+
     # --- 3. Branching Instructions ---
     beq a1, a1, test_bne   # 25 == 25, should branch
     j fail_loop
