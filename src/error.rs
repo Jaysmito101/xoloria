@@ -5,9 +5,9 @@ use crate::{
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Instruction Error")]
+    #[error("Instruction Error {0:?}")]
     InstructionError(InstructionError),
-    #[error("Bus Error")]
+    #[error("Bus Error {0:?}")]
     BusError(BusError),
     #[error("Allocation Failed: {0}")]
     AllocationFailed(#[from] std::collections::TryReserveError),
