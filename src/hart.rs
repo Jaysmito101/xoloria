@@ -103,13 +103,7 @@ impl Hart {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
         // show pc as hex
-        tracing::info!(
-            "[{}] [{:#010x}] Executing instruction: {}",
-            self.id(),
-            self.registers.pc,
-            instruction
-        );
-
+        tracing::info!("[{:#010x}] {}", self.registers.pc, instruction);
         self.registers.pc += 4;
 
         Ok(())
