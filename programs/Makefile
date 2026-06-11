@@ -2,7 +2,7 @@ CC := riscv64-unknown-elf-gcc
 OBJCOPY := riscv64-unknown-elf-objcopy
 LD := riscv64-unknown-elf-ld
 
-CFLAGS := -g -O0 -ffreestanding -nostdlib -nostartfiles -I ../include -march=rv64i_zicsr -mabi=lp64
+CFLAGS := -g -O0 -ffreestanding -nostdlib -nostartfiles -I ../include -march=rv64i_zicsr_zifencei -mabi=lp64
 CFLAGS += -Wall -Werror -Wextra
 LDFLAGS := -Ttext=0x80000000 -nostdlib 
 

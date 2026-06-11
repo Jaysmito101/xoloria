@@ -40,7 +40,9 @@ _start:
     srlw s3, a0, zero          # s3 = 15
     sllw s4, a0, t1          # s4 = 15 << 1 = 30
     sraw s5, a0, t1          # s5 = 15 >> 1 = 7 (Arithmetic)
-    ecall
+    
+    fence 
+    fence.i
 
     # --- 3. Branching Instructions ---
     beq a1, a1, test_bne   # 25 == 25, should branch
