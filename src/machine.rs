@@ -50,9 +50,12 @@ pub struct Machine {
     bus: Bus,
     _mmu: MemoryManagementUnit,
     harts: Vec<Hart>,
+    cycle_count: u64,
 }
 
 impl Machine {
+    const RTC_DIVISOR: u64 = 100;
+
     fn new(params: MachineParams) -> Result<Self> {
         let mmu = MemoryManagementUnit::new()?;
         let mut bus = Bus::new()?;
@@ -71,6 +74,7 @@ impl Machine {
             bus,
             _mmu: mmu,
             harts,
+            cycle_count: 0,
         })
     }
 
@@ -82,8 +86,9 @@ impl Machine {
     pub fn simulate(mut self) -> Result<()> {
         loop {
             for hart in &mut self.harts {
-                hart.tick()?;
+                hart.tick(&mut self.bus)?;
             }
+            self.cycle_count += 1;
         }
     }
 }
