@@ -14,6 +14,7 @@ pub enum InstructionError {
     UnknownOpcode(u8),
     UnknownRegister(u8),
     InvalidInstruction,
+    InvalidAtomicWidth(u8),
     IllegalInstruction,
 }
 
