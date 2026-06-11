@@ -1,4 +1,7 @@
-use crate::instructions::{Instruction, InstructionError, InstructionResult, OpcodeName, payload};
+use crate::{
+    instructions::{Instruction, InstructionError, InstructionResult, OpcodeName, payload},
+    registers::GeneralRegisterName,
+};
 
 impl Instruction {
     #[inline(always)]
@@ -332,6 +335,17 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
+
+    fn try_fence(raw: payload::IType) -> InstructionResult<Self> {
+        if raw.rd != GeneralRegisterName::Zero || raw.rs1 != GeneralRegisterName::Zero {
+            return Err(InstructionError::InvalidInstruction);
+        }
+        match raw.funct3 {
+            0 => Ok(Self::Fence),
+            1 => Ok(Self::Fencei),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
 }
 
 impl TryFrom<u32> for Instruction {
@@ -354,10 +368,7 @@ impl TryFrom<u32> for Instruction {
                 tracing::info!("Parsing Atomic instruction with value {:#010x}", value);
                 todo!()
             }
-            OpcodeName::Fence => {
-                tracing::info!("Parsing Fence instruction with value {:#010x}", value);
-                todo!()
-            }
+            OpcodeName::Fence => Self::try_fence(payload::IType::try_from(value)?),
             OpcodeName::System => {
                 tracing::info!("Parsing System instruction with value {:#010x}", value);
                 todo!()
