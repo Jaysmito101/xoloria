@@ -372,6 +372,31 @@ impl Instruction {
                 rs1: raw.rs1,
                 rs2: raw.rs2,
             }),
+            (0, 1) => Ok(Self::Mulw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (4, 1) => Ok(Self::Divw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (5, 1) => Ok(Self::Divuw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (6, 1) => Ok(Self::Remw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (7, 1) => Ok(Self::Remuw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
