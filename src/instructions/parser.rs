@@ -138,6 +138,72 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
+
+    pub fn try_op_imm(raw: payload::IType) -> InstructionResult<Self> {
+        match raw.funct3 {
+            0 => Ok(Self::Addi {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            2 => Ok(Self::Slti {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            3 => Ok(Self::Sltiu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            4 => Ok(Self::Xori {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            6 => Ok(Self::Ori {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            7 => Ok(Self::Andi {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                imm: raw.imm,
+            }),
+            1 => {
+                // ammount is the lower 5 bits of the immediate
+                let shamt = (raw.imm & 0x1f) as u8;
+                match (raw.imm >> 10) & 0x3f {
+                    0 => Ok(Self::Slli {
+                        rd: raw.rd,
+                        rs1: raw.rs1,
+                        imm: shamt,
+                    }),
+                    _ => Err(InstructionError::InvalidInstruction),
+                }
+            }
+            5 => {
+                // ammount is the lower 5 bits of the immediate
+                let shamt = (raw.imm & 0x1f) as u8;
+                // the right shift type is determined by bits bit 30 of the instruction (which is bit 10 of the immediate)
+                match (raw.imm >> 10) & 0x3f {
+                    0 => Ok(Self::Srli {
+                        rd: raw.rd,
+                        rs1: raw.rs1,
+                        imm: shamt,
+                    }),
+                    1 => Ok(Self::Srai {
+                        rd: raw.rd,
+                        rs1: raw.rs1,
+                        imm: shamt,
+                    }),
+                    _ => Err(InstructionError::InvalidInstruction),
+                }
+            }
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
 }
 
 impl TryFrom<u32> for Instruction {
@@ -146,10 +212,7 @@ impl TryFrom<u32> for Instruction {
     fn try_from(value: u32) -> InstructionResult<Self> {
         match OpcodeName::try_from(value & 0x7f)? {
             OpcodeName::Load => Self::try_load(payload::IType::try_from(value)?),
-            OpcodeName::OpImm => {
-                tracing::info!("Parsing OpImm instruction with value {:#010x}", value);
-                todo!()
-            }
+            OpcodeName::OpImm => Self::try_op_imm(payload::IType::try_from(value)?),
             OpcodeName::Auipc => Self::try_auipc(payload::UType::try_from(value)?),
             OpcodeName::Store => Self::try_store(payload::SType::try_from(value)?),
             OpcodeName::OpReg => {
