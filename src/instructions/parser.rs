@@ -1,6 +1,6 @@
 use crate::{
     instructions::{Instruction, InstructionError, InstructionResult, OpcodeName, payload},
-    registers::GeneralRegisterName,
+    registers::{ControlRegisterName, GeneralRegisterName},
 };
 
 impl Instruction {
@@ -411,6 +411,54 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
+
+    fn try_system(raw: payload::IType) -> InstructionResult<Self> {
+        let parse_csr = |csr_num: i32| {
+            ControlRegisterName::try_from(csr_num as u16)
+                .map_err(|_| InstructionError::InvalidInstruction)
+        };
+        match raw.funct3 {
+            0 => match raw.imm {
+                0 => Ok(Self::Ecall),
+                1 => Ok(Self::Ebreak),
+                0x102 => Ok(Self::Mret),
+                0x302 => Ok(Self::Sret),
+                0x105 => Ok(Self::Wfi),
+                _ => Err(InstructionError::InvalidInstruction),
+            },
+            1 => Ok(Self::Csrrw {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                csr: parse_csr(raw.imm)?,
+            }),
+            2 => Ok(Self::Csrrs {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                csr: parse_csr(raw.imm)?,
+            }),
+            3 => Ok(Self::Csrrc {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                csr: parse_csr(raw.imm)?,
+            }),
+            5 => Ok(Self::Csrrwi {
+                rd: raw.rd,
+                csr: parse_csr(raw.imm)?,
+                imm: (raw.rs1 as u8) & 0x1f,
+            }),
+            6 => Ok(Self::Csrrsi {
+                rd: raw.rd,
+                csr: parse_csr(raw.imm)?,
+                imm: (raw.rs1 as u8) & 0x1f,
+            }),
+            7 => Ok(Self::Csrrci {
+                rd: raw.rd,
+                csr: parse_csr(raw.imm)?,
+                imm: (raw.rs1 as u8) & 0x1f,
+            }),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
 }
 
 impl TryFrom<u32> for Instruction {
@@ -434,10 +482,7 @@ impl TryFrom<u32> for Instruction {
                 todo!()
             }
             OpcodeName::Fence => Self::try_fence(payload::IType::try_from(value)?),
-            OpcodeName::System => {
-                tracing::info!("Parsing System instruction with value {:#010x}", value);
-                todo!()
-            }
+            OpcodeName::System => Self::try_system(payload::IType::try_from(value)?),
         }
     }
 }
