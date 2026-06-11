@@ -572,6 +572,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOSWAP performs an atomic swap operation
@@ -581,6 +582,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// LR (Load-Reserved) loads a value from memory and registers a reservation set
@@ -589,6 +591,7 @@ pub enum Instruction {
         rs1: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// SC (Store-Conditional) writes a value to memory if the reservation is still valid
@@ -598,6 +601,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOXOR performs an atomic bitwise XOR operation
@@ -607,6 +611,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOOR performs an atomic bitwise OR operation
@@ -616,6 +621,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOAND performs an atomic bitwise AND operation
@@ -625,6 +631,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOMIN performs an atomic minimum operation (signed)
@@ -634,6 +641,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOMAX performs an atomic maximum operation (signed)
@@ -643,6 +651,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOMINU performs an atomic minimum operation (unsigned)
@@ -652,6 +661,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     /// AMOMAXU performs an atomic maximum operation (unsigned)
@@ -661,6 +671,7 @@ pub enum Instruction {
         rs2: GeneralRegisterName,
         aq: bool,
         rl: bool,
+        width: bool, // false for word, true for double word
     },
 
     // System, Zicsr, Zifencei extensions

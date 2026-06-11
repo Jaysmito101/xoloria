@@ -91,9 +91,11 @@ impl Display for Instruction {
                 rs2,
                 aq,
                 rl,
+                width,
             } => write!(
                 f,
-                "amoadd.w{} {}, {}, ({})",
+                "amoadd.{}{} {}, {}, ({})",
+                if *width { "d" } else { "w" },
                 fmt_aqrl(*aq, *rl),
                 rd,
                 rs2,
@@ -105,16 +107,25 @@ impl Display for Instruction {
                 rs2,
                 aq,
                 rl,
+                width,
             } => write!(
                 f,
-                "amoswap.w{} {}, {}, ({})",
+                "amoswap.{}{} {}, {}, ({})",
+                if *width { "d" } else { "w" },
                 fmt_aqrl(*aq, *rl),
                 rd,
                 rs2,
                 rs1
             ),
-            Instruction::Lr { rd, rs1, aq, rl } => {
-                write!(f, "lr.w{} {}, ({})", fmt_aqrl(*aq, *rl), rd, rs1)
+            Instruction::Lr {
+                rd,
+                rs1,
+                aq,
+                rl,
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(f, "lr.{}{} {}, ({})", suffix, fmt_aqrl(*aq, *rl), rd, rs1)
             }
             Instruction::Sc {
                 rd,
@@ -122,58 +133,87 @@ impl Display for Instruction {
                 rs2,
                 aq,
                 rl,
-            } => write!(f, "sc.w{} {}, {}, ({})", fmt_aqrl(*aq, *rl), rd, rs2, rs1),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "sc.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amoxor {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amoxor.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amoxor.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amoor {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amoor.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amoor.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amoand {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amoand.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amoand.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amomin {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
+                width,
             } => write!(
                 f,
-                "amomin.w{} {}, {}, ({})",
+                "amomin.{}{} {}, {}, ({})",
+                if *width { "d" } else { "w" },
                 fmt_aqrl(*aq, *rl),
                 rd,
                 rs2,
@@ -185,42 +225,57 @@ impl Display for Instruction {
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amomax.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amomax.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amominu {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amominu.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amominu.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
             Instruction::Amomaxu {
                 rd,
                 rs1,
                 rs2,
                 aq,
                 rl,
-            } => write!(
-                f,
-                "amomaxu.w{} {}, {}, ({})",
-                fmt_aqrl(*aq, *rl),
-                rd,
-                rs2,
-                rs1
-            ),
+                width,
+            } => {
+                let suffix = if *width { "d" } else { "w" };
+                write!(
+                    f,
+                    "amomaxu.{}{} {}, {}, ({})",
+                    suffix,
+                    fmt_aqrl(*aq, *rl),
+                    rd,
+                    rs2,
+                    rs1
+                )
+            }
 
             Instruction::Fence => write!(f, "fence"),
 
