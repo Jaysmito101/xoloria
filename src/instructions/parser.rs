@@ -459,6 +459,106 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
+
+    fn try_atomic(raw: payload::RType) -> InstructionResult<Self> {
+        let width = match raw.funct3 {
+            2 => false, // word
+            3 => true,  // double word
+            _ => return Err(InstructionError::InvalidAtomicWidth(raw.funct3)),
+        };
+        let aq = ((raw.funct7 >> 1) & 1) != 0;
+        let rl = (raw.funct7 & 1) != 0;
+        match (raw.funct7 >> 2) & 0x1f {
+            0 => Ok(Self::Amoadd {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            1 => Ok(Self::Amoswap {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            2 => Ok(Self::Lr {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                aq,
+                rl,
+                width,
+            }),
+            3 => Ok(Self::Sc {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            4 => Ok(Self::Amoxor {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            8 => Ok(Self::Amoor {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            12 => Ok(Self::Amoand {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            16 => Ok(Self::Amomin {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            20 => Ok(Self::Amomax {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            24 => Ok(Self::Amominu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            28 => Ok(Self::Amomaxu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+                aq,
+                rl,
+                width,
+            }),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
 }
 
 impl TryFrom<u32> for Instruction {
@@ -477,10 +577,7 @@ impl TryFrom<u32> for Instruction {
             OpcodeName::Jal => Self::try_jal(payload::JType::try_from(value)?),
             OpcodeName::OpImm64 => Self::try_op_imm64(payload::IType::try_from(value)?),
             OpcodeName::OpReg64 => Self::try_op_reg64(payload::RType::try_from(value)?),
-            OpcodeName::Atomic => {
-                tracing::info!("Parsing Atomic instruction with value {:#010x}", value);
-                todo!()
-            }
+            OpcodeName::Atomic => Self::try_atomic(payload::RType::try_from(value)?),
             OpcodeName::Fence => Self::try_fence(payload::IType::try_from(value)?),
             OpcodeName::System => Self::try_system(payload::IType::try_from(value)?),
         }
