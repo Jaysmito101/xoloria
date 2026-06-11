@@ -11,6 +11,9 @@ pub mod payload;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum InstructionError {
+    UnknownOpcode(u8),
+    UnknownRegister(u8),
+    InvalidInstruction,
     IllegalInstruction,
 }
 
