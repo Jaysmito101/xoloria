@@ -50,8 +50,8 @@ pub enum Instruction {
     /// is not required
     Jalr {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// All branch instructions use the B-type instruction format.
@@ -108,38 +108,38 @@ pub enum Instruction {
     /// The LB instruction loads an 8-bit value from memory, then sign-extends to 32-bits before storing in rd
     Lb {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// LH loads a 16-bit value from memory, then sign-extends to 32-bits before storing in rd
     Lh {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// The LW instruction loads a 32-bit value from memory into rd
     Lw {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     // Unsigned loads zero-extend the loaded value instead of sign-extending it.
     /// The effective address is calculated the same way as for signed loads.
     Lbu {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// Lhu loads a 16-bit value from memory, then zero-extends to 32-bits before storing in rd
     /// The effective address is calculated the same way as for signed loads.
     Lhu {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// Stores 8 bit values from the low bits of register rs2 to memory.
@@ -170,8 +170,8 @@ pub enum Instruction {
     /// `ADDI rd, rs1, 0` is used to implement the `MV rd, rs1` assembler pseudoinstruction.
     Addi {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// SLTI (set less than immediate) places the value 1 in register rd if register
@@ -179,8 +179,8 @@ pub enum Instruction {
     /// else 0 is written to rd.
     Slti {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: i32,
     },
 
     /// SLTIU is similar but compares the values as unsigned numbers
@@ -199,8 +199,8 @@ pub enum Instruction {
     /// SLLI is a logical left shift (zeros are shifted into the lower bits).
     Slli {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: u8,
     },
 
     /// Shifts by a constant are encoded as a specialization of the I-type format.
@@ -209,8 +209,8 @@ pub enum Instruction {
     /// SRLI is a logical right shift (zeros are shifted into the upper bits).
     Srli {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: u8,
     },
 
     /// Shifts by a constant are encoded as a specialization of the I-type format.
@@ -219,8 +219,8 @@ pub enum Instruction {
     /// SRAI is an arithmetic right shift (the original sign bit is copied into the vacated upper bits).
     Srai {
         rd: GeneralRegisterName,
-        imm: i32,
         rs1: GeneralRegisterName,
+        imm: u8,
     },
 
     /// ANDI, ORI, XORI are logical operations that perform bitwise AND, OR, and XOR on register rs1
