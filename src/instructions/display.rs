@@ -222,30 +222,8 @@ impl Display for Instruction {
                 rs1
             ),
 
-            Instruction::Fence {
-                predecessor_load,
-                predecessor_store,
-                successor_load,
-                successor_store,
-            } => {
-                let mut pred = String::new();
-                if *predecessor_load {
-                    pred.push('r');
-                }
-                if *predecessor_store {
-                    pred.push('w');
-                }
+            Instruction::Fence => write!(f, "fence"),
 
-                let mut succ = String::new();
-                if *successor_load {
-                    succ.push('r');
-                }
-                if *successor_store {
-                    succ.push('w');
-                }
-
-                write!(f, "fence {}, {}", pred, succ)
-            }
             Instruction::Fencei => write!(f, "fence.i"),
             Instruction::Ecall => write!(f, "ecall"),
             Instruction::Ebreak => write!(f, "ebreak"),

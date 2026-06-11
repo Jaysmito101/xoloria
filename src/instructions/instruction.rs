@@ -672,12 +672,7 @@ pub enum Instruction {
     /// fences have PR, PW, SR, and SW bits which restrict the predecessor and/or successor sets.
     /// The predecessor set includes loads (resp.stores) if and only if PR (resp.PW) is set.
     /// Similarly, the successor set includes loads (resp.stores) if and only if SR (resp.SW) is set.
-    Fence {
-        predecessor_load: bool,
-        predecessor_store: bool,
-        successor_load: bool,
-        successor_store: bool,
-    },
+    Fence,
 
     /// The FENCE.I instruction is used to synchronize the instruction and data streams. RISC-V does not
     /// guarantee that stores to instruction memory will be made visible to instruction fetches on a RISC-V
