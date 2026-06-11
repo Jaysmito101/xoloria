@@ -106,50 +106,40 @@ pub enum Instruction {
     /// The effective address is obtained by adding register rs1 to the sign-extended 12-bit offset.
     ///
     /// The LB instruction loads an 8-bit value from memory, then sign-extends to 32-bits before storing in rd
-    /// also stores a copy of the value in rs2
     Lb {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// LH loads a 16-bit value from memory, then sign-extends to 32-bits before storing in rd
-    /// also stores a copy of the value in rs2
     Lh {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// The LW instruction loads a 32-bit value from memory into rd
-    /// also stores a copy of the value in rs2
     Lw {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     // Unsigned loads zero-extend the loaded value instead of sign-extending it.
     /// The effective address is calculated the same way as for signed loads.
-    /// also stores a copy of the value in rs2
     Lbu {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// Lhu loads a 16-bit value from memory, then zero-extends to 32-bits before storing in rd
     /// The effective address is calculated the same way as for signed loads.
-    /// also stores a copy of the value in rs2
     Lhu {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// Stores 8 bit values from the low bits of register rs2 to memory.
@@ -346,7 +336,6 @@ pub enum Instruction {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// Unsigned loads zero-extend 32-bit values from memory to 64-bit registers instead
@@ -355,7 +344,6 @@ pub enum Instruction {
         rd: GeneralRegisterName,
         imm: i32,
         rs1: GeneralRegisterName,
-        rs2: GeneralRegisterName,
     },
 
     /// Stores 64 bit values from register rs2 to memory for RV64I.
