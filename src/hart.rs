@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    Bus, BusIO, Result,
     registers::{ISAExtensions, Misa, Register},
 };
 
@@ -97,7 +97,9 @@ impl Hart {
         self.registers.mhartid
     }
 
-    pub fn tick(&mut self) -> Result<()> {
+    pub fn tick(&mut self, bus: &mut Bus) -> Result<()> {
+        // TODO: first ideally, clear interutps
+
         Ok(())
     }
 }
