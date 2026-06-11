@@ -81,8 +81,77 @@ test_load_store:
     li t3, 100
     bne a0, t3, fail_loop
 
-    # --- 6. System & CSR Instructions ---
-    csrr t4, mstatus       # Read CSR
+    # --- 6. M Extension (Multiply / Divide) ---
+    li t4, 21
+    li t5, 4
+    
+    # RV32M
+    mul t6, t4, t5         # t6 = 84
+    mulh s0, t4, t5        
+    mulhsu s1, t4, t5
+    mulhu s2, t4, t5
+    div a1, t4, t5         # a1 = 5
+    divu a2, t4, t5
+    rem a3, t4, t5         # a3 = 1
+    remu a4, t4, t5
+
+    # RV64M Specific
+    mulw a5, t4, t5        # a5 = 84 (32-bit sign-extended)
+    divw a6, t4, t5        # a6 = 5 (32-bit sign-extended)
+    divuw a7, t4, t5
+    remw t6, t4, t5        # t6 = 1 (32-bit sign-extended)
+    remuw s0, t4, t5
+
+    # --- 7. A Extension (Atomics) ---
+    la t2, my_data
+    li t3, 15
+    sw zero, 0(t2)          # Reset memory to 0
+    
+    # RV32A
+    lr.w t5, (t2)           # t5 = 0, lock memory
+    addi t5, t5, 20         # t5 = 20
+    sc.w t6, t5, (t2)       # mem[my_data] = 20, t6 = 0 (success)
+    amoswap.w t5, t3, (t2)  # mem[my_data] = 15, t5 = old_value (20)
+    amoadd.w t4, t3, (t2)   # mem[my_data] = 30, t4 = 15
+    amoxor.w t4, t3, (t2)
+    amoand.w t4, t3, (t2)
+    amoor.w t4, t3, (t2)
+    amomin.w t4, t3, (t2)
+    amomax.w t4, t3, (t2)
+    amominu.w t4, t3, (t2)
+    amomaxu.w t4, t3, (t2)
+
+    # RV64A
+    lr.d t5, (t2)           
+    addi t5, t5, 20         
+    sc.d t6, t5, (t2)       
+    amoswap.d t5, t3, (t2)  
+    amoadd.d t4, t3, (t2)   
+    amoxor.d t4, t3, (t2)
+    amoand.d t4, t3, (t2)
+    amoor.d t4, t3, (t2)
+    amomin.d t4, t3, (t2)
+    amomax.d t4, t3, (t2)
+    amominu.d t4, t3, (t2)
+    amomaxu.d t4, t3, (t2)
+
+    # --- 8. System & CSR Instructions ---
+    # Exception / Traps
+    ecall               # Not called to not exit early
+    ebreak              # Not called to not trap early
+    mret                # Not called as we are not returning from trap
+    sret
+    wfi                 # Not called so we don't stall
+    
+    # CSR operations
+    csrr t4, mstatus       # Read CSR (mstatus) - this is a pseudo instruction for csrrs t4, mstatus, zero
+    li t5, 0b1000          # MIE bit
+    csrrs zero, mstatus, t5 # Set MIE in mstatus
+    csrrc zero, mstatus, t5 # Clear MIE in mstatus
+    csrrw t4, mstatus, t5  # Swap
+    csrrwi zero, mstatus, 0 # Write literal 0 to mstatus
+    csrrsi zero, mstatus, 0 # Set literal
+    csrrci zero, mstatus, 0 # Clear literal
 
     # --- Success State ---
 success_loop:
