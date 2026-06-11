@@ -13,18 +13,18 @@ impl Display for Instruction {
         match self {
             Instruction::Noop => write!(f, "; nop"),
 
-            Instruction::Lui { rd, imm } => write!(f, "lui {}, {}", rd, imm),
-            Instruction::Auipc { rd, imm } => write!(f, "auipc {}, {}", rd, imm),
+            Instruction::Lui { rd, imm } => write!(f, "lui {}, {:#x}", rd, imm),
+            Instruction::Auipc { rd, imm } => write!(f, "auipc {}, {:#x}", rd, imm),
 
-            Instruction::Jal { rd, imm } => write!(f, "jal {}, {}", rd, imm),
+            Instruction::Jal { rd, imm } => write!(f, "jal {}, {:#x}", rd, imm),
             Instruction::Jalr { rd, rs1, imm } => write!(f, "jalr {}, {}({})", rd, imm, rs1),
 
-            Instruction::Beq { rs1, rs2, imm } => write!(f, "beq {}, {}, {}", rs1, rs2, imm),
-            Instruction::Bne { rs1, rs2, imm } => write!(f, "bne {}, {}, {}", rs1, rs2, imm),
-            Instruction::Blt { rs1, rs2, imm } => write!(f, "blt {}, {}, {}", rs1, rs2, imm),
-            Instruction::Bge { rs1, rs2, imm } => write!(f, "bge {}, {}, {}", rs1, rs2, imm),
-            Instruction::Bltu { rs1, rs2, imm } => write!(f, "bltu {}, {}, {}", rs1, rs2, imm),
-            Instruction::Bgeu { rs1, rs2, imm } => write!(f, "bgeu {}, {}, {}", rs1, rs2, imm),
+            Instruction::Beq { rs1, rs2, imm } => write!(f, "beq {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Bne { rs1, rs2, imm } => write!(f, "bne {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Blt { rs1, rs2, imm } => write!(f, "blt {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Bge { rs1, rs2, imm } => write!(f, "bge {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Bltu { rs1, rs2, imm } => write!(f, "bltu {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Bgeu { rs1, rs2, imm } => write!(f, "bgeu {}, {}, {:#x}", rs1, rs2, imm),
 
             Instruction::Lb { rd, imm, rs1, .. } => write!(f, "lb {}, {}({})", rd, imm, rs1),
             Instruction::Lh { rd, imm, rs1, .. } => write!(f, "lh {}, {}({})", rd, imm, rs1),
