@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GeneralRegisterName {
     Zero = 0,
@@ -56,4 +58,16 @@ pub enum ControlRegisterName {
     Scause = 0x142,
     Stval = 0x143,
     Satp = 0x180,
+}
+
+impl Display for GeneralRegisterName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", self).to_lowercase())
+    }
+}
+
+impl Display for ControlRegisterName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", self).to_lowercase())
+    }
 }
