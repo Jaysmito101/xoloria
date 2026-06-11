@@ -6,6 +6,9 @@ _start:
     lui t0, 0x12345        # t0 = 0x12345000
     auipc t1, 0            # t1 = Current PC
 
+    lb t2, 5(t0)            # Load Byte from address in t0 (should be 0)
+    sd t3, 8(t0)            # Store Doubleword to address in t0 + 8
+
     # --- 2. I-Type and R-Type ALU Instructions ---
     li a0, 15              # addi a0, zero, 15
     addi a1, zero, 25      # a1 = 25
