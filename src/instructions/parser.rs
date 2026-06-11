@@ -204,6 +204,62 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
+
+    pub fn try_op_reg(raw: payload::RType) -> InstructionResult<Self> {
+        match (raw.funct3, raw.funct7) {
+            (0, 0) => Ok(Self::Add {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (0, 0x20) => Ok(Self::Sub {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (1, 0) => Ok(Self::Sll {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (2, 0) => Ok(Self::Slt {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (3, 0) => Ok(Self::Sltu {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (4, 0) => Ok(Self::Xor {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (5, 0) => Ok(Self::Srl {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (5, 0x20) => Ok(Self::Sra {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (6, 0) => Ok(Self::Or {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            (7, 0) => Ok(Self::And {
+                rd: raw.rd,
+                rs1: raw.rs1,
+                rs2: raw.rs2,
+            }),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
 }
 
 impl TryFrom<u32> for Instruction {
@@ -215,10 +271,7 @@ impl TryFrom<u32> for Instruction {
             OpcodeName::OpImm => Self::try_op_imm(payload::IType::try_from(value)?),
             OpcodeName::Auipc => Self::try_auipc(payload::UType::try_from(value)?),
             OpcodeName::Store => Self::try_store(payload::SType::try_from(value)?),
-            OpcodeName::OpReg => {
-                tracing::info!("Parsing OpReg instruction with value {:#010x}", value);
-                todo!()
-            }
+            OpcodeName::OpReg => Self::try_op_reg(payload::RType::try_from(value)?),
             OpcodeName::Lui => Self::try_lui(payload::UType::try_from(value)?),
             OpcodeName::Branch => Self::try_branch(payload::BType::try_from(value)?),
             OpcodeName::Jalr => Self::try_jalr(payload::IType::try_from(value)?),
