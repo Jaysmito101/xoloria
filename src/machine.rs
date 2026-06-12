@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{Address, Bus, BusIO, Hart, Memory, MemoryManagementUnit, Result};
 
 struct MachineParams {
@@ -47,8 +49,8 @@ impl MachineBuilder {
 }
 
 pub struct Machine {
-    bus: Bus,
-    _mmu: MemoryManagementUnit,
+    bus: Arc<Bus>,
+    _mmu: Arc<MemoryManagementUnit>,
     harts: Vec<Hart>,
     cycle_count: u64,
 }
@@ -57,7 +59,7 @@ impl Machine {
     const RTC_DIVISOR: u64 = 100;
 
     fn new(params: MachineParams) -> Result<Self> {
-        let mmu = MemoryManagementUnit::new()?;
+        let mmu = Arc::new(MemoryManagementUnit::new()?);
         let mut bus = Bus::new()?;
 
         bus.map(
@@ -71,24 +73,42 @@ impl Machine {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
-            bus,
+            bus: Arc::new(bus),
             _mmu: mmu,
             harts,
             cycle_count: 0,
         })
     }
 
-    pub fn load_binary(&mut self, location: Address, binary: &[u8]) -> Result<()> {
+    pub fn load_binary(&self, location: Address, binary: &[u8]) -> Result<()> {
         self.bus.write(location, binary)?;
         Ok(())
     }
 
-    pub fn simulate(mut self) -> Result<()> {
-        loop {
-            for hart in &mut self.harts {
-                hart.tick(&mut self.bus)?;
-            }
-            self.cycle_count += 1;
+    pub fn simulate(self) -> Result<()> {
+        let mut threads = Vec::new();
+        for mut hart in self.harts {
+            let bus = self.bus.clone();
+            let handle = std::thread::Builder::new()
+                .name(format!("Hart-{}", hart.id()))
+                .spawn(move || {
+                    loop {
+                        hart.tick(&bus).unwrap();
+                    }
+                })
+                .map_err(crate::Error::ThreadSpawnFailed)?;
+            threads.push(handle);
         }
+        for handle in threads {
+            let name = handle.thread().name().unwrap_or("Unknown").to_owned();
+            let _ = handle
+                .join()
+                .inspect_err(|e| {
+                    tracing::error!("Thread [{}] Join Failed: {:?}", name, e);
+                })
+                .ok();
+        }
+
+        Ok(())
     }
 }
