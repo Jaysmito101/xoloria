@@ -17,6 +17,10 @@ pub enum Error {
     InvalidParameter(String),
     #[error("Generic Error : {0}")]
     Generic(String),
+    #[error("Thread Spawn Failed: {0}")]
+    ThreadSpawnFailed(#[from] std::io::Error),
+    #[error("Thread Join Failed")]
+    ThreadJoinFailed,
 }
 
 #[derive(Debug)]
