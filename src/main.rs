@@ -14,8 +14,8 @@ fn main() -> anyhow::Result<()> {
 
     let binary = std::fs::read(opts.binary)?;
 
-    let mut machine = xoloria::MachineBuilder::new("Xoloria/VM")
-        .with_harts(4)?
+    let machine = xoloria::MachineBuilder::new("Xoloria/VM")
+        // .with_harts(4)?
         .with_memory(1024 * 32)?
         .build()?;
 
