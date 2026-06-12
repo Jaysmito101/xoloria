@@ -1,8 +1,10 @@
+use std::sync::Mutex;
+
 use crate::bus::{BusError, BusIO, BusResult};
 use crate::{Address, Result};
 
 pub struct Memory {
-    data: Vec<u8>,
+    data: Mutex<Vec<u8>>,
 }
 
 impl Memory {
@@ -11,40 +13,40 @@ impl Memory {
         data.try_reserve_exact(size)
             .map_err(crate::Error::AllocationFailed)?;
         data.resize(size, 0);
-        Ok(Self { data })
+        Ok(Self {
+            data: Mutex::new(data),
+        })
     }
 }
 
 impl BusIO for Memory {
-    fn read(&mut self, offset: Address, buffer: &mut [u8]) -> BusResult<()> {
+    fn read(&self, offset: Address, buffer: &mut [u8]) -> BusResult<()> {
         let end = offset
             .checked_add(buffer.len() as u64)
             .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
 
-        if end > self.data.len() as u64 {
-            return Err(BusError::IndexOutOfBounds(
-                end,
-                0..self.data.len() as Address,
-            ));
+        let gaurd = self.data.lock().map_err(|_| BusError::LockFailed)?;
+
+        if end > gaurd.len() as u64 {
+            return Err(BusError::IndexOutOfBounds(end, 0..gaurd.len() as Address));
         }
 
-        buffer.copy_from_slice(&self.data[offset as usize..end as usize]);
+        buffer.copy_from_slice(&gaurd[offset as usize..end as usize]);
         Ok(())
     }
 
-    fn write(&mut self, offset: Address, buffer: &[u8]) -> BusResult<()> {
+    fn write(&self, offset: Address, buffer: &[u8]) -> BusResult<()> {
         let end = offset
             .checked_add(buffer.len() as u64)
             .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
 
-        if end > self.data.len() as u64 {
-            return Err(BusError::IndexOutOfBounds(
-                end,
-                0..self.data.len() as Address,
-            ));
+        let mut gaurd = self.data.lock().map_err(|_| BusError::LockFailed)?;
+
+        if end > gaurd.len() as u64 {
+            return Err(BusError::IndexOutOfBounds(end, 0..gaurd.len() as Address));
         }
 
-        self.data[offset as usize..end as usize].copy_from_slice(buffer);
+        gaurd[offset as usize..end as usize].copy_from_slice(buffer);
         Ok(())
     }
 }

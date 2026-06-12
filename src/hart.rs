@@ -98,12 +98,14 @@ impl Hart {
         self.registers.mhartid
     }
 
-    pub fn tick(&mut self, bus: &mut Bus) -> Result<()> {
-        // TODO: first ideally, clear interutps
+    pub fn tick(&mut self, bus: &Bus) -> Result<()> {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
-        // show pc as hex
-        tracing::info!("[{:#010x}] {}", self.registers.pc, instruction);
+        tracing::warn!(
+            "Executing instruction {} at PC {:#010x}",
+            instruction,
+            self.registers.pc
+        );
         self.registers.pc += 4;
 
         Ok(())
