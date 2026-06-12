@@ -1,10 +1,10 @@
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use crate::bus::{BusError, BusIO, BusResult};
 use crate::{Address, Result};
 
 pub struct Memory {
-    data: Mutex<Vec<u8>>,
+    data: RwLock<Vec<u8>>,
 }
 
 impl Memory {
@@ -14,7 +14,7 @@ impl Memory {
             .map_err(crate::Error::AllocationFailed)?;
         data.resize(size, 0);
         Ok(Self {
-            data: Mutex::new(data),
+            data: RwLock::new(data),
         })
     }
 }
@@ -25,7 +25,7 @@ impl BusIO for Memory {
             .checked_add(buffer.len() as u64)
             .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
 
-        let gaurd = self.data.lock().map_err(|_| BusError::LockFailed)?;
+        let gaurd = self.data.read().map_err(|_| BusError::LockFailed)?;
 
         if end > gaurd.len() as u64 {
             return Err(BusError::IndexOutOfBounds(end, 0..gaurd.len() as Address));
@@ -40,7 +40,7 @@ impl BusIO for Memory {
             .checked_add(buffer.len() as u64)
             .ok_or(BusError::AddressOverflow(offset, buffer.len()))?;
 
-        let mut gaurd = self.data.lock().map_err(|_| BusError::LockFailed)?;
+        let mut gaurd = self.data.write().map_err(|_| BusError::LockFailed)?;
 
         if end > gaurd.len() as u64 {
             return Err(BusError::IndexOutOfBounds(end, 0..gaurd.len() as Address));
