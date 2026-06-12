@@ -93,7 +93,10 @@ impl Machine {
                 .name(format!("Hart-{}", hart.id()))
                 .spawn(move || {
                     loop {
-                        hart.tick(&bus).unwrap();
+                        if let Err(e) = hart.tick(&bus) {
+                            tracing::error!("Hart [{}] Tick Failed: {:?}", hart.id(), e);
+                            break;
+                        }
                     }
                 })
                 .map_err(crate::Error::ThreadSpawnFailed)?;
