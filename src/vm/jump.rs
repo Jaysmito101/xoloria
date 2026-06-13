@@ -6,9 +6,9 @@ use crate::{
 
 #[inline]
 pub fn execute_jal(rd: GeneralRegisterName, imm: i32, hart: &mut Hart) -> VmResult {
-    let next_address = hart.registers.pc + 4;
+    let next_address = hart.registers.pc.wrapping_add(4);
     hart.registers.x[rd as usize] = next_address;
-    let jump_target = hart.registers.pc as i64 + imm as i64;
+    let jump_target = hart.registers.pc.wrapping_add_signed(imm as i64);
     Ok(VmOutput::Jump(jump_target as Address))
 }
 
@@ -19,9 +19,9 @@ pub fn execute_jalr(
     imm: i32,
     hart: &mut Hart,
 ) -> VmResult {
-    let next_address = hart.registers.pc + 4;
+    let next_address = hart.registers.pc.wrapping_add(4);
     hart.registers.x[rd as usize] = next_address;
     let base_address = hart.registers.x[rs1 as usize];
-    let jump_target = (base_address as i64 + imm as i64) & !1;
+    let jump_target = base_address.wrapping_add_signed(imm as i64) & (!1);
     Ok(VmOutput::Jump(jump_target as Address))
 }
