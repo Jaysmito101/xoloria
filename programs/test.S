@@ -1,5 +1,6 @@
 .global _start
 _start:
+        j       _start # debug infinite loop
         addi    sp,sp,-32
         sd      s0,16(sp)
         sd      s1,8(sp)
