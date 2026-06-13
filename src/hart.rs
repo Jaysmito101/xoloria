@@ -157,6 +157,7 @@ impl Hart {
         let vm_result = match instruction {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
+            Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
 
             // a way to debug register state with this for now
