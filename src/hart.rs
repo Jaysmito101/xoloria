@@ -159,6 +159,7 @@ impl Hart {
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
             Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
+            Instruction::Jalr { rd, rs1, imm } => vm::jump::execute_jalr(rd, rs1, imm, self),
 
             // a way to debug register state with this for now
             Instruction::Ecall => {
