@@ -18,3 +18,4 @@ pub use hart::Hart;
 
 pub mod instructions;
 pub mod registers;
+pub mod vm;

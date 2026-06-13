@@ -2,6 +2,7 @@ use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
     registers::{ISAExtensions, Misa, Register},
+    vm,
 };
 
 pub enum PrivilageMode {
@@ -18,38 +19,38 @@ pub struct RegisterSet {
 }
 
 pub struct HartRegisters {
-    pc: Register,
-    x: [Register; 32],
+    pub(crate) pc: Register,
+    pub(crate) x: [Register; 32],
 
-    load_reservation_valid: bool,
-    load_reservation_address: Register,
+    pub(crate) load_reservation_valid: bool,
+    pub(crate) load_reservation_address: Register,
 
-    mhartid: Register, // hardware thread id
+    pub(crate) mhartid: Register, // hardware thread id
 
-    misa: Register, // machine ISA and extensions
+    pub(crate) misa: Register, // machine ISA and extensions
 
-    mstatus: Register, // machine status (interrupt enables, previous privilage mode)
-    medeleg: Register, // machine exception delegation
-    mideleg: Register, // machine interrupt deligation
-    mie: Register,     // machine interrupt enable mask
-    mtvec: Register,   // machine trap vector base address
-    mscratch: Register, // machine scratch register
-    mepc: Register,    // maching exception program counter
-    mcause: Register,  // machine trap cause
-    mtval: Register,   // machine bad address or instruction
-    mip: Register,     // machine interrupt pending
+    pub(crate) mstatus: Register, // machine status (interrupt enables, previous privilage mode)
+    pub(crate) medeleg: Register, // machine exception delegation
+    pub(crate) mideleg: Register, // machine interrupt deligation
+    pub(crate) mie: Register,     // machine interrupt enable mask
+    pub(crate) mtvec: Register,   // machine trap vector base address
+    pub(crate) mscratch: Register, // machine scratch register
+    pub(crate) mepc: Register,    // maching exception program counter
+    pub(crate) mcause: Register,  // machine trap cause
+    pub(crate) mtval: Register,   // machine bad address or instruction
+    pub(crate) mip: Register,     // machine interrupt pending
 
-    stvec: Register,    // supervisor trap vector base address
-    sscratch: Register, // supervisor scratch register
-    sepc: Register,     // supervisor exception program counter
-    scause: Register,   // supervisor trap cause
-    stval: Register,    // supervisor bad address or instruction
-    satp: Register,     // supervisor address translation and protection
+    pub(crate) stvec: Register,    // supervisor trap vector base address
+    pub(crate) sscratch: Register, // supervisor scratch register
+    pub(crate) sepc: Register,     // supervisor exception program counter
+    pub(crate) scause: Register,   // supervisor trap cause
+    pub(crate) stval: Register,    // supervisor bad address or instruction
+    pub(crate) satp: Register,     // supervisor address translation and protection
 }
 
 pub struct Hart {
-    privilage_mode: PrivilageMode,
-    registers: HartRegisters,
+    pub(crate) privilage_mode: PrivilageMode,
+    pub(crate) registers: HartRegisters,
 }
 
 impl Hart {
@@ -101,11 +102,12 @@ impl Hart {
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
-        tracing::warn!(
-            "Executing instruction {} at PC {:#010x}",
-            instruction,
-            self.registers.pc
-        );
+        let result = match instruction {
+            Instruction::Noop => Ok(()),
+            Instruction::Lui { rd, imm } => vm::lui::execute_lui(rd, imm, self),
+            _ => unimplemented!("Instruction {:?} not implemented", instruction),
+        };
+        result?; // temporary for testing, will need to handle exceptions and interrupts later
         self.registers.pc += 4;
 
         Ok(())
