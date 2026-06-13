@@ -1,6 +1,15 @@
+use crate::Address;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VmError {}
 
-pub type VmResult<T> = std::result::Result<T, VmError>;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VmOutput {
+    NextInstruction,
+    Jump(Address),
+}
 
-pub mod lui;
+pub type VmResult = std::result::Result<VmOutput, VmError>;
+
+pub mod jump;
+pub mod load;

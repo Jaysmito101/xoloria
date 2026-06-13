@@ -2,7 +2,7 @@ use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
     registers::{ISAExtensions, Misa, Register},
-    vm,
+    vm::{self, VmOutput},
 };
 
 pub enum PrivilageMode {
@@ -102,13 +102,21 @@ impl Hart {
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
-        let result = match instruction {
-            Instruction::Noop => Ok(()),
-            Instruction::Lui { rd, imm } => vm::lui::execute_lui(rd, imm, self),
+        tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
+        let vm_result = match instruction {
+            Instruction::Noop => Ok(VmOutput::NextInstruction),
+            Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
+            Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
             _ => unimplemented!("Instruction {:?} not implemented", instruction),
         };
-        result?; // temporary for testing, will need to handle exceptions and interrupts later
-        self.registers.pc += 4;
+
+        match vm_result {
+            Ok(output) => match output {
+                VmOutput::NextInstruction => self.registers.pc += 4,
+                VmOutput::Jump(target) => self.registers.pc = target,
+            },
+            Err(err) => match err {},
+        }
 
         Ok(())
     }
