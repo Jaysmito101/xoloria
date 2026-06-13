@@ -170,6 +170,11 @@ impl Hart {
             Instruction::Ld { rd, rs1, imm } => vm::load::execute_ld(rd, rs1, imm, self, bus),
             Instruction::Lwu { rd, rs1, imm } => vm::load::execute_lwu(rd, rs1, imm, self, bus),
 
+            Instruction::Sb { rs1, rs2, imm } => vm::store::execute_sb(rs1, rs2, imm, self, bus),
+            Instruction::Sh { rs1, rs2, imm } => vm::store::execute_sh(rs1, rs2, imm, self, bus),
+            Instruction::Sw { rs1, rs2, imm } => vm::store::execute_sw(rs1, rs2, imm, self, bus),
+            Instruction::Sd { rs1, rs2, imm } => vm::store::execute_sd(rs1, rs2, imm, self, bus),
+
             Instruction::Addi { rd, rs1, imm } => vm::opimm::execute_addi(rd, rs1, imm, self),
             Instruction::Slti { rd, rs1, imm } => vm::opimm::execute_slti(rd, rs1, imm, self),
             Instruction::Sltiu { rd, rs1, imm } => vm::opimm::execute_sltiu(rd, rs1, imm, self),
@@ -199,7 +204,7 @@ impl Hart {
             },
             Err(err) => match err {
                 VmError::BusError(bus_err) => {
-                    tracing::error!("Bus error: {:?}", bus_err);
+                    panic!("Bus error at address {:?}", bus_err);
                 }
             },
         }

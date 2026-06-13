@@ -16,3 +16,4 @@ pub type VmResult = std::result::Result<VmOutput, VmError>;
 pub mod jump;
 pub mod load;
 pub mod opimm;
+pub mod store;
