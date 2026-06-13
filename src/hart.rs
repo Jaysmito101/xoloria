@@ -158,8 +158,10 @@ impl Hart {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
             Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
+
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
             Instruction::Jalr { rd, rs1, imm } => vm::jump::execute_jalr(rd, rs1, imm, self),
+
             Instruction::Lb { rd, rs1, imm } => vm::load::execute_lb(rd, rs1, imm, self, bus),
             Instruction::Lh { rd, rs1, imm } => vm::load::execute_lh(rd, rs1, imm, self, bus),
             Instruction::Lw { rd, rs1, imm } => vm::load::execute_lw(rd, rs1, imm, self, bus),
@@ -167,6 +169,20 @@ impl Hart {
             Instruction::Lhu { rd, rs1, imm } => vm::load::execute_lhu(rd, rs1, imm, self, bus),
             Instruction::Ld { rd, rs1, imm } => vm::load::execute_ld(rd, rs1, imm, self, bus),
             Instruction::Lwu { rd, rs1, imm } => vm::load::execute_lwu(rd, rs1, imm, self, bus),
+
+            Instruction::Addi { rd, rs1, imm } => vm::opimm::execute_addi(rd, rs1, imm, self),
+            Instruction::Slti { rd, rs1, imm } => vm::opimm::execute_slti(rd, rs1, imm, self),
+            Instruction::Sltiu { rd, rs1, imm } => vm::opimm::execute_sltiu(rd, rs1, imm, self),
+            Instruction::Slli { rd, rs1, imm } => vm::opimm::execute_slli(rd, rs1, imm, self),
+            Instruction::Srli { rd, rs1, imm } => vm::opimm::execute_srli(rd, rs1, imm, self),
+            Instruction::Srai { rd, rs1, imm } => vm::opimm::execute_srai(rd, rs1, imm, self),
+            Instruction::Xori { rd, rs1, imm } => vm::opimm::execute_xori(rd, rs1, imm, self),
+            Instruction::Ori { rd, rs1, imm } => vm::opimm::execute_ori(rd, rs1, imm, self),
+            Instruction::Andi { rd, rs1, imm } => vm::opimm::execute_andi(rd, rs1, imm, self),
+            Instruction::Addiw { rd, rs1, imm } => vm::opimm::execute_addiw(rd, rs1, imm, self),
+            Instruction::Slliw { rd, rs1, imm } => vm::opimm::execute_slliw(rd, rs1, imm, self),
+            Instruction::Srliw { rd, rs1, imm } => vm::opimm::execute_srliw(rd, rs1, imm, self),
+            Instruction::Sraiw { rd, rs1, imm } => vm::opimm::execute_sraiw(rd, rs1, imm, self),
 
             // a way to debug register state with this for now
             Instruction::Ecall => {
