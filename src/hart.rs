@@ -5,6 +5,7 @@ use crate::{
     vm::{self, VmOutput},
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PrivilageMode {
     Machine = 0,
     Supervisor = 1,
@@ -18,6 +19,7 @@ pub struct RegisterSet {
     pub(crate) csr: [Register; 4096],
 }
 
+#[derive(Debug)]
 pub struct HartRegisters {
     pub(crate) pc: Register,
     pub(crate) x: [Register; 32],
@@ -48,6 +50,7 @@ pub struct HartRegisters {
     pub(crate) satp: Register,     // supervisor address translation and protection
 }
 
+#[derive(Debug)]
 pub struct Hart {
     pub(crate) privilage_mode: PrivilageMode,
     pub(crate) registers: HartRegisters,
@@ -103,10 +106,17 @@ impl Hart {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
         tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
+        self.registers.x[0] = 0; // enforce zero being zero
         let vm_result = match instruction {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
+
+            // a way to debug register state with this for now
+            Instruction::Ecall => {
+                tracing::info!("{:?}", &self);
+                Ok(VmOutput::NextInstruction)
+            }
             _ => unimplemented!("Instruction {:?} not implemented", instruction),
         };
 
