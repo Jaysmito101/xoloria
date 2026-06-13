@@ -189,6 +189,13 @@ impl Hart {
             Instruction::Srliw { rd, rs1, imm } => vm::opimm::execute_srliw(rd, rs1, imm, self),
             Instruction::Sraiw { rd, rs1, imm } => vm::opimm::execute_sraiw(rd, rs1, imm, self),
 
+            Instruction::Beq { rs1, rs2, imm } => vm::branch::execute_beq(rs1, rs2, imm, self),
+            Instruction::Bne { rs1, rs2, imm } => vm::branch::execute_bne(rs1, rs2, imm, self),
+            Instruction::Blt { rs1, rs2, imm } => vm::branch::execute_blt(rs1, rs2, imm, self),
+            Instruction::Bge { rs1, rs2, imm } => vm::branch::execute_bge(rs1, rs2, imm, self),
+            Instruction::Bltu { rs1, rs2, imm } => vm::branch::execute_bltu(rs1, rs2, imm, self),
+            Instruction::Bgeu { rs1, rs2, imm } => vm::branch::execute_bgeu(rs1, rs2, imm, self),
+
             // a way to debug register state with this for now
             Instruction::Ecall => {
                 tracing::info!("{}", &self);
