@@ -1,7 +1,9 @@
-use crate::Address;
+use crate::{Address, bus::BusError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VmError {}
+pub enum VmError {
+    BusError(BusError),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VmOutput {

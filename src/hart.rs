@@ -4,7 +4,7 @@ use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
     registers::{GeneralRegisterName, ISAExtensions, Misa, Register},
-    vm::{self, VmOutput},
+    vm::{self, VmError, VmOutput},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -160,6 +160,13 @@ impl Hart {
             Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
             Instruction::Jalr { rd, rs1, imm } => vm::jump::execute_jalr(rd, rs1, imm, self),
+            Instruction::Lb { rd, rs1, imm } => vm::load::execute_lb(rd, rs1, imm, self, bus),
+            Instruction::Lh { rd, rs1, imm } => vm::load::execute_lh(rd, rs1, imm, self, bus),
+            Instruction::Lw { rd, rs1, imm } => vm::load::execute_lw(rd, rs1, imm, self, bus),
+            Instruction::Lbu { rd, rs1, imm } => vm::load::execute_lbu(rd, rs1, imm, self, bus),
+            Instruction::Lhu { rd, rs1, imm } => vm::load::execute_lhu(rd, rs1, imm, self, bus),
+            Instruction::Ld { rd, rs1, imm } => vm::load::execute_ld(rd, rs1, imm, self, bus),
+            Instruction::Lwu { rd, rs1, imm } => vm::load::execute_lwu(rd, rs1, imm, self, bus),
 
             // a way to debug register state with this for now
             Instruction::Ecall => {
@@ -174,7 +181,11 @@ impl Hart {
                 VmOutput::NextInstruction => self.registers.pc += 4,
                 VmOutput::Jump(target) => self.registers.pc = target,
             },
-            Err(err) => match err {},
+            Err(err) => match err {
+                VmError::BusError(bus_err) => {
+                    tracing::error!("Bus error: {:?}", bus_err);
+                }
+            },
         }
 
         Ok(())
