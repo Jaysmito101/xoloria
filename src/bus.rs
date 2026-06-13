@@ -9,7 +9,7 @@ pub enum BusDevice {
     Generic(Box<dyn BusIO + Send + Sync>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BusError {
     UnmappedLocation(Address),
     IndexOutOfBounds(Address, Range<Address>),
