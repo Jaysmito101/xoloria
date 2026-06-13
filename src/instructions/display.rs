@@ -13,7 +13,7 @@ impl Display for Instruction {
         match self {
             Instruction::Noop => write!(f, "; nop"),
 
-            Instruction::Lui { rd, imm } => write!(f, "lui {}, {:#x}", rd, imm),
+            Instruction::Lui { rd, imm } => write!(f, "lui {}, {:#x}", rd, imm >> 12),
             Instruction::Auipc { rd, imm } => write!(f, "auipc {}, {:#x}", rd, imm),
 
             Instruction::Jal { rd, imm } => write!(f, "jal {}, {:#x}", rd, imm),
