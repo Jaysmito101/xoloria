@@ -1,8 +1,9 @@
 .global _start
 _start:
         lui a0, 1
+        la  a1, _start
         ecall
-        j       _start # debug infinite loop
+        jalr zero, 0(a1)
         addi    sp,sp,-32
         sd      s0,16(sp)
         sd      s1,8(sp)
