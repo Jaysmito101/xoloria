@@ -650,8 +650,38 @@ impl Instruction {
                     },
                 })
             }
-            6 => unimplemented!("C.BEQZ"),
-            7 => unimplemented!("C.BNEZ"),
+            6 => {
+                // C.BEQZ
+                let reg_raw = value.bits(7, 3) as u8;
+                let rs1 = GeneralRegisterName::try_from(reg_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(reg_raw))?;
+                let imm = ((value.bits(12, 1) as i32) << 31) >> 23
+                    | (value.bits(5, 2) as i32) << 6
+                    | (value.bits(2, 1) as i32) << 5
+                    | (value.bits(10, 2) as i32) << 3
+                    | (value.bits(3, 2) as i32) << 1;
+                Ok(Self::Beq {
+                    rs1,
+                    rs2: GeneralRegisterName::Zero,
+                    imm,
+                })
+            }
+            7 => {
+                // C.BNEZ
+                let reg_raw = value.bits(7, 3) as u8;
+                let rs1 = GeneralRegisterName::try_from(reg_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(reg_raw))?;
+                let imm = ((value.bits(12, 1) as i32) << 31) >> 23
+                    | (value.bits(5, 2) as i32) << 6
+                    | (value.bits(2, 1) as i32) << 5
+                    | (value.bits(10, 2) as i32) << 3
+                    | (value.bits(3, 2) as i32) << 1;
+                Ok(Self::Bne {
+                    rs1,
+                    rs2: GeneralRegisterName::Zero,
+                    imm,
+                })
+            }
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
