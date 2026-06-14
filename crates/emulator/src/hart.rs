@@ -152,7 +152,7 @@ impl Hart {
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
         let instruction_value = bus.read_u32(self.registers.pc)?;
         let instruction = Instruction::try_from(instruction_value)?;
-        tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
+        // tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
         self.registers.x[0] = 0; // enforce zero being zero
         let vm_result = match instruction {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
