@@ -1,10 +1,16 @@
-pub fn run_cli(debug: bool) -> anyhow::Result<()> {
+pub fn run_cli(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("run").arg("--package").arg("cli");
     if debug {
         cmd.arg("--debug");
     } else {
         cmd.arg("--release");
+    }
+
+    cmd.arg("--");
+
+    for arg in args {
+        cmd.arg(arg);
     }
     let status = cmd.status()?;
     if !status.success() {

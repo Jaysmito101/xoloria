@@ -23,6 +23,8 @@ pub enum Command {
         debug: bool,
     },
     Cli {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
         #[clap(short, long, default_value_t = false)]
         debug: bool,
     },

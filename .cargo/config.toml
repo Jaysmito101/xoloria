@@ -1,2 +1,4 @@
 [alias]
 xtask = ["run", "--release", "--package", "xtask", "--"]
+
+cli = ["xtask", "cli", "--"]
