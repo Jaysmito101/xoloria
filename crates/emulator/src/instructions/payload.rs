@@ -17,7 +17,7 @@ impl BitsExt for u32 {
 impl BitsExt for u16 {
     #[inline(always)]
     fn bits(&self, shift: u32, width: u32) -> u16 {
-        ((*self >> shift) & ((1 << width) - 1)) as u16
+        (*self >> shift) & ((1 << width) - 1)
     }
 }
 

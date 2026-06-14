@@ -597,7 +597,24 @@ impl Instruction {
             4 => unimplemented!(
                 "C.SRLI | C.SRAI | C.ANDI | C.SUB | C.XOR | C.OR | C.AND | C.SUBW | C.ADDW"
             ),
-            5 => unimplemented!("C.J"),
+            5 => {
+                let offset11 = value.bits(12, 1) << 11
+                    | value.bits(8, 1) << 10
+                    | value.bits(9, 2) << 8
+                    | value.bits(6, 1) << 7
+                    | value.bits(7, 1) << 6
+                    | value.bits(2, 1) << 5
+                    | value.bits(11, 1) << 4
+                    | value.bits(3, 3) << 1;
+                Ok(Self::Jal {
+                    rd: GeneralRegisterName::Zero,
+                    imm: if offset11 & (1 << 11) != 0 {
+                        (offset11 | !0 << 12) as i16 as i32
+                    } else {
+                        offset11 as i16 as i32
+                    },
+                })
+            }
             6 => unimplemented!("C.BEQZ"),
             7 => unimplemented!("C.BNEZ"),
             _ => Err(InstructionError::InvalidInstruction),
@@ -657,6 +674,7 @@ impl TryFrom<u32> for Instruction {
     type Error = InstructionError;
 
     fn try_from(value: u32) -> InstructionResult<Self> {
+        tracing::warn!("offset11: {:b} {:#x}", value, value);
         if value & 0b11 != 0b11 {
             Self::try_from_compressed((value & 0xffff) as u16)
         } else {
