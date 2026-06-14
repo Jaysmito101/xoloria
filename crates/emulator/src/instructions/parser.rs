@@ -1,5 +1,8 @@
 use crate::{
-    instructions::{Instruction, InstructionError, InstructionResult, OpcodeName, payload},
+    instructions::{
+        Instruction, InstructionError, InstructionResult, OpcodeName,
+        payload::{self, BitsExt},
+    },
     registers::{ControlRegisterName, GeneralRegisterName},
 };
 
@@ -116,6 +119,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_store(raw: payload::SType) -> InstructionResult<Self> {
         match raw.funct3 {
             0 => Ok(Self::Sb {
@@ -142,6 +146,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_op_imm(raw: payload::IType) -> InstructionResult<Self> {
         match raw.funct3 {
             0 => Ok(Self::Addi {
@@ -208,6 +213,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_op_reg(raw: payload::RType) -> InstructionResult<Self> {
         match (raw.funct3, raw.funct7) {
             (0, 0) => Ok(Self::Add {
@@ -304,6 +310,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_op_imm64(raw: payload::IType) -> InstructionResult<Self> {
         match raw.funct3 {
             0 => Ok(Self::Addiw {
@@ -345,6 +352,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_op_reg64(raw: payload::RType) -> InstructionResult<Self> {
         match (raw.funct3, raw.funct7) {
             (0, 0) => Ok(Self::Addw {
@@ -401,6 +409,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_fence(raw: payload::IType) -> InstructionResult<Self> {
         if raw.rd != GeneralRegisterName::Zero || raw.rs1 != GeneralRegisterName::Zero {
             return Err(InstructionError::InvalidInstruction);
@@ -412,6 +421,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_system(raw: payload::IType) -> InstructionResult<Self> {
         let parse_csr = |csr_num: i32| {
             ControlRegisterName::try_from(csr_num as u16)
@@ -460,6 +470,7 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
     fn try_atomic(raw: payload::RType) -> InstructionResult<Self> {
         let width = match raw.funct3 {
             2 => false, // word
@@ -560,8 +571,65 @@ impl Instruction {
         }
     }
 
+    #[inline(always)]
+    fn try_compressed_q0(value: u16) -> InstructionResult<Self> {
+        let funct3 = value.bits(13, 3);
+        match funct3 {
+            0 => unimplemented!("C.ADDI4SPN"),
+            1 => unimplemented!("C.FLD"),
+            2 => unimplemented!("C.LW"),
+            3 => unimplemented!("C.LD"),
+            5 => unimplemented!("C.FSD"),
+            6 => unimplemented!("C.SW"),
+            7 => unimplemented!("C.SD"),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
+
+    #[inline(always)]
+    fn try_compressed_q1(value: u16) -> InstructionResult<Self> {
+        let funct3 = value.bits(13, 3);
+        match funct3 {
+            0 => unimplemented!("C.NOP | C.ADDI"),
+            1 => unimplemented!("C.JAL | C.ADDIW"),
+            2 => unimplemented!("C.LI"),
+            3 => unimplemented!("C.ADDI16SP | C.LUI"),
+            4 => unimplemented!(
+                "C.SRLI | C.SRAI | C.ANDI | C.SUB | C.XOR | C.OR | C.AND | C.SUBW | C.ADDW"
+            ),
+            5 => unimplemented!("C.J"),
+            6 => unimplemented!("C.BEQZ"),
+            7 => unimplemented!("C.BNEZ"),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
+
+    #[inline(always)]
+    fn try_compressed_q2(value: u16) -> InstructionResult<Self> {
+        let funct3 = value.bits(13, 3);
+        match funct3 {
+            0 => unimplemented!("C.SLLI"),
+            1 => unimplemented!("C.FLDSP"),
+            2 => unimplemented!("C.LWSP"),
+            3 => unimplemented!("C.LDSP"),
+            4 => unimplemented!("C.JR | C.MV | C.EBREAK | C.JALR | C.ADD"),
+            5 => unimplemented!("C.FSDSP"),
+            6 => unimplemented!("C.SWSP"),
+            7 => unimplemented!("C.SDSP"),
+            _ => Err(InstructionError::InvalidInstruction),
+        }
+    }
+
     fn try_from_compressed(value: u16) -> InstructionResult<Self> {
-        Ok(Instruction::Noop)
+        let op = value.bits(0, 2);
+        match op {
+            0 => Self::try_compressed_q0(value),
+            1 => Self::try_compressed_q1(value),
+            2 => Self::try_compressed_q2(value),
+            _ => unreachable!(
+                "cannot be reached as this function is only called for compressed instructions, which have opcodes 0, 1, or 2"
+            ),
+        }
     }
 
     fn try_from_uncompressed(value: u32) -> InstructionResult<Self> {

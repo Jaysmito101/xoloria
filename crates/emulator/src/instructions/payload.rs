@@ -14,6 +14,13 @@ impl BitsExt for u32 {
     }
 }
 
+impl BitsExt for u16 {
+    #[inline(always)]
+    fn bits(&self, shift: u32, width: u32) -> u8 {
+        ((*self >> shift) & ((1 << width) - 1)) as u8
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RType {
     pub(crate) opcode: OpcodeName,
