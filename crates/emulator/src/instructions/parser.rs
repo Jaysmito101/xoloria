@@ -649,7 +649,18 @@ impl Instruction {
             4 => unimplemented!("C.JR | C.MV | C.EBREAK | C.JALR | C.ADD"),
             5 => unimplemented!("C.FSDSP"),
             6 => unimplemented!("C.SWSP"),
-            7 => unimplemented!("C.SDSP"),
+            7 => {
+                // C.SDSP
+                let rs2_raw = value.bits(2, 5) as u8;
+                let rs2 = GeneralRegisterName::try_from(rs2_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rs2_raw))?;
+                let imm = (value.bits(7, 3) << 6) | (value.bits(10, 3) << 3);
+                Ok(Self::Sd {
+                    imm: imm as i32,
+                    rs1: GeneralRegisterName::Sp,
+                    rs2,
+                })
+            }
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
