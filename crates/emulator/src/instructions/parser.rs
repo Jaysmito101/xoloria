@@ -674,7 +674,6 @@ impl TryFrom<u32> for Instruction {
     type Error = InstructionError;
 
     fn try_from(value: u32) -> InstructionResult<Self> {
-        tracing::warn!("offset11: {:b} {:#x}", value, value);
         if value & 0b11 != 0b11 {
             Self::try_from_compressed((value & 0xffff) as u16)
         } else {

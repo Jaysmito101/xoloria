@@ -14,9 +14,15 @@ fn panic(_info: &PanicInfo) -> ! {
 pub unsafe extern "C" fn _start() -> ! {
     naked_asm!(
         r#"
-    1:
+        la sp, __stack_top
+        auipc ra, 0x0
         ecall
-        j 1b
+        call runtime_init
         "#
     );
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn runtime_init() -> ! {
+    loop {}
 }
