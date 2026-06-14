@@ -609,7 +609,25 @@ impl Instruction {
                 }
             }
             1 => unimplemented!("C.JAL | C.ADDIW"),
-            2 => unimplemented!("C.LI"),
+            2 => {
+                // C.LI
+                let rd_raw = value.bits(7, 5) as u8;
+                let rd = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let imm = ((value.bits(12, 1) as i32) << 31) >> 26 | value.bits(2, 5) as i32;
+                match rd {
+                    GeneralRegisterName::Zero => Ok(Self::Noop),
+                    _ => Ok(Self::Addi {
+                        rd,
+                        rs1: GeneralRegisterName::Zero,
+                        imm: if imm & (1 << 5) != 0 {
+                            (imm | !0 << 6) as i16 as i32
+                        } else {
+                            imm as i16 as i32
+                        },
+                    }),
+                }
+            }
             3 => unimplemented!("C.ADDI16SP | C.LUI"),
             4 => unimplemented!(
                 "C.SRLI | C.SRAI | C.ANDI | C.SUB | C.XOR | C.OR | C.AND | C.SUBW | C.ADDW"
