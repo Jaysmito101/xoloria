@@ -590,7 +590,24 @@ impl Instruction {
     fn try_compressed_q1(value: u16) -> InstructionResult<Self> {
         let funct3 = value.bits(13, 3);
         match funct3 {
-            0 => unimplemented!("C.NOP | C.ADDI"),
+            0 => {
+                let rd_raw = value.bits(7, 5) as u8;
+                let rd = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let imm = (value.bits(2, 5) as i32) | (value.bits(12, 1) as i32) << 5;
+                match rd {
+                    GeneralRegisterName::Zero => Ok(Self::Noop),
+                    _ => Ok(Self::Addi {
+                        rd,
+                        rs1: rd,
+                        imm: if imm & (1 << 5) != 0 {
+                            (imm | !0 << 6) as i16 as i32
+                        } else {
+                            imm as i16 as i32
+                        },
+                    }),
+                }
+            }
             1 => unimplemented!("C.JAL | C.ADDIW"),
             2 => unimplemented!("C.LI"),
             3 => unimplemented!("C.ADDI16SP | C.LUI"),
