@@ -196,6 +196,31 @@ impl Hart {
             Instruction::Bltu { rs1, rs2, imm } => vm::branch::execute_bltu(rs1, rs2, imm, self),
             Instruction::Bgeu { rs1, rs2, imm } => vm::branch::execute_bgeu(rs1, rs2, imm, self),
 
+            Instruction::Add { rd, rs1, rs2 } => vm::opreg::execute_add(rd, rs1, rs2, self),
+            Instruction::Sub { rd, rs1, rs2 } => vm::opreg::execute_sub(rd, rs1, rs2, self),
+            Instruction::Sll { rd, rs1, rs2 } => vm::opreg::execute_sll(rd, rs1, rs2, self),
+            Instruction::Srl { rd, rs1, rs2 } => vm::opreg::execute_srl(rd, rs1, rs2, self),
+            Instruction::Sra { rd, rs1, rs2 } => vm::opreg::execute_sra(rd, rs1, rs2, self),
+            Instruction::Slt { rd, rs1, rs2 } => vm::opreg::execute_slt(rd, rs1, rs2, self),
+            Instruction::Sltu { rd, rs1, rs2 } => vm::opreg::execute_sltu(rd, rs1, rs2, self),
+            Instruction::Xor { rd, rs1, rs2 } => vm::opreg::execute_xor(rd, rs1, rs2, self),
+            Instruction::Or { rd, rs1, rs2 } => vm::opreg::execute_or(rd, rs1, rs2, self),
+            Instruction::And { rd, rs1, rs2 } => vm::opreg::execute_and(rd, rs1, rs2, self),
+            Instruction::Addw { rd, rs1, rs2 } => vm::opreg::execute_addw(rd, rs1, rs2, self),
+            Instruction::Subw { rd, rs1, rs2 } => vm::opreg::execute_subw(rd, rs1, rs2, self),
+            Instruction::Sllw { rd, rs1, rs2 } => vm::opreg::execute_sllw(rd, rs1, rs2, self),
+            Instruction::Srlw { rd, rs1, rs2 } => vm::opreg::execute_srlw(rd, rs1, rs2, self),
+            Instruction::Sraw { rd, rs1, rs2 } => vm::opreg::execute_sraw(rd, rs1, rs2, self),
+            Instruction::Mul { rd, rs1, rs2 } => vm::opreg::execute_mul(rd, rs1, rs2, self),
+            Instruction::Mulw { rd, rs1, rs2 } => vm::opreg::execute_mulw(rd, rs1, rs2, self),
+            Instruction::Mulh { rd, rs1, rs2 } => vm::opreg::execute_mulh(rd, rs1, rs2, self),
+            Instruction::Mulhu { rd, rs1, rs2 } => vm::opreg::execute_mulhu(rd, rs1, rs2, self),
+            Instruction::Mulhsu { rd, rs1, rs2 } => vm::opreg::execute_mulhsu(rd, rs1, rs2, self),
+            Instruction::Div { rd, rs1, rs2 } => vm::opreg::execute_div(rd, rs1, rs2, self),
+            Instruction::Divu { rd, rs1, rs2 } => vm::opreg::execute_divu(rd, rs1, rs2, self),
+            Instruction::Rem { rd, rs1, rs2 } => vm::opreg::execute_rem(rd, rs1, rs2, self),
+            Instruction::Remu { rd, rs1, rs2 } => vm::opreg::execute_remu(rd, rs1, rs2, self),
+
             // a way to debug register state with this for now
             Instruction::Ecall => {
                 tracing::info!("{}", &self);

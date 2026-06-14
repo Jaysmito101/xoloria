@@ -17,4 +17,5 @@ pub mod branch;
 pub mod jump;
 pub mod load;
 pub mod opimm;
+pub mod opreg;
 pub mod store;
