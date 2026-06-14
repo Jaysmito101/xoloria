@@ -1,5 +1,17 @@
+use num_traits::Signed;
+
 use crate::instructions::Instruction;
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter, LowerHex, UpperHex};
+
+struct SignedHexView<'a, T: PartialOrd + Signed + LowerHex>(&'a T);
+
+impl<'a, T: PartialOrd + Signed + LowerHex> LowerHex for SignedHexView<'a, T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let prefix = if f.alternate() { "0x" } else { "" };
+        let bare_hex = format!("{:x}", self.0.abs());
+        f.pad_integral(self.0 >= &T::zero(), prefix, &bare_hex)
+    }
+}
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,12 +31,24 @@ impl Display for Instruction {
             Instruction::Jal { rd, imm } => write!(f, "jal {}, {:#x}", rd, imm),
             Instruction::Jalr { rd, rs1, imm } => write!(f, "jalr {}, {}({})", rd, imm, rs1),
 
-            Instruction::Beq { rs1, rs2, imm } => write!(f, "beq {}, {}, {:#x}", rs1, rs2, imm),
-            Instruction::Bne { rs1, rs2, imm } => write!(f, "bne {}, {}, {:#x}", rs1, rs2, imm),
-            Instruction::Blt { rs1, rs2, imm } => write!(f, "blt {}, {}, {:#x}", rs1, rs2, imm),
-            Instruction::Bge { rs1, rs2, imm } => write!(f, "bge {}, {}, {:#x}", rs1, rs2, imm),
-            Instruction::Bltu { rs1, rs2, imm } => write!(f, "bltu {}, {}, {:#x}", rs1, rs2, imm),
-            Instruction::Bgeu { rs1, rs2, imm } => write!(f, "bgeu {}, {}, {:#x}", rs1, rs2, imm),
+            Instruction::Beq { rs1, rs2, imm } => {
+                write!(f, "beq {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
+            Instruction::Bne { rs1, rs2, imm } => {
+                write!(f, "bne {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
+            Instruction::Blt { rs1, rs2, imm } => {
+                write!(f, "blt {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
+            Instruction::Bge { rs1, rs2, imm } => {
+                write!(f, "bge {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
+            Instruction::Bltu { rs1, rs2, imm } => {
+                write!(f, "bltu {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
+            Instruction::Bgeu { rs1, rs2, imm } => {
+                write!(f, "bgeu {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
+            }
 
             Instruction::Lb { rd, imm, rs1, .. } => write!(f, "lb {}, {}({})", rd, imm, rs1),
             Instruction::Lh { rd, imm, rs1, .. } => write!(f, "lh {}, {}({})", rd, imm, rs1),
@@ -36,15 +60,29 @@ impl Display for Instruction {
             Instruction::Sh { imm, rs1, rs2 } => write!(f, "sh {}, {}({})", rs2, imm, rs1),
             Instruction::Sw { imm, rs1, rs2 } => write!(f, "sw {}, {}({})", rs2, imm, rs1),
 
-            Instruction::Addi { rd, rs1, imm } => write!(f, "addi {}, {}, {}", rd, rs1, imm),
-            Instruction::Slti { rd, rs1, imm } => write!(f, "slti {}, {}, {}", rd, rs1, imm),
-            Instruction::Sltiu { rd, rs1, imm } => write!(f, "sltiu {}, {}, {}", rd, rs1, imm),
-            Instruction::Slli { rd, rs1, imm } => write!(f, "slli {}, {}, {}", rd, rs1, imm),
-            Instruction::Srli { rd, rs1, imm } => write!(f, "srli {}, {}, {}", rd, rs1, imm),
-            Instruction::Srai { rd, rs1, imm } => write!(f, "srai {}, {}, {}", rd, rs1, imm),
-            Instruction::Xori { rd, rs1, imm } => write!(f, "xori {}, {}, {}", rd, rs1, imm),
-            Instruction::Ori { rd, rs1, imm } => write!(f, "ori {}, {}, {}", rd, rs1, imm),
-            Instruction::Andi { rd, rs1, imm } => write!(f, "andi {}, {}, {}", rd, rs1, imm),
+            Instruction::Addi { rd, rs1, imm } => {
+                write!(f, "addi {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+            Instruction::Slti { rd, rs1, imm } => {
+                write!(f, "slti {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+            Instruction::Sltiu { rd, rs1, imm } => {
+                write!(f, "sltiu {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+
+            Instruction::Slli { rd, rs1, imm } => write!(f, "slli {}, {}, {:#x}", rd, rs1, imm),
+            Instruction::Srli { rd, rs1, imm } => write!(f, "srli {}, {}, {:#x}", rd, rs1, imm),
+            Instruction::Srai { rd, rs1, imm } => write!(f, "srai {}, {}, {:#x}", rd, rs1, imm),
+
+            Instruction::Xori { rd, rs1, imm } => {
+                write!(f, "xori {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+            Instruction::Ori { rd, rs1, imm } => {
+                write!(f, "ori {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+            Instruction::Andi { rd, rs1, imm } => {
+                write!(f, "andi {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
 
             Instruction::Add { rd, rs1, rs2 } => write!(f, "add {}, {}, {}", rd, rs1, rs2),
             Instruction::Sub { rd, rs1, rs2 } => write!(f, "sub {}, {}, {}", rd, rs1, rs2),
@@ -61,10 +99,12 @@ impl Display for Instruction {
             Instruction::Lwu { rd, imm, rs1, .. } => write!(f, "lwu {}, {}({})", rd, imm, rs1),
             Instruction::Sd { imm, rs1, rs2 } => write!(f, "sd {}, {}({})", rs2, imm, rs1),
 
-            Instruction::Addiw { rd, rs1, imm } => write!(f, "addiw {}, {}, {}", rd, rs1, imm),
-            Instruction::Slliw { rd, rs1, imm } => write!(f, "slliw {}, {}, {}", rd, rs1, imm),
-            Instruction::Srliw { rd, rs1, imm } => write!(f, "srliw {}, {}, {}", rd, rs1, imm),
-            Instruction::Sraiw { rd, rs1, imm } => write!(f, "sraiw {}, {}, {}", rd, rs1, imm),
+            Instruction::Addiw { rd, rs1, imm } => {
+                write!(f, "addiw {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
+            }
+            Instruction::Slliw { rd, rs1, imm } => write!(f, "slliw {}, {}, {:#x}", rd, rs1, imm),
+            Instruction::Srliw { rd, rs1, imm } => write!(f, "srliw {}, {}, {:#x}", rd, rs1, imm),
+            Instruction::Sraiw { rd, rs1, imm } => write!(f, "sraiw {}, {}, {:#x}", rd, rs1, imm),
             Instruction::Addw { rd, rs1, rs2 } => write!(f, "addw {}, {}, {}", rd, rs1, rs2),
             Instruction::Subw { rd, rs1, rs2 } => write!(f, "subw {}, {}, {}", rd, rs1, rs2),
             Instruction::Sllw { rd, rs1, rs2 } => write!(f, "sllw {}, {}, {}", rd, rs1, rs2),
