@@ -122,6 +122,7 @@ impl Hart {
                     .with_extension(ISAExtensions::I)
                     .with_extension(ISAExtensions::M)
                     .with_extension(ISAExtensions::A)
+                    .with_extension(ISAExtensions::C)
                     .register(),
 
                 mstatus: 0,
