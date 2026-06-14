@@ -4,20 +4,20 @@ use crate::{
 };
 
 pub trait BitsExt {
-    fn bits(&self, shift: u32, width: u32) -> u8;
+    fn bits(&self, shift: u32, width: u32) -> u16;
 }
 
 impl BitsExt for u32 {
     #[inline(always)]
-    fn bits(&self, shift: u32, width: u32) -> u8 {
-        ((*self >> shift) & ((1 << width) - 1)) as u8
+    fn bits(&self, shift: u32, width: u32) -> u16 {
+        ((*self >> shift) & ((1 << width) - 1)) as u16
     }
 }
 
 impl BitsExt for u16 {
     #[inline(always)]
-    fn bits(&self, shift: u32, width: u32) -> u8 {
-        ((*self >> shift) & ((1 << width) - 1)) as u8
+    fn bits(&self, shift: u32, width: u32) -> u16 {
+        ((*self >> shift) & ((1 << width) - 1)) as u16
     }
 }
 
@@ -78,17 +78,17 @@ impl TryFrom<u32> for RType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let rd_b = value.bits(7, 5);
+        let rd_b = value.bits(7, 5) as u8;
         let rd = GeneralRegisterName::try_from(rd_b)
             .map_err(|_| InstructionError::UnknownRegister(rd_b))?;
-        let funct3 = value.bits(12, 3);
-        let rs1_b = value.bits(15, 5);
+        let funct3 = value.bits(12, 3) as u8;
+        let rs1_b = value.bits(15, 5) as u8;
         let rs1 = GeneralRegisterName::try_from(rs1_b)
             .map_err(|_| InstructionError::UnknownRegister(rs1_b))?;
-        let rs2_b = value.bits(20, 5);
+        let rs2_b = value.bits(20, 5) as u8;
         let rs2 = GeneralRegisterName::try_from(rs2_b)
             .map_err(|_| InstructionError::UnknownRegister(rs2_b))?;
-        let funct7 = value.bits(25, 7);
+        let funct7 = value.bits(25, 7) as u8;
         Ok(Self {
             opcode,
             rd,
@@ -106,11 +106,11 @@ impl TryFrom<u32> for IType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let rd_b = value.bits(7, 5);
+        let rd_b = value.bits(7, 5) as u8;
         let rd = GeneralRegisterName::try_from(rd_b)
             .map_err(|_| InstructionError::UnknownRegister(rd_b))?;
-        let funct3 = value.bits(12, 3);
-        let rs1_b = value.bits(15, 5);
+        let funct3 = value.bits(12, 3) as u8;
+        let rs1_b = value.bits(15, 5) as u8;
         let rs1 = GeneralRegisterName::try_from(rs1_b)
             .map_err(|_| InstructionError::UnknownRegister(rs1_b))?;
         let imm = (value as i32) >> 20;
@@ -130,11 +130,11 @@ impl TryFrom<u32> for SType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let funct3 = value.bits(12, 3);
-        let rs1_b = value.bits(15, 5);
+        let funct3 = value.bits(12, 3) as u8;
+        let rs1_b = value.bits(15, 5) as u8;
         let rs1 = GeneralRegisterName::try_from(rs1_b)
             .map_err(|_| InstructionError::UnknownRegister(rs1_b))?;
-        let rs2_b = value.bits(20, 5);
+        let rs2_b = value.bits(20, 5) as u8;
         let rs2 = GeneralRegisterName::try_from(rs2_b)
             .map_err(|_| InstructionError::UnknownRegister(rs2_b))?;
 
@@ -159,11 +159,11 @@ impl TryFrom<u32> for BType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let funct3 = value.bits(12, 3);
-        let rs1_b = value.bits(15, 5);
+        let funct3 = value.bits(12, 3) as u8;
+        let rs1_b = value.bits(15, 5) as u8;
         let rs1 = GeneralRegisterName::try_from(rs1_b)
             .map_err(|_| InstructionError::UnknownRegister(rs1_b))?;
-        let rs2_b = value.bits(20, 5);
+        let rs2_b = value.bits(20, 5) as u8;
         let rs2 = GeneralRegisterName::try_from(rs2_b)
             .map_err(|_| InstructionError::UnknownRegister(rs2_b))?;
 
@@ -190,7 +190,7 @@ impl TryFrom<u32> for UType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let rd_b = value.bits(7, 5);
+        let rd_b = value.bits(7, 5) as u8;
         let rd = GeneralRegisterName::try_from(rd_b)
             .map_err(|_| InstructionError::UnknownRegister(rd_b))?;
         let imm = (value & 0xfffff000) as i32;
@@ -204,7 +204,7 @@ impl TryFrom<u32> for JType {
     #[inline]
     fn try_from(value: u32) -> InstructionResult<Self> {
         let opcode = OpcodeName::try_from(value.bits(0, 7) as u32)?;
-        let rd_b = value.bits(7, 5);
+        let rd_b = value.bits(7, 5) as u8;
         let rd = GeneralRegisterName::try_from(rd_b)
             .map_err(|_| InstructionError::UnknownRegister(rd_b))?;
 
