@@ -1,8 +1,10 @@
 [workspace]
 name = "xoloria"
+edition = "2024"
+resolver = "3"
 members = [
     "crates/emulator",
-    # "crates/xtasks",
+    "crates/xtask",
 ]
 
 [workspace.dependencies]
