@@ -14,10 +14,8 @@ fn main() -> anyhow::Result<()> {
         opts::Command::Check => lints::run_check()?,
         opts::Command::Clippy => lints::run_clippy()?,
         opts::Command::Clean => clean::clean()?,
-        opts::Command::BuildFirmware { debug } => {
-            let _ = debug;
-            unimplemented!("BuildFirmware command is not implemented yet")
-        }
+        opts::Command::BuildFirmware => build::build_firmware()?,
+        opts::Command::DumpFirmware => build::dump_firmware()?,
         opts::Command::BuildOs { debug } => {
             let _ = debug;
             unimplemented!("BuildOs command is not implemented yet")

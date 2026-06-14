@@ -18,3 +18,49 @@ pub fn run_cli(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+pub fn build_firmware() -> anyhow::Result<()> {
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build")
+        .arg("--package")
+        .arg("firmware")
+        .arg("--release")
+        .arg("--target")
+        .arg("riscv64imac-unknown-none-elf");
+    let status = cmd.status()?;
+    if !status.success() {
+        anyhow::bail!("cargo build failed with status: {}", status);
+    }
+
+    let mut objcopy_cmd = std::process::Command::new("rust-objcopy");
+    objcopy_cmd
+        .arg("--strip-all")
+        .arg("-O")
+        .arg("binary")
+        .arg("target/riscv64imac-unknown-none-elf/release/firmware")
+        .arg("target/riscv64imac-unknown-none-elf/release/firmware.bin");
+    let objcopy_status = objcopy_cmd.status()?;
+    if !objcopy_status.success() {
+        anyhow::bail!("rust-objcopy failed with status: {}", objcopy_status);
+    }
+
+    std::fs::copy(
+        "target/riscv64imac-unknown-none-elf/release/firmware.bin",
+        "firmware.bin",
+    )?;
+
+    Ok(())
+}
+
+pub fn dump_firmware() -> anyhow::Result<()> {
+    let firmware_path = "target/riscv64imac-unknown-none-elf/release/firmware";
+    let mut cmd = std::process::Command::new("rust-objdump");
+    cmd.arg("-d").arg(firmware_path);
+
+    let status = cmd.status()?;
+    if !status.success() {
+        anyhow::bail!("rust-objdump failed with status: {}", status);
+    }
+
+    Ok(())
+}
