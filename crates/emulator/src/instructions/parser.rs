@@ -559,18 +559,14 @@ impl Instruction {
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
-}
 
-impl TryFrom<u32> for Instruction {
-    type Error = InstructionError;
+    fn try_from_compressed(value: u16) -> InstructionResult<Self> {
+        Ok(Instruction::Noop)
+    }
 
-    fn try_from(value: u32) -> InstructionResult<Self> {
-        // check if its a compressed instruction (if the lower 2 bits are not 11, its compressed)
-        if value & 0b11 != 0b11 {
-            panic!("Compressed instructions are not supported");
-        }
-
-        match OpcodeName::try_from(value & 0x7f)? {
+    fn try_from_uncompressed(value: u32) -> InstructionResult<Self> {
+        let opcode = OpcodeName::try_from(value & 0x7f)?;
+        match opcode {
             OpcodeName::Load => Self::try_load(payload::IType::try_from(value)?),
             OpcodeName::OpImm => Self::try_op_imm(payload::IType::try_from(value)?),
             OpcodeName::Auipc => Self::try_auipc(payload::UType::try_from(value)?),
@@ -585,6 +581,18 @@ impl TryFrom<u32> for Instruction {
             OpcodeName::Atomic => Self::try_atomic(payload::RType::try_from(value)?),
             OpcodeName::Fence => Self::try_fence(payload::IType::try_from(value)?),
             OpcodeName::System => Self::try_system(payload::IType::try_from(value)?),
+        }
+    }
+}
+
+impl TryFrom<u32> for Instruction {
+    type Error = InstructionError;
+
+    fn try_from(value: u32) -> InstructionResult<Self> {
+        if value & 0b11 != 0b11 {
+            Self::try_from_compressed((value & 0xffff) as u16)
+        } else {
+            Self::try_from_uncompressed(value)
         }
     }
 }
