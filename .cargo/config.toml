@@ -1,7 +1,7 @@
 [alias]
 xtask = ["run", "--release", "--package", "xtask", "--"]
 
-cli = ["xtask", "cli", "--"]
+emu = ["xtask", "cli", "--"]
 firmware = ["xtask", "build-firmware", "--"]
 dump = ["xtask", "dump-firmware", "--"]
 
