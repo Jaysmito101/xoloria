@@ -3,3 +3,5 @@
 # for test binaries
 /binmake
 /programs/artifacts
+
+firmware.bin
