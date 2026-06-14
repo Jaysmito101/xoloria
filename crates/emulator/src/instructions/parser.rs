@@ -565,6 +565,11 @@ impl TryFrom<u32> for Instruction {
     type Error = InstructionError;
 
     fn try_from(value: u32) -> InstructionResult<Self> {
+        // check if its a compressed instruction (if the lower 2 bits are not 11, its compressed)
+        if value & 0b11 != 0b11 {
+            panic!("Compressed instructions are not supported");
+        }
+
         match OpcodeName::try_from(value & 0x7f)? {
             OpcodeName::Load => Self::try_load(payload::IType::try_from(value)?),
             OpcodeName::OpImm => Self::try_op_imm(payload::IType::try_from(value)?),
