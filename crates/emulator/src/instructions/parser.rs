@@ -628,7 +628,47 @@ impl Instruction {
                     }),
                 }
             }
-            3 => unimplemented!("C.ADDI16SP | C.LUI"),
+            3 => {
+                let rd_raw = value.bits(7, 5) as u8;
+                let rd = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                match rd {
+                    GeneralRegisterName::Zero => Err(InstructionError::IllegalInstruction),
+                    GeneralRegisterName::Sp => {
+                        let imm = ((value.bits(12, 1) as i32) << 31) >> 22
+                            | (value.bits(3, 2) as i32) << 7
+                            | (value.bits(5, 1) as i32) << 6
+                            | (value.bits(2, 1) as i32) << 5
+                            | (value.bits(6, 1) as i32) << 4;
+                        let nzimm = if imm & (1 << 8) != 0 {
+                            (imm | !0 << 9) as i16 as i32
+                        } else {
+                            imm as i16 as i32
+                        };
+                        if nzimm == 0 {
+                            return Err(InstructionError::IllegalInstruction);
+                        }
+                        Ok(Self::Addi {
+                            rd: GeneralRegisterName::Sp,
+                            rs1: GeneralRegisterName::Sp,
+                            imm: nzimm,
+                        })
+                    }
+                    _ => {
+                        let imm = ((value.bits(12, 1) as i32) << 31) >> 14
+                            | (value.bits(2, 5) as i32) << 12;
+                        let imm = if imm & (1 << 16) != 0 {
+                            (imm | !0 << 17) as i16 as i32
+                        } else {
+                            imm as i16 as i32
+                        };
+                        if imm == 0 {
+                            return Err(InstructionError::InvalidInstruction);
+                        }
+                        Ok(Self::Lui { rd, imm })
+                    }
+                }
+            }
             4 => unimplemented!(
                 "C.SRLI | C.SRAI | C.ANDI | C.SUB | C.XOR | C.OR | C.AND | C.SUBW | C.ADDW"
             ),
