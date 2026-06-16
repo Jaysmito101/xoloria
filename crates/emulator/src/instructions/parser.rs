@@ -802,7 +802,17 @@ impl Instruction {
     fn try_compressed_q2(value: u16) -> InstructionResult<Self> {
         let funct3 = value.bits(13, 3);
         match funct3 {
-            0 => unimplemented!("C.SLLI"),
+            0 => {
+                let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
+                let rd_raw = value.bits(7, 5) as u8;
+                let rd = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                Ok(Self::Slli {
+                    rd,
+                    rs1: rd,
+                    imm: shamt as u8,
+                })
+            }
             1 => unimplemented!("C.FLDSP"),
             2 => unimplemented!("C.LWSP"),
             3 => unimplemented!("C.LDSP"),
