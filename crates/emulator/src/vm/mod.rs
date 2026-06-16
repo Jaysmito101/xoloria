@@ -13,6 +13,7 @@ pub enum VmOutput {
 
 pub type VmResult = std::result::Result<VmOutput, VmError>;
 
+pub mod atomic;
 pub mod branch;
 pub mod jump;
 pub mod load;

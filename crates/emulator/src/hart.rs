@@ -160,10 +160,8 @@ impl Hart {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
             Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
-
             Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
             Instruction::Jalr { rd, rs1, imm } => vm::jump::execute_jalr(rd, rs1, imm, self),
-
             Instruction::Lb { rd, rs1, imm } => vm::load::execute_lb(rd, rs1, imm, self, bus),
             Instruction::Lh { rd, rs1, imm } => vm::load::execute_lh(rd, rs1, imm, self, bus),
             Instruction::Lw { rd, rs1, imm } => vm::load::execute_lw(rd, rs1, imm, self, bus),
@@ -171,12 +169,10 @@ impl Hart {
             Instruction::Lhu { rd, rs1, imm } => vm::load::execute_lhu(rd, rs1, imm, self, bus),
             Instruction::Ld { rd, rs1, imm } => vm::load::execute_ld(rd, rs1, imm, self, bus),
             Instruction::Lwu { rd, rs1, imm } => vm::load::execute_lwu(rd, rs1, imm, self, bus),
-
             Instruction::Sb { rs1, rs2, imm } => vm::store::execute_sb(rs1, rs2, imm, self, bus),
             Instruction::Sh { rs1, rs2, imm } => vm::store::execute_sh(rs1, rs2, imm, self, bus),
             Instruction::Sw { rs1, rs2, imm } => vm::store::execute_sw(rs1, rs2, imm, self, bus),
             Instruction::Sd { rs1, rs2, imm } => vm::store::execute_sd(rs1, rs2, imm, self, bus),
-
             Instruction::Addi { rd, rs1, imm } => vm::opimm::execute_addi(rd, rs1, imm, self),
             Instruction::Slti { rd, rs1, imm } => vm::opimm::execute_slti(rd, rs1, imm, self),
             Instruction::Sltiu { rd, rs1, imm } => vm::opimm::execute_sltiu(rd, rs1, imm, self),
@@ -190,14 +186,12 @@ impl Hart {
             Instruction::Slliw { rd, rs1, imm } => vm::opimm::execute_slliw(rd, rs1, imm, self),
             Instruction::Srliw { rd, rs1, imm } => vm::opimm::execute_srliw(rd, rs1, imm, self),
             Instruction::Sraiw { rd, rs1, imm } => vm::opimm::execute_sraiw(rd, rs1, imm, self),
-
             Instruction::Beq { rs1, rs2, imm } => vm::branch::execute_beq(rs1, rs2, imm, self),
             Instruction::Bne { rs1, rs2, imm } => vm::branch::execute_bne(rs1, rs2, imm, self),
             Instruction::Blt { rs1, rs2, imm } => vm::branch::execute_blt(rs1, rs2, imm, self),
             Instruction::Bge { rs1, rs2, imm } => vm::branch::execute_bge(rs1, rs2, imm, self),
             Instruction::Bltu { rs1, rs2, imm } => vm::branch::execute_bltu(rs1, rs2, imm, self),
             Instruction::Bgeu { rs1, rs2, imm } => vm::branch::execute_bgeu(rs1, rs2, imm, self),
-
             Instruction::Add { rd, rs1, rs2 } => vm::opreg::execute_add(rd, rs1, rs2, self),
             Instruction::Sub { rd, rs1, rs2 } => vm::opreg::execute_sub(rd, rs1, rs2, self),
             Instruction::Sll { rd, rs1, rs2 } => vm::opreg::execute_sll(rd, rs1, rs2, self),
@@ -222,13 +216,115 @@ impl Hart {
             Instruction::Divu { rd, rs1, rs2 } => vm::opreg::execute_divu(rd, rs1, rs2, self),
             Instruction::Rem { rd, rs1, rs2 } => vm::opreg::execute_rem(rd, rs1, rs2, self),
             Instruction::Remu { rd, rs1, rs2 } => vm::opreg::execute_remu(rd, rs1, rs2, self),
+            Instruction::Divw { rd, rs1, rs2 } => vm::opreg::execute_divw(rd, rs1, rs2, self),
+            Instruction::Divuw { rd, rs1, rs2 } => vm::opreg::execute_divuw(rd, rs1, rs2, self),
+            Instruction::Remw { rd, rs1, rs2 } => vm::opreg::execute_remw(rd, rs1, rs2, self),
+            Instruction::Remuw { rd, rs1, rs2 } => vm::opreg::execute_remuw(rd, rs1, rs2, self),
 
-            // a way to debug register state with this for now
+            Instruction::Lr {
+                rd,
+                rs1,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_lr(rd, rs1, (aq, rl), width, bus, self),
+            Instruction::Sc {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_sc(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amoxor {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amxor(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amoor {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amoor(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amoand {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amoand(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amoadd {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amoadd(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amoswap {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amoswap(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amomax {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amomax(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amomaxu {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amomaxu(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amomin {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amomin(rd, rs1, rs2, (aq, rl), width, bus, self),
+            Instruction::Amominu {
+                rd,
+                rs1,
+                rs2,
+                aq,
+                rl,
+                width,
+            } => vm::atomic::execute_amominu(rd, rs1, rs2, (aq, rl), width, bus, self),
             Instruction::Ecall => {
                 tracing::info!("{}", &self);
                 Ok(VmOutput::NextInstruction)
             }
-            _ => unimplemented!("Instruction {:?} not implemented", instruction),
+
+            Instruction::Fence => todo!(),
+            Instruction::Fencei => todo!(),
+            Instruction::Ebreak => todo!(),
+            Instruction::Sret => todo!(),
+            Instruction::Mret => todo!(),
+            Instruction::Wfi => todo!(),
+            Instruction::Csrrw { rd, rs1, csr } => todo!(),
+            Instruction::Csrrs { rd, rs1, csr } => todo!(),
+            Instruction::Csrrc { rd, rs1, csr } => todo!(),
+            Instruction::Csrrwi { rd, csr, imm } => todo!(),
+            Instruction::Csrrsi { rd, csr, imm } => todo!(),
+            Instruction::Csrrci { rd, csr, imm } => todo!(),
         };
 
         match vm_result {
