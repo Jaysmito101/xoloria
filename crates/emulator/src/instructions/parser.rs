@@ -734,7 +734,53 @@ impl Instruction {
             1 => unimplemented!("C.FLDSP"),
             2 => unimplemented!("C.LWSP"),
             3 => unimplemented!("C.LDSP"),
-            4 => unimplemented!("C.JR | C.MV | C.EBREAK | C.JALR | C.ADD"),
+            4 => {
+                let bit12 = value.bits(12, 1);
+                let rs1_raw = value.bits(7, 5) as u8;
+                let rs1 = GeneralRegisterName::try_from(rs1_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rs1_raw))?;
+                let rs2_raw = value.bits(2, 5) as u8;
+                let rs2 = GeneralRegisterName::try_from(rs2_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rs2_raw))?;
+
+                if bit12 == 0 {
+                    if rs2 == GeneralRegisterName::Zero {
+                        if rs1 == GeneralRegisterName::Zero {
+                            return Err(InstructionError::InvalidInstruction);
+                        }
+                        Ok(Self::Jalr {
+                            rd: GeneralRegisterName::Zero,
+                            rs1,
+                            imm: 0,
+                        })
+                    } else {
+                        if rs1 == GeneralRegisterName::Zero {
+                            return Err(InstructionError::InvalidInstruction);
+                        }
+                        Ok(Self::Add {
+                            rd: rs1,
+                            rs1: GeneralRegisterName::Zero,
+                            rs2,
+                        })
+                    }
+                } else if rs1 == GeneralRegisterName::Zero && rs2 == GeneralRegisterName::Zero {
+                    Ok(Self::Ebreak)
+                } else if rs2 == GeneralRegisterName::Zero {
+                    if rs1 == GeneralRegisterName::Zero {
+                        return Err(InstructionError::InvalidInstruction);
+                    }
+                    Ok(Self::Jalr {
+                        rd: GeneralRegisterName::Ra,
+                        rs1,
+                        imm: 0,
+                    })
+                } else {
+                    if rs1 == GeneralRegisterName::Zero || rs2 == GeneralRegisterName::Zero {
+                        return Err(InstructionError::InvalidInstruction);
+                    }
+                    Ok(Self::Add { rd: rs1, rs1, rs2 })
+                }
+            }
             5 => unimplemented!("C.FSDSP"),
             6 => unimplemented!("C.SWSP"),
             7 => {
