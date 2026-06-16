@@ -81,7 +81,7 @@ impl Machine {
     }
 
     pub fn load_binary(&self, location: Address, binary: &[u8]) -> Result<()> {
-        self.bus.write(location, binary)?;
+        self.bus.write_bytes(location, binary)?;
         Ok(())
     }
 

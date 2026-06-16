@@ -14,8 +14,7 @@ pub fn execute_sb(
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
     let value = hart.registers.x[rs2 as usize];
-    bus.write_u8(address, value as u8)
-        .map_err(VmError::BusError)?;
+    bus.write(address, value as u8).map_err(VmError::BusError)?;
     Ok(VmOutput::NextInstruction)
 }
 
@@ -29,7 +28,7 @@ pub fn execute_sh(
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
     let value = hart.registers.x[rs2 as usize];
-    bus.write_u16(address, value as u16)
+    bus.write(address, value as u16)
         .map_err(VmError::BusError)?;
     Ok(VmOutput::NextInstruction)
 }
@@ -44,7 +43,7 @@ pub fn execute_sw(
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
     let value = hart.registers.x[rs2 as usize];
-    bus.write_u32(address, value as u32)
+    bus.write(address, value as u32)
         .map_err(VmError::BusError)?;
     Ok(VmOutput::NextInstruction)
 }
@@ -59,6 +58,6 @@ pub fn execute_sd(
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
     let value = hart.registers.x[rs2 as usize];
-    bus.write_u64(address, value).map_err(VmError::BusError)?;
+    bus.write(address, value).map_err(VmError::BusError)?;
     Ok(VmOutput::NextInstruction)
 }

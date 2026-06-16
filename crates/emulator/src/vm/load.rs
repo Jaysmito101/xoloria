@@ -25,7 +25,7 @@ pub fn execute_lb(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u8(address).map_err(VmError::BusError)?;
+    let value: u8 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as i8 as u64;
     Ok(VmOutput::NextInstruction)
 }
@@ -39,7 +39,7 @@ pub fn execute_lh(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u16(address).map_err(VmError::BusError)?;
+    let value: u16 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as i16 as u64;
     Ok(VmOutput::NextInstruction)
 }
@@ -53,7 +53,7 @@ pub fn execute_lw(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u32(address).map_err(VmError::BusError)?;
+    let value: u32 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as i32 as u64;
     Ok(VmOutput::NextInstruction)
 }
@@ -67,7 +67,7 @@ pub fn execute_lbu(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u8(address).map_err(VmError::BusError)?;
+    let value: u8 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as u64;
     Ok(VmOutput::NextInstruction)
 }
@@ -81,7 +81,7 @@ pub fn execute_lhu(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u16(address).map_err(VmError::BusError)?;
+    let value: u16 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as u64;
     Ok(VmOutput::NextInstruction)
 }
@@ -95,7 +95,7 @@ pub fn execute_ld(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u64(address).map_err(VmError::BusError)?;
+    let value: u64 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value;
     Ok(VmOutput::NextInstruction)
 }
@@ -109,7 +109,7 @@ pub fn execute_lwu(
     bus: &Bus,
 ) -> VmResult {
     let address = hart.registers.x[rs1 as usize].wrapping_add_signed(imm as i64);
-    let value = bus.read_u32(address).map_err(VmError::BusError)?;
+    let value: u32 = bus.read(address).map_err(VmError::BusError)?;
     hart.registers.x[rd as usize] = value as u64;
     Ok(VmOutput::NextInstruction)
 }

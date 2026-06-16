@@ -151,7 +151,7 @@ impl Hart {
     }
 
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
-        let instruction_value = bus.read_u32(self.registers.pc)?;
+        let instruction_value: u32 = bus.read(self.registers.pc)?;
         let is_compressed = instruction_value & 0b11 != 0b11;
         let instruction = Instruction::try_from(instruction_value)?;
         tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
