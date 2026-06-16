@@ -6,7 +6,6 @@ pub type Address = u64;
 
 pub enum BusDevice {
     Memory(Memory),
-    Generic(Box<dyn BusIO + Send + Sync>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,71 +18,61 @@ pub enum BusError {
 
 pub type BusResult<T> = std::result::Result<T, BusError>;
 
+pub trait BusOperable: Sized + Copy + Send + Sync {}
+
+impl BusOperable for u8 {}
+impl BusOperable for u16 {}
+impl BusOperable for u32 {}
+impl BusOperable for u64 {}
+
 pub trait BusIO {
-    fn read(&self, offset: Address, buffer: &mut [u8]) -> BusResult<()>;
-    fn write(&self, offset: Address, data: &[u8]) -> BusResult<()>;
+    fn read<T>(&self, offset: Address) -> BusResult<T>
+    where
+        T: BusOperable;
 
-    #[inline]
-    fn read_u8(&self, offset: Address) -> BusResult<u8> {
-        let mut buffer = [0u8; 1];
-        self.read(offset, &mut buffer)?;
-        Ok(buffer[0])
-    }
+    fn write<T>(&self, offset: Address, data: T) -> BusResult<()>
+    where
+        T: BusOperable;
 
-    #[inline]
-    fn write_u8(&self, offset: Address, data: u8) -> BusResult<()> {
-        self.write(offset, &[data])
-    }
+    fn rmw<T, F>(&self, offset: Address, f: F) -> BusResult<T>
+    where
+        T: BusOperable,
+        F: FnOnce(T) -> T;
 
-    #[inline]
-    fn read_u16(&self, offset: Address) -> BusResult<u16> {
-        let mut buffer = [0u8; 2];
-        self.read(offset, &mut buffer)?;
-        Ok(u16::from_le_bytes(buffer))
-    }
-
-    #[inline]
-    fn write_u16(&self, offset: Address, data: u16) -> BusResult<()> {
-        self.write(offset, &data.to_le_bytes())
-    }
-
-    #[inline]
-    fn read_u32(&self, offset: Address) -> BusResult<u32> {
-        let mut buffer = [0u8; 4];
-        self.read(offset, &mut buffer)?;
-        Ok(u32::from_le_bytes(buffer))
-    }
-
-    #[inline]
-    fn write_u32(&self, offset: Address, data: u32) -> BusResult<()> {
-        self.write(offset, &data.to_le_bytes())
-    }
-
-    #[inline]
-    fn read_u64(&self, offset: Address) -> BusResult<u64> {
-        let mut buffer = [0u8; 8];
-        self.read(offset, &mut buffer)?;
-        Ok(u64::from_le_bytes(buffer))
-    }
-
-    #[inline]
-    fn write_u64(&self, offset: Address, data: u64) -> BusResult<()> {
-        self.write(offset, &data.to_le_bytes())
+    fn write_bytes(&self, offset: Address, data: &[u8]) -> BusResult<()> {
+        for (i, &byte) in data.iter().enumerate() {
+            self.write(offset + i as u64, byte)?;
+        }
+        Ok(())
     }
 }
 
 impl BusIO for BusDevice {
-    fn read(&self, offset: Address, buffer: &mut [u8]) -> BusResult<()> {
+    fn read<T>(&self, offset: Address) -> BusResult<T>
+    where
+        T: BusOperable,
+    {
         match self {
-            BusDevice::Memory(memory) => memory.read(offset, buffer),
-            BusDevice::Generic(device) => device.read(offset, buffer),
+            BusDevice::Memory(mem) => mem.read(offset),
         }
     }
 
-    fn write(&self, offset: Address, data: &[u8]) -> BusResult<()> {
+    fn write<T>(&self, offset: Address, data: T) -> BusResult<()>
+    where
+        T: BusOperable,
+    {
         match self {
-            BusDevice::Memory(memory) => memory.write(offset, data),
-            BusDevice::Generic(device) => device.write(offset, data),
+            BusDevice::Memory(mem) => mem.write(offset, data),
+        }
+    }
+
+    fn rmw<T, F>(&self, offset: Address, f: F) -> BusResult<T>
+    where
+        T: BusOperable,
+        F: FnOnce(T) -> T,
+    {
+        match self {
+            BusDevice::Memory(mem) => mem.rmw(offset, f),
         }
     }
 }
@@ -157,29 +146,37 @@ impl Bus {
 }
 
 impl BusIO for Bus {
-    fn read(&self, location: Address, buffer: &mut [u8]) -> BusResult<()> {
-        let mapping = self
-            .mapping_index(location)
-            .map(|index| &self.mappings[index])
-            .ok_or(BusError::UnmappedLocation(location))?;
-
-        if buffer.len() as u64 > mapping.range.end - location {
-            return Err(BusError::IndexOutOfBounds(location, mapping.range.clone()));
-        }
-
-        mapping.handler.read(location - mapping.range.start, buffer)
+    fn read<T>(&self, offset: Address) -> BusResult<T>
+    where
+        T: BusOperable,
+    {
+        let index = self
+            .mapping_index(offset)
+            .ok_or(BusError::UnmappedLocation(offset))?;
+        let mapping = &self.mappings[index];
+        mapping.handler.read(offset - mapping.range.start)
     }
 
-    fn write(&self, location: Address, data: &[u8]) -> BusResult<()> {
-        let mapping = self
-            .mapping_index(location)
-            .map(|index| &self.mappings[index])
-            .ok_or(BusError::UnmappedLocation(location))?;
+    fn write<T>(&self, offset: Address, data: T) -> BusResult<()>
+    where
+        T: BusOperable,
+    {
+        let index = self
+            .mapping_index(offset)
+            .ok_or(BusError::UnmappedLocation(offset))?;
+        let mapping = &self.mappings[index];
+        mapping.handler.write(offset - mapping.range.start, data)
+    }
 
-        if data.len() as u64 > mapping.range.end - location {
-            return Err(BusError::IndexOutOfBounds(location, mapping.range.clone()));
-        }
-
-        mapping.handler.write(location - mapping.range.start, data)
+    fn rmw<T, F>(&self, offset: Address, f: F) -> BusResult<T>
+    where
+        T: BusOperable,
+        F: FnOnce(T) -> T,
+    {
+        let index = self
+            .mapping_index(offset)
+            .ok_or(BusError::UnmappedLocation(offset))?;
+        let mapping = &self.mappings[index];
+        mapping.handler.rmw(offset - mapping.range.start, f)
     }
 }
