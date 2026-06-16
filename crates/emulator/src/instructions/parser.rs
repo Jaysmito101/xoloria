@@ -578,7 +578,20 @@ impl Instruction {
             0 => unimplemented!("C.ADDI4SPN"),
             1 => unimplemented!("C.FLD"),
             2 => unimplemented!("C.LW"),
-            3 => unimplemented!("C.LD"),
+            3 => {
+                let imm = (value.bits(5, 2) << 6) | (value.bits(10, 3) << 3);
+                let rd_raw = value.bits(2, 3) as u8;
+                let rd = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rs1_raw = value.bits(7, 3) as u8;
+                let rs1 = GeneralRegisterName::try_from(rs1_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rs1_raw))?;
+                Ok(Self::Ld {
+                    rd,
+                    rs1,
+                    imm: imm as i32,
+                })
+            }
             5 => unimplemented!("C.FSD"),
             6 => unimplemented!("C.SW"),
             7 => unimplemented!("C.SD"),
