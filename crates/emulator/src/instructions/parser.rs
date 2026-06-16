@@ -669,9 +669,81 @@ impl Instruction {
                     }
                 }
             }
-            4 => unimplemented!(
-                "C.SRLI | C.SRAI | C.ANDI | C.SUB | C.XOR | C.OR | C.AND | C.SUBW | C.ADDW"
-            ),
+            4 => {
+                let funct2 = value.bits(10, 2);
+                let rd_raw = value.bits(7, 3) as u8;
+                let rd_creg = GeneralRegisterName::try_from(rd_raw)
+                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                match funct2 {
+                    0b00 => {
+                        let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
+                        Ok(Self::Srli {
+                            rd: rd_creg,
+                            rs1: rd_creg,
+                            imm: shamt as u8,
+                        })
+                    }
+                    0b01 => {
+                        let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
+                        Ok(Self::Srai {
+                            rd: rd_creg,
+                            rs1: rd_creg,
+                            imm: shamt as u8,
+                        })
+                    }
+                    0b10 => {
+                        let imm =
+                            ((value.bits(12, 1) as i32) << 31) >> 26 | value.bits(2, 5) as i32;
+                        Ok(Self::Andi {
+                            rd: rd_creg,
+                            rs1: rd_creg,
+                            imm,
+                        })
+                    }
+                    0b11 => {
+                        let bit12 = value.bits(12, 1);
+                        let funct1 = value.bits(5, 2);
+                        let rs2_creg = GeneralRegisterName::try_from(value.bits(2, 3) as u8)
+                            .map_err(|_| {
+                                InstructionError::UnknownRegister(value.bits(2, 3) as u8)
+                            })?;
+                        match (bit12, funct1) {
+                            (0, 0b00) => Ok(Self::Sub {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            (0, 0b01) => Ok(Self::Xor {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            (0, 0b10) => Ok(Self::Or {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            (0, 0b11) => Ok(Self::And {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            (1, 0b00) => Ok(Self::Subw {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            (1, 0b01) => Ok(Self::Addw {
+                                rd: rd_creg,
+                                rs1: rd_creg,
+                                rs2: rs2_creg,
+                            }),
+                            _ => Err(InstructionError::InvalidInstruction),
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
             5 => {
                 let offset11 = value.bits(12, 1) << 11
                     | value.bits(8, 1) << 10
