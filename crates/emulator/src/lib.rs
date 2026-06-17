@@ -14,7 +14,7 @@ mod memory;
 pub use memory::Memory;
 
 mod hart;
-pub use hart::Hart;
+pub use hart::{Hart, HartRegisters, PrivilageMode};
 
 pub mod instructions;
 pub mod registers;
