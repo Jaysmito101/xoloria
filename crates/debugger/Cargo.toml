@@ -15,3 +15,6 @@ addr2line.workspace = true
 gimli.workspace = true
 object.workspace = true
 rustc-demangle.workspace = true
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true

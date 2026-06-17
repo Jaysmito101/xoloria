@@ -207,8 +207,14 @@ pub struct MachineConfig {
 }
 
 #[derive(Debug)]
+pub enum BreakpointTarget {
+    Address(u64),
+    Symbol(String),
+}
+
+#[derive(Debug)]
 pub enum DebugCommand {
-    Breakpoint(Option<u64>),
+    Breakpoint(Option<BreakpointTarget>),
     Delete(DeleteTarget),
     Info(InfoTarget),
     Memory(u64),
@@ -220,6 +226,8 @@ pub enum DebugCommand {
     Reset,
     Targets,
     Help,
+    SaveBreakpoints,
+    LoadBreakpoints,
 }
 
 #[derive(Debug)]
@@ -242,8 +250,28 @@ impl DebugCommand {
         }
         match parts[0] {
             "bp" | "break" | "b" => {
-                let addr = parts.get(1).map(|s| parse_addr(s)).transpose()?;
-                Ok(Self::Breakpoint(addr))
+                let target = parts.get(1).map(|s| {
+                    if let Ok(addr) = parse_addr(s) {
+                        BreakpointTarget::Address(addr)
+                    } else {
+                        BreakpointTarget::Symbol(s.to_string())
+                    }
+                });
+                Ok(Self::Breakpoint(target))
+            }
+            "save" => {
+                if parts.get(1).copied() == Some("bp") || parts.get(1).copied() == Some("breakpoints") {
+                    Ok(Self::SaveBreakpoints)
+                } else {
+                    Err("Usage: save bp".into())
+                }
+            }
+            "load" => {
+                if parts.get(1).copied() == Some("bp") || parts.get(1).copied() == Some("breakpoints") {
+                    Ok(Self::LoadBreakpoints)
+                } else {
+                    Err("Usage: load bp".into())
+                }
             }
             "del" | "delete" => {
                 if parts.get(1).copied() == Some("all") {

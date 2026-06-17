@@ -213,6 +213,9 @@ impl Debugger {
             "",
             "=== Disassembly ===",
             " b : Toggle breakpoint at cursor",
+            " Shift+D : Clear all breakpoints",
+            " Ctrl+S : Save breakpoints",
+            " Ctrl+L : Load breakpoints",
             " g / Enter : Follow jump / Jump to selected symbol",
             " u / Backspace : Go back in history",
             " t : Toggle jump target labels",
@@ -233,6 +236,7 @@ impl Debugger {
             "=== Console ===",
             " v : Switch console tab (Logs vs Tracing)",
             " : : Command prompt",
+            "   (e.g. :bp main, :save bp, :load bp)",
         ];
 
         let visible_lines: Vec<Line> = help_text

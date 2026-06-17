@@ -283,6 +283,15 @@ impl Debugger {
                     self.toggle_breakpoint_at(addr);
                 }
             }
+            KeyCode::Char('D') => {
+                let count = self.breakpoints.len();
+                self.breakpoints.clear();
+                self.set_info(format!("Cleared {} breakpoints", count));
+                self.disasm_cache = None;
+            }
+            KeyCode::Char('l') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                self.load_breakpoints();
+            }
             KeyCode::Char('t') => {
                 self.ui.show_targets = !self.ui.show_targets;
                 self.set_info(if self.ui.show_targets {
@@ -292,7 +301,9 @@ impl Debugger {
                 });
             }
             KeyCode::Char('s') => {
-                if self.ui.panel == Panel::Disassembly {
+                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                    self.save_breakpoints();
+                } else if self.ui.panel == Panel::Disassembly {
                     if self.ui.disasm_tab == DisasmTab::Assembly {
                         let entries = self.disassemble_around(200);
                         let hw_pc = self

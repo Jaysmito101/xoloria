@@ -520,15 +520,33 @@ impl Debugger {
                 }
             }
             Ok(command) => match command {
-                DebugCommand::Breakpoint(addr) => {
-                    let addr = addr.unwrap_or_else(|| {
-                        self.machine
+                DebugCommand::Breakpoint(target) => match target {
+                    None => {
+                        let addr = self
+                            .machine
                             .as_ref()
                             .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                            .unwrap_or(0)
-                    });
-                    self.toggle_breakpoint_at(addr);
-                }
+                            .unwrap_or(0);
+                        self.toggle_breakpoint_at(addr);
+                    }
+                    Some(crate::state::BreakpointTarget::Address(addr)) => {
+                        self.toggle_breakpoint_at(addr);
+                    }
+                    Some(crate::state::BreakpointTarget::Symbol(name)) => {
+                        let mut found = None;
+                        for (a, n) in &self.sorted_symbols {
+                            if n == &name {
+                                found = Some(*a);
+                                break;
+                            }
+                        }
+                        if let Some(addr) = found {
+                            self.toggle_breakpoint_at(addr);
+                        } else {
+                            self.set_error(format!("Symbol '{}' not found", name));
+                        }
+                    }
+                },
                 DebugCommand::Delete(target) => match target {
                     DeleteTarget::All => {
                         let count = self.breakpoints.len();
@@ -626,10 +644,70 @@ impl Debugger {
                 }
                 DebugCommand::Help => {
                     self.set_info(
-                        "bp [addr] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | help"
+                        "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | save bp | load bp | help"
                     );
                 }
+                DebugCommand::SaveBreakpoints => {
+                    self.save_breakpoints();
+                }
+                DebugCommand::LoadBreakpoints => {
+                    self.load_breakpoints();
+                }
             },
+        }
+    }
+
+    pub(crate) fn save_breakpoints(&mut self) {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&self.binary);
+        let hash = hasher.finish();
+
+        if let Some(proj_dirs) = directories::ProjectDirs::from("com", "Xoloria", "Debugger") {
+            let config_dir = proj_dirs.config_dir();
+            if !config_dir.exists() {
+                let _ = std::fs::create_dir_all(config_dir);
+            }
+            let file_path = config_dir.join(format!("breakpoints_{:016x}.json", hash));
+            let bps: Vec<u64> = self.breakpoints.iter().copied().collect();
+            match std::fs::write(&file_path, serde_json::to_string_pretty(&bps).unwrap_or_default()) {
+                Ok(_) => self.set_info(format!("Saved {} breakpoints", bps.len())),
+                Err(e) => self.set_error(format!("Failed to save breakpoints: {}", e)),
+            }
+        } else {
+            self.set_error("Could not find configuration directory");
+        }
+    }
+
+    pub(crate) fn load_breakpoints(&mut self) {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&self.binary);
+        let hash = hasher.finish();
+
+        if let Some(proj_dirs) = directories::ProjectDirs::from("com", "Xoloria", "Debugger") {
+            let config_dir = proj_dirs.config_dir();
+            let file_path = config_dir.join(format!("breakpoints_{:016x}.json", hash));
+            if file_path.exists() {
+                match std::fs::read_to_string(&file_path) {
+                    Ok(json) => {
+                        if let Ok(bps) = serde_json::from_str::<Vec<u64>>(&json) {
+                            for addr in bps {
+                                self.breakpoints.insert(addr);
+                            }
+                            self.disasm_cache = None;
+                            self.set_info(format!("Loaded {} breakpoints", self.breakpoints.len()));
+                        } else {
+                            self.set_error("Failed to parse breakpoints JSON");
+                        }
+                    }
+                    Err(e) => self.set_error(format!("Failed to read breakpoints: {}", e)),
+                }
+            } else {
+                self.set_info("No saved breakpoints found for this binary");
+            }
+        } else {
+            self.set_error("Could not find configuration directory");
         }
     }
 
