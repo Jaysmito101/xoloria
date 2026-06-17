@@ -25,4 +25,6 @@ rustc-demangle = "0.1.24"
 directories = "5.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+evalexpr = "13.1.0"
+regex = "1.10"
 emulator = { path = "crates/emulator" }

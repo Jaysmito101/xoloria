@@ -324,11 +324,19 @@ impl DebugCommand {
     }
 }
 
-fn parse_addr(s: &str) -> Result<u64, String> {
-    let s = s.trim().trim_start_matches("0x").trim_start_matches("0X");
-    let mut addr = u64::from_str_radix(s, 16).map_err(|_| format!("Invalid address: {}", s))?;
-    if addr < 0x80000000 {
-        addr |= 0x80000000;
+pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
+    let re = regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").expect("Failed to create regex for parsing expr");
+    let expr_str = re.replace_all(s, "0x$1");
+
+    match evalexpr::eval(&expr_str) {
+        Ok(evalexpr::Value::Int(val)) => {
+            let mut addr = val as u64;
+            if addr < 0x80000000 {
+                addr |= 0x80000000;
+            }
+            Ok(addr)
+        }
+        Ok(_) => Err(format!("Expression evaluated to non-integer: {}", s)),
+        Err(e) => Err(format!("Failed to evaluate expression '{}': {}", s, e)),
     }
-    Ok(addr)
 }
