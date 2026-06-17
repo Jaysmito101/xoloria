@@ -10,6 +10,7 @@ use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 
 use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
+use crate::ui_state::DisasmTab;
 
 impl Debugger {
     pub fn render(&mut self, frame: &mut Frame) {
@@ -477,11 +478,94 @@ impl Debugger {
         let target_abs_idx =
             cursor_target_addr.and_then(|addr| all_entries.iter().position(|e| e.addr == addr));
 
+        let titles = vec![
+            Line::from(vec![
+                Span::styled(
+                    if self.ui.disasm_tab == DisasmTab::Assembly { " [Assembly] " } else { " Assembly " },
+                    Style::default().fg(if self.ui.disasm_tab == DisasmTab::Assembly { self.theme.accent } else { self.theme.dim }),
+                ),
+                Span::styled(
+                    if self.ui.disasm_tab == DisasmTab::Source { " [Source] " } else { " Source " },
+                    Style::default().fg(if self.ui.disasm_tab == DisasmTab::Source { self.theme.accent } else { self.theme.dim }),
+                ),
+            ])
+        ];
+        
         let title = if self.breakpoints.is_empty() {
-            "Disassembly".into()
+            "Disassembly (s: toggle tab)".into()
         } else {
-            format!("Disassembly ({} bp)", self.breakpoints.len())
+            format!("Disassembly ({} bp) (s: toggle tab)", self.breakpoints.len())
         };
+        
+        let block = self.panel_block(&title, focused);
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .split(inner_area);
+        
+        let tabs = Tabs::new(titles);
+        frame.render_widget(tabs, layout[0]);
+        let content_area = layout[1];
+        
+        let visible_height = content_area.height as usize;
+
+        if self.ui.disasm_tab == DisasmTab::Source {
+            let source_loc = self.source_locations.get(&center_addr).cloned();
+            if let Some((path, target_line)) = source_loc {
+                let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
+                if lines_len > 0 {
+                    let target_line = target_line as usize;
+                    let max_scroll = lines_len.saturating_sub(visible_height);
+                    
+                    if self.ui.source_scroll == 0 {
+                        self.ui.source_scroll = target_line.saturating_sub(visible_height / 2);
+                    }
+                    
+                    self.ui.source_scroll = self.ui.source_scroll.min(max_scroll);
+                    let scroll = self.ui.source_scroll;
+
+                    let mut source_lines = Vec::new();
+                    let theme_dim = self.theme.dim;
+                    let theme_accent = self.theme.accent;
+                    
+                    let lines = self.get_source_file(&path).unwrap();
+
+                    for (i, line) in lines.iter().enumerate().skip(scroll).take(visible_height) {
+                        let is_target = i + 1 == target_line;
+                        let line_num = format!("{:4} | ", i + 1);
+                        
+                        let mut spans = vec![
+                            Span::styled(line_num, Style::default().fg(theme_dim)),
+                        ];
+                        
+                        if is_target {
+                            spans.push(Span::styled("► ", Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)));
+                            spans.push(Span::styled(line, Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)));
+                        } else {
+                            spans.push(Span::raw("  "));
+                            spans.push(Span::raw(line));
+                        }
+                        
+                        source_lines.push(Line::from(spans));
+                    }
+                    
+                    let paragraph = Paragraph::new(source_lines);
+                    frame.render_widget(paragraph, content_area);
+                    return;
+                } else {
+                    let text = format!("Could not load source file: {}", path);
+                    frame.render_widget(Paragraph::new(text).style(Style::default().fg(self.theme.error)), content_area);
+                    return;
+                }
+            } else {
+                let text = "No source information available for current address.";
+                frame.render_widget(Paragraph::new(text).style(Style::default().fg(self.theme.dim)), content_area);
+                return;
+            }
+        }
 
         let x_regs = {
             if let Some(machine) = self.machine.as_ref() {
@@ -628,8 +712,8 @@ impl Debugger {
         let view_end = (view_start + visible_height).min(all_lines.len());
         let visible_lines = all_lines[view_start..view_end].to_vec();
 
-        let paragraph = Paragraph::new(visible_lines).block(self.panel_block(&title, focused));
-        frame.render_widget(paragraph, area);
+        let paragraph = Paragraph::new(visible_lines);
+        frame.render_widget(paragraph, content_area);
     }
 
     fn render_memory(&mut self, frame: &mut Frame, area: Rect) {

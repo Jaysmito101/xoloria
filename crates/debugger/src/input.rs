@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
+use crate::ui_state::DisasmTab;
 
 impl Debugger {
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -265,6 +266,15 @@ impl Debugger {
                     "Jump targets: OFF"
                 });
             }
+            KeyCode::Char('s') => {
+                if self.ui.panel == Panel::Disassembly {
+                    self.ui.disasm_tab = if self.ui.disasm_tab == DisasmTab::Assembly {
+                        DisasmTab::Source
+                    } else {
+                        DisasmTab::Assembly
+                    };
+                }
+            }
             KeyCode::Char('v') => {
                 self.ui.console_tab = self.ui.console_tab.next();
             }
@@ -319,7 +329,11 @@ impl Debugger {
     fn scroll(&mut self, delta: i32) {
         match self.ui.panel {
             Panel::Disassembly => {
-                self.ui.disasm_cursor += delta;
+                if self.ui.disasm_tab == DisasmTab::Source {
+                    self.ui.source_scroll = (self.ui.source_scroll as i32 + delta).max(0) as usize;
+                } else {
+                    self.ui.disasm_cursor += delta;
+                }
             }
             Panel::Memory => {
                 let byte_delta = delta as i64 * 16;
@@ -363,7 +377,13 @@ impl Debugger {
 
                 if delta != 0 {
                     match panel {
-                        Panel::Disassembly => self.ui.disasm_cursor += delta,
+                        Panel::Disassembly => {
+                            if self.ui.disasm_tab == DisasmTab::Source {
+                                self.ui.source_scroll = (self.ui.source_scroll as i32 + delta).max(0) as usize;
+                            } else {
+                                self.ui.disasm_cursor += delta;
+                            }
+                        }
                         Panel::Memory => {
                             let byte_delta = delta as i64 * 16;
                             self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;

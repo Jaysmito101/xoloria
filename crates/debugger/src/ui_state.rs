@@ -24,6 +24,14 @@ pub struct UiState {
     pub symbols_search: String,
     pub show_help: bool,
     pub help_scroll: usize,
+    pub disasm_tab: DisasmTab,
+    pub source_scroll: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DisasmTab {
+    Assembly,
+    Source,
 }
 
 impl UiState {
@@ -49,6 +57,8 @@ impl UiState {
             symbols_search: String::new(),
             show_help: false,
             help_scroll: 0,
+            disasm_tab: DisasmTab::Assembly,
+            source_scroll: 0,
         }
     }
 

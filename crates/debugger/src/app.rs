@@ -36,6 +36,8 @@ pub struct Debugger {
     pub(crate) disasm_cache: Option<DisasmCache>,
 
     pub(crate) source_lines: HashMap<u64, String>,
+    pub(crate) source_locations: HashMap<u64, (String, u32)>,
+    pub(crate) source_files_cache: HashMap<String, Option<Vec<String>>>,
     pub(crate) symbols: HashMap<u64, String>,
     pub(crate) sorted_symbols: Vec<(u64, String)>,
 }
@@ -51,9 +53,9 @@ pub(crate) struct DisasmCache {
 impl Debugger {
     pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
-        let (source_lines, symbols) = match elf_path {
+        let (source_lines, source_locations, symbols) = match elf_path {
             Some(path) => Self::load_elf_symbols(path),
-            None => (HashMap::new(), HashMap::new()),
+            None => (HashMap::new(), HashMap::new(), HashMap::new()),
         };
         let mut console_log = Vec::new();
         if !source_lines.is_empty() || !symbols.is_empty() {
@@ -85,6 +87,8 @@ impl Debugger {
             ui: UiState::new(),
             disasm_cache: None,
             source_lines,
+            source_locations,
+            source_files_cache: HashMap::new(),
             symbols: symbols.clone(),
             sorted_symbols: {
                 let mut s: Vec<_> = symbols.into_iter().collect();
@@ -94,14 +98,15 @@ impl Debugger {
         })
     }
 
-    fn load_elf_symbols(path: &str) -> (HashMap<u64, String>, HashMap<u64, String>) {
+    fn load_elf_symbols(path: &str) -> (HashMap<u64, String>, HashMap<u64, (String, u32)>, HashMap<u64, String>) {
         let mut source_map = HashMap::new();
+        let mut source_locs = HashMap::new();
         let mut symbol_map = HashMap::new();
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not read ELF file: {}", e);
-                return (source_map, symbol_map);
+                return (source_map, source_locs, symbol_map);
             }
         };
 
@@ -109,7 +114,7 @@ impl Debugger {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("Warning: could not parse ELF: {}", e);
-                return (source_map, symbol_map);
+                return (source_map, source_locs, symbol_map);
             }
         };
 
@@ -150,7 +155,7 @@ impl Debugger {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not load DWARF sections: {}", e);
-                return (source_map, symbol_map);
+                return (source_map, source_locs, symbol_map);
             }
         };
 
@@ -158,7 +163,7 @@ impl Debugger {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("Warning: could not build addr2line context: {}", e);
-                return (source_map, symbol_map);
+                return (source_map, source_locs, symbol_map);
             }
         };
 
@@ -176,12 +181,21 @@ impl Debugger {
                 {
                     let short: &str = file.rsplit(['/', '\\']).next().unwrap_or(file);
                     source_map.insert(pc, format!("{}:{}", short, line));
+                    source_locs.insert(pc, (file.to_string(), line));
                 }
                 offset += 2;
             }
         }
 
-        (source_map, symbol_map)
+        (source_map, source_locs, symbol_map)
+    }
+
+    pub(crate) fn get_source_file(&mut self, path: &str) -> Option<&Vec<String>> {
+        if !self.source_files_cache.contains_key(path) {
+            let content = std::fs::read_to_string(path).ok().map(|s| s.lines().map(|l| l.to_string()).collect());
+            self.source_files_cache.insert(path.to_string(), content);
+        }
+        self.source_files_cache.get(path).unwrap().as_ref()
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {
