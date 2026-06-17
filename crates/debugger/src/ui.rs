@@ -730,9 +730,16 @@ impl Debugger {
                 Color::Reset
             };
 
+            let compressed_marker = if e.is_compressed {
+                Span::styled(" [C] ", Style::default().fg(self.theme.dim).bg(bg))
+            } else {
+                Span::styled("     ", Style::default().bg(bg))
+            };
+
             let mut spans = vec![
                 marker,
                 Span::styled(format!(" {:#010x} ", e.addr), addr_style.bg(bg)),
+                compressed_marker,
             ];
 
             spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));

@@ -893,6 +893,7 @@ impl Debugger {
                     is_bp: false,
                     jump_target: None,
                     symbol: None,
+                    is_compressed: false,
                 });
                 addr += 2;
             }
@@ -945,6 +946,7 @@ impl Debugger {
             is_bp: breakpoints.contains(&addr),
             jump_target,
             symbol: None,
+            is_compressed,
         };
         Some((entry, step))
     }
@@ -1000,6 +1002,7 @@ pub struct DisasmEntry {
     pub is_bp: bool,
     pub jump_target: Option<JumpTarget>,
     pub symbol: Option<String>,
+    pub is_compressed: bool,
 }
 
 impl Clone for JumpTarget {
