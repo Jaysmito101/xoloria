@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
-    registers::{GeneralRegisterName, ISAExtensions, Misa, Register},
+    registers::{ControlRegisterName, GeneralRegisterName, ISAExtensions, Misa, Register},
     vm::{self, VmError, VmOutput},
 };
 
@@ -12,6 +12,16 @@ pub enum PrivilageMode {
     Machine = 0,
     Supervisor = 1,
     User = 2,
+}
+
+impl std::fmt::Display for PrivilageMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Machine => write!(f, "M"),
+            Self::Supervisor => write!(f, "S"),
+            Self::User => write!(f, "U"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -95,6 +105,39 @@ pub struct Hart {
     pub(crate) registers: HartRegisters,
 }
 
+impl HartRegisters {
+    pub fn pc(&self) -> Register {
+        self.pc
+    }
+    pub fn x(&self) -> &[Register; 32] {
+        &self.x
+    }
+
+    pub fn csrs(&self) -> Vec<(ControlRegisterName, Register)> {
+        use ControlRegisterName::*;
+        vec![
+            (Mhartid, self.mhartid),
+            (Misa, self.misa),
+            (Mstatus, self.mstatus),
+            (Medeleg, self.medeleg),
+            (Mideleg, self.mideleg),
+            (Mie, self.mie),
+            (Mtvec, self.mtvec),
+            (Mscratch, self.mscratch),
+            (Mepc, self.mepc),
+            (Mcause, self.mcause),
+            (Mtval, self.mtval),
+            (Mip, self.mip),
+            (Stvec, self.stvec),
+            (Sscratch, self.sscratch),
+            (Sepc, self.sepc),
+            (Scause, self.scause),
+            (Stval, self.stval),
+            (Satp, self.satp),
+        ]
+    }
+}
+
 impl Display for Hart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Privilage Mode: {:?}", self.privilage_mode)?;
@@ -104,6 +147,13 @@ impl Display for Hart {
 }
 
 impl Hart {
+    pub fn registers(&self) -> &HartRegisters {
+        &self.registers
+    }
+    pub fn privilage_mode(&self) -> PrivilageMode {
+        self.privilage_mode
+    }
+
     pub fn new(id: u64) -> Result<Self> {
         Ok(Self {
             privilage_mode: PrivilageMode::Machine,
