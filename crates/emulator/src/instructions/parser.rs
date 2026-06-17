@@ -808,9 +808,33 @@ impl Instruction {
                     imm: shamt as u8,
                 })
             }
-            1 => unimplemented!("C.FLDSP"),
-            2 => unimplemented!("C.LWSP"),
-            3 => unimplemented!("C.LDSP"),
+            1 => unimplemented!("C.FLDSP"), // we dont support floating point instructions
+            2 => {
+                let imm =
+                    (value.bits(2, 2) << 6) | (value.bits(12, 1) << 5) | (value.bits(4, 3) << 2);
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
+                if rd == GeneralRegisterName::Zero {
+                    return Err(InstructionError::InvalidInstruction);
+                }
+                Ok(Self::Lw {
+                    rd,
+                    rs1: GeneralRegisterName::Sp,
+                    imm: imm as i32,
+                })
+            }
+            3 => {
+                let imm =
+                    (value.bits(2, 3) << 6) | (value.bits(12, 1) << 5) | (value.bits(5, 2) << 3);
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
+                if rd == GeneralRegisterName::Zero {
+                    return Err(InstructionError::InvalidInstruction);
+                }
+                Ok(Self::Ld {
+                    rd,
+                    rs1: GeneralRegisterName::Sp,
+                    imm: imm as i32,
+                })
+            }
             4 => {
                 let bit12 = value.bits(12, 1);
                 let rs1 = Self::try_parse_reg(value.bits(7, 5))?;
@@ -854,8 +878,15 @@ impl Instruction {
                     Ok(Self::Add { rd: rs1, rs1, rs2 })
                 }
             }
-            5 => unimplemented!("C.FSDSP"),
-            6 => unimplemented!("C.SWSP"),
+            5 => unimplemented!("C.FSDSP"), // we dont support floating point instructions
+            6 => {
+                let imm = (value.bits(7, 2) << 6) | (value.bits(9, 4) << 2);
+                Ok(Self::Sw {
+                    rs1: GeneralRegisterName::Sp,
+                    rs2: Self::try_parse_reg(value.bits(2, 5))?,
+                    imm: imm as i32,
+                })
+            }
             7 => {
                 let rs2 = Self::try_parse_reg(value.bits(2, 5))?;
                 let imm = (value.bits(7, 3) << 6) | (value.bits(10, 3) << 3);
