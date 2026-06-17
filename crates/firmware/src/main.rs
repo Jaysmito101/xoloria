@@ -19,7 +19,6 @@ pub unsafe extern "C" fn _start() -> ! {
         r#"
         la sp, __stack_top
         auipc ra, 0x0
-        ecall
         call runtime_init
         "#
     );
@@ -73,6 +72,7 @@ fn main() -> core::result::Result<u32, ()> {
     let n = 10;
     let fibo_rec = fibo_recursive(n);
     let fibo_iter = fibo_iterative(fibo_rec);
-    let fact_rec = factorial_recursive(n);
-    Ok(fibo_rec + fibo_iter + fact_rec)
+    // let fact_rec = factorial_recursive(n);
+    // Ok(fibo_rec + fibo_iter + fact_rec)
+    Ok(fibo_rec + fibo_iter)
 }
