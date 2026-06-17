@@ -621,7 +621,19 @@ impl Instruction {
                     }),
                 }
             }
-            1 => unimplemented!("C.JAL | C.ADDIW"),
+            1 => {
+                let imm = ((value.bits(12, 1) as i32) << 31) >> 26 | value.bits(2, 5) as i32;
+                let imm = if imm & (1 << 5) != 0 {
+                    (imm | !0 << 6) as i16 as i32
+                } else {
+                    imm as i16 as i32
+                };
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
+                if rd == GeneralRegisterName::Zero {
+                    return Err(InstructionError::InvalidInstruction);
+                }
+                Ok(Self::Addiw { rd, rs1: rd, imm })
+            }
             2 => {
                 let rd = Self::try_parse_reg(value.bits(7, 5))?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 26 | value.bits(2, 5) as i32;
