@@ -653,6 +653,107 @@ impl Debugger {
                 DebugCommand::LoadBreakpoints => {
                     self.load_breakpoints();
                 }
+                DebugCommand::ReadMemory { data_type, addr_expr } => {
+                    if let Some(machine) = &self.machine {
+                        match crate::state::parse_addr(&addr_expr) {
+                            Ok(addr) => {
+                                use emulator::BusIO;
+                                match data_type {
+                                    crate::state::DataType::U8 => {
+                                        match machine.bus().read::<u8>(addr) {
+                                            Ok(v) => self.set_info(format!("Read u8 at {:#x}: {:#x} ({})", addr, v, v)),
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U16 => {
+                                        match machine.bus().read::<u16>(addr) {
+                                            Ok(v) => self.set_info(format!("Read u16 at {:#x}: {:#x} ({})", addr, v, v)),
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U32 => {
+                                        match machine.bus().read::<u32>(addr) {
+                                            Ok(v) => self.set_info(format!("Read u32 at {:#x}: {:#x} ({})", addr, v, v)),
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U64 => {
+                                        match machine.bus().read::<u64>(addr) {
+                                            Ok(v) => self.set_info(format!("Read u64 at {:#x}: {:#x} ({})", addr, v, v)),
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::I8 => {
+                                        match machine.bus().read::<u8>(addr) {
+                                            Ok(v) => { let v = v as i8; self.set_info(format!("Read i8 at {:#x}: {:#x} ({})", addr, v, v)) },
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::I16 => {
+                                        match machine.bus().read::<u16>(addr) {
+                                            Ok(v) => { let v = v as i16; self.set_info(format!("Read i16 at {:#x}: {:#x} ({})", addr, v, v)) },
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::I32 => {
+                                        match machine.bus().read::<u32>(addr) {
+                                            Ok(v) => { let v = v as i32; self.set_info(format!("Read i32 at {:#x}: {:#x} ({})", addr, v, v)) },
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::I64 => {
+                                        match machine.bus().read::<u64>(addr) {
+                                            Ok(v) => { let v = v as i64; self.set_info(format!("Read i64 at {:#x}: {:#x} ({})", addr, v, v)) },
+                                            Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => self.set_error(e),
+                        }
+                    } else {
+                        self.set_error("Machine not loaded");
+                    }
+                }
+                DebugCommand::WriteMemory { data_type, addr_expr, value_expr } => {
+                    if let Some(machine) = &self.machine {
+                        match (crate::state::parse_addr(&addr_expr), crate::state::parse_value(&value_expr)) {
+                            (Ok(addr), Ok(val)) => {
+                                use emulator::BusIO;
+                                match data_type {
+                                    crate::state::DataType::U8 | crate::state::DataType::I8 => {
+                                        match machine.bus().write::<u8>(addr, val as u8) {
+                                            Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u8, addr)),
+                                            Err(e) => self.set_error(format!("Write failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U16 | crate::state::DataType::I16 => {
+                                        match machine.bus().write::<u16>(addr, val as u16) {
+                                            Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u16, addr)),
+                                            Err(e) => self.set_error(format!("Write failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U32 | crate::state::DataType::I32 => {
+                                        match machine.bus().write::<u32>(addr, val as u32) {
+                                            Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u32, addr)),
+                                            Err(e) => self.set_error(format!("Write failed: {:?}", e)),
+                                        }
+                                    }
+                                    crate::state::DataType::U64 | crate::state::DataType::I64 => {
+                                        match machine.bus().write::<u64>(addr, val as u64) {
+                                            Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u64, addr)),
+                                            Err(e) => self.set_error(format!("Write failed: {:?}", e)),
+                                        }
+                                    }
+                                }
+                            }
+                            (Err(e), _) => self.set_error(e),
+                            (_, Err(e)) => self.set_error(e),
+                        }
+                    } else {
+                        self.set_error("Machine not loaded");
+                    }
+                }
             },
         }
     }

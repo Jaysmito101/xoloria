@@ -237,6 +237,8 @@ impl Debugger {
             " v : Switch console tab (Logs vs Tracing)",
             " : : Command prompt",
             "   (e.g. :bp main, :save bp, :load bp)",
+            "   (e.g. :read u32 0x1000)",
+            "   (e.g. :write u32 0x1000 = 0xff)",
         ];
 
         let visible_lines: Vec<Line> = help_text

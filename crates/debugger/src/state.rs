@@ -212,6 +212,28 @@ pub enum BreakpointTarget {
     Symbol(String),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum DataType {
+    U8, U16, U32, U64,
+    I8, I16, I32, I64,
+}
+
+impl DataType {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "u8" => Ok(Self::U8),
+            "u16" => Ok(Self::U16),
+            "u32" => Ok(Self::U32),
+            "u64" => Ok(Self::U64),
+            "i8" => Ok(Self::I8),
+            "i16" => Ok(Self::I16),
+            "i32" => Ok(Self::I32),
+            "i64" => Ok(Self::I64),
+            _ => Err(format!("Unknown data type: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum DebugCommand {
     Breakpoint(Option<BreakpointTarget>),
@@ -228,6 +250,8 @@ pub enum DebugCommand {
     Help,
     SaveBreakpoints,
     LoadBreakpoints,
+    ReadMemory { data_type: DataType, addr_expr: String },
+    WriteMemory { data_type: DataType, addr_expr: String, value_expr: String },
 }
 
 #[derive(Debug)]
@@ -272,6 +296,27 @@ impl DebugCommand {
                 } else {
                     Err("Usage: load bp".into())
                 }
+            }
+            "read" => {
+                if parts.len() < 3 {
+                    return Err("Usage: read <type> <addr_expr>".into());
+                }
+                let data_type = DataType::parse(parts[1])?;
+                let addr_expr = parts[2..].join(" ");
+                Ok(Self::ReadMemory { data_type, addr_expr })
+            }
+            "write" => {
+                if parts.len() < 4 {
+                    return Err("Usage: write <type> <addr_expr> = <value_expr>".into());
+                }
+                let data_type = DataType::parse(parts[1])?;
+                let rest = parts[2..].join(" ");
+                let (addr_expr, value_expr) = if let Some((a, v)) = rest.split_once('=') {
+                    (a.trim().to_string(), v.trim().to_string())
+                } else {
+                    return Err("Usage: write <type> <addr_expr> = <value_expr>\nExample: write u32 0x1000 = 0x50".into());
+                };
+                Ok(Self::WriteMemory { data_type, addr_expr, value_expr })
             }
             "del" | "delete" => {
                 if parts.get(1).copied() == Some("all") {
@@ -336,6 +381,17 @@ pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
             }
             Ok(addr)
         }
+        Ok(_) => Err(format!("Expression evaluated to non-integer: {}", s)),
+        Err(e) => Err(format!("Failed to evaluate expression '{}': {}", s, e)),
+    }
+}
+
+pub(crate) fn parse_value(s: &str) -> Result<u64, String> {
+    let re = regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").unwrap();
+    let expr_str = re.replace_all(s, "0x$1");
+
+    match evalexpr::eval(&expr_str) {
+        Ok(evalexpr::Value::Int(val)) => Ok(val as u64),
         Ok(_) => Err(format!("Expression evaluated to non-integer: {}", s)),
         Err(e) => Err(format!("Failed to evaluate expression '{}': {}", s, e)),
     }
