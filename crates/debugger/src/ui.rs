@@ -236,16 +236,16 @@ impl Debugger {
             "=== Console ===",
             " v : Switch console tab (Logs vs Tracing)",
             " : : Command prompt",
-            "   (e.g. :bp main, :save bp, :load bp)",
-            "   (e.g. :read u32 0x1000)",
-            "   (e.g. :write u32 0x1000 = 0xff)",
+            " (e.g. :bp main, :save bp, :load bp)",
+            " (e.g. :read u32 0x1000)",
+            " (e.g. :write u32 0x1000 = 0xff)",
         ];
 
         let visible_lines: Vec<Line> = help_text
             .into_iter()
             .skip(self.ui.help_scroll)
             .take((modal_area.height.saturating_sub(2)) as usize)
-            .map(|s| Line::from(s))
+            .map(Line::from)
             .collect();
 
         let block = Block::default()
@@ -464,8 +464,6 @@ impl Debugger {
     fn render_disassembly(&mut self, frame: &mut Frame, area: Rect) {
         self.ui.panel_rects.insert(Panel::Disassembly, area);
         let focused = self.ui.panel == Panel::Disassembly;
-        let visible_height = area.height.saturating_sub(2) as usize;
-
         let all_entries = self.disassemble_around(200);
 
         let hw_pc = self
@@ -601,13 +599,11 @@ impl Debugger {
                         };
                         spans.push(marker);
 
-                        if is_target {
-                            if let Some(addr) = mapped_addr {
-                                spans.push(Span::styled(
-                                    format!("[{:#010x}] ", addr),
-                                    Style::default().fg(theme_dim),
-                                ));
-                            }
+                        if is_target && let Some(addr) = mapped_addr {
+                            spans.push(Span::styled(
+                                format!("[{:#010x}] ", addr),
+                                Style::default().fg(theme_dim),
+                            ));
                         }
 
                         let text_style = if is_target && is_pc {
@@ -1315,15 +1311,16 @@ fn extract_register_values_from_asm(asm: &str, x_regs: &[u64; 32]) -> Vec<(Strin
     let mut regs = Vec::new();
     let mut seen_indices = Vec::new();
 
-    let tokens = asm.split(|c: char| c == ' ' || c == ',' || c == '(' || c == ')');
+    let tokens = asm.split([' ', ',', '(', ')']);
     for token in tokens {
         let token = token.trim();
-        if let Some(idx) = parse_register_name(token) {
-            if idx != 0 && !seen_indices.contains(&idx) {
-                seen_indices.push(idx);
-                let val = x_regs[idx];
-                regs.push((token.to_string(), val));
-            }
+        if let Some(idx) = parse_register_name(token)
+            && idx != 0
+            && !seen_indices.contains(&idx)
+        {
+            seen_indices.push(idx);
+            let val = x_regs[idx];
+            regs.push((token.to_string(), val));
         }
     }
     regs
