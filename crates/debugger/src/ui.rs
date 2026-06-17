@@ -747,8 +747,14 @@ impl Debugger {
             if self.ui.show_targets {
                 match &e.jump_target {
                     Some(JumpTarget::Known(addr)) => {
+                        let sym_name = self.sorted_symbols.iter().find(|(a, _)| a == addr).map(|(_, n)| n.as_str());
+                        let target_str = if let Some(sym) = sym_name {
+                            format!(" → {:#x} <{}>", addr, sym)
+                        } else {
+                            format!(" → {:#x}", addr)
+                        };
                         spans.push(Span::styled(
-                            format!(" → {:#x}", addr),
+                            target_str,
                             Style::default().fg(self.theme.target).bg(bg),
                         ));
                     }
