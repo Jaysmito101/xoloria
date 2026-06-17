@@ -25,6 +25,7 @@ fn main() -> anyhow::Result<()> {
             unimplemented!("BuildAll command is not implemented yet")
         }
         opts::Command::Cli { debug, args } => build::run_cli(debug, args)?,
+        opts::Command::Debugger { debug, args } => build::run_debugger(debug, args)?,
     };
 
     Ok(())

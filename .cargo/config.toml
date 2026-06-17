@@ -2,6 +2,7 @@
 xtask = ["run", "--release", "--package", "xtask", "--"]
 
 emu = ["xtask", "cli", "--"]
+dbg = ["xtask", "debugger", "--"]
 firmware = ["xtask", "build-firmware", "--"]
 dump = ["xtask", "dump-firmware", "--"]
 

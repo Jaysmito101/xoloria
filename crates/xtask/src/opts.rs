@@ -26,4 +26,10 @@ pub enum Command {
         #[clap(short, long, default_value_t = false)]
         debug: bool,
     },
+    Debugger {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        #[clap(short, long, default_value_t = false)]
+        debug: bool,
+    },
 }

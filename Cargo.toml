@@ -4,6 +4,7 @@ members = [
     "crates/emulator",
     "crates/firmware",
     "crates/cli",
+    "crates/debugger",
     "crates/xtask",
 ]
 
