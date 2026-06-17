@@ -140,6 +140,9 @@ impl Debugger {
             KeyCode::Char('n') | KeyCode::Char(' ') => {
                 if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
                     self.step_hart(1);
+                    self.ui.view_center_addr = None;
+                    self.ui.disasm_cursor = 0;
+                    self.disasm_cache = None;
                 }
             }
 
