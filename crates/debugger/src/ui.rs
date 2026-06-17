@@ -385,21 +385,9 @@ impl Debugger {
         let abs_cursor = (pc_idx + self.ui.disasm_cursor).max(0) as usize;
         let abs_cursor = abs_cursor.min(all_entries.len().saturating_sub(1));
 
-        let half = visible_height / 2;
-        let view_start = if abs_cursor < half {
-            0
-        } else if abs_cursor + half >= all_entries.len() {
-            all_entries.len().saturating_sub(visible_height)
-        } else {
-            abs_cursor.saturating_sub(half)
-        };
-        let view_end = (view_start + visible_height).min(all_entries.len());
-        let visible = &all_entries[view_start..view_end];
-        let cursor_in_view = abs_cursor.saturating_sub(view_start);
-
         let cursor_target_addr = if self.ui.show_targets {
-            visible
-                .get(cursor_in_view)
+            all_entries
+                .get(abs_cursor)
                 .and_then(|e| match &e.jump_target {
                     Some(JumpTarget::Known(a)) => Some(*a),
                     _ => None,
@@ -408,8 +396,8 @@ impl Debugger {
             None
         };
 
-        let target_in_view =
-            cursor_target_addr.and_then(|addr| visible.iter().position(|e| e.addr == addr));
+        let target_abs_idx =
+            cursor_target_addr.and_then(|addr| all_entries.iter().position(|e| e.addr == addr));
 
         let title = if self.breakpoints.is_empty() {
             "Disassembly".into()
@@ -425,122 +413,144 @@ impl Debugger {
             }
         };
 
-        let lines: Vec<Line> = visible
-            .iter()
-            .enumerate()
-            .map(|(i, e)| {
-                let is_cursor = focused && i == cursor_in_view;
-                let is_target_line = target_in_view == Some(i);
+        let mut all_lines: Vec<Line> = Vec::new();
+        let mut cursor_line_idx = 0;
 
-                let marker = if e.is_pc {
-                    Span::styled(
-                        "►",
-                        Style::default()
-                            .fg(self.theme.accent)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                } else if e.is_bp {
-                    Span::styled(
-                        "●",
-                        Style::default()
-                            .fg(self.theme.breakpoint)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                } else if is_target_line {
-                    Span::styled(
-                        "◄",
-                        Style::default()
-                            .fg(self.theme.target)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                } else {
-                    Span::raw(" ")
-                };
+        for (i, e) in all_entries.iter().enumerate() {
+            let is_cursor = focused && i == abs_cursor;
+            let is_target_line = target_abs_idx == Some(i);
 
-                let text_color = if e.is_pc {
-                    self.theme.accent
-                } else if is_target_line && self.ui.show_targets {
-                    self.theme.target
-                } else {
-                    self.theme.instruction_color(&e.text)
-                };
+            if let Some(sym) = &e.symbol {
+                all_lines.push(Line::from(Span::styled(
+                    format!("<{}>:", sym),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                )));
+            }
 
-                let base_style = if e.is_pc {
-                    Style::default().fg(text_color).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(text_color)
-                };
+            if i == abs_cursor {
+                cursor_line_idx = all_lines.len();
+            }
 
-                let addr_style = if e.is_pc && e.is_bp {
+            let marker = if e.is_pc {
+                Span::styled(
+                    "►",
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else if e.is_bp {
+                Span::styled(
+                    "●",
                     Style::default()
                         .fg(self.theme.breakpoint)
-                        .add_modifier(Modifier::BOLD)
-                } else if e.is_pc {
-                    base_style
-                } else {
-                    Style::default().fg(self.theme.dim)
-                };
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else if is_target_line {
+                Span::styled(
+                    "◄",
+                    Style::default()
+                        .fg(self.theme.target)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw(" ")
+            };
 
-                let bg = if is_cursor {
-                    self.theme.cursor_bg
-                } else {
-                    Color::Reset
-                };
+            let text_color = if e.is_pc {
+                self.theme.accent
+            } else if is_target_line && self.ui.show_targets {
+                self.theme.target
+            } else {
+                self.theme.instruction_color(&e.text)
+            };
 
-                let mut spans = vec![
-                    marker,
-                    Span::styled(format!(" {:#010x} ", e.addr), addr_style.bg(bg)),
-                    Span::styled(e.text.clone(), base_style.bg(bg)),
-                ];
+            let base_style = if e.is_pc {
+                Style::default().fg(text_color).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(text_color)
+            };
 
-                if self.ui.show_targets {
-                    match &e.jump_target {
-                        Some(JumpTarget::Known(addr)) => {
-                            spans.push(Span::styled(
-                                format!(" → {:#x}", addr),
-                                Style::default().fg(self.theme.target).bg(bg),
-                            ));
-                        }
-                        Some(JumpTarget::Unknown) => {
-                            spans.push(Span::styled(
-                                " → ???",
-                                Style::default().fg(self.theme.dim).bg(bg),
-                            ));
-                        }
-                        None => {}
-                    }
-                }
+            let addr_style = if e.is_pc && e.is_bp {
+                Style::default()
+                    .fg(self.theme.breakpoint)
+                    .add_modifier(Modifier::BOLD)
+            } else if e.is_pc {
+                base_style
+            } else {
+                Style::default().fg(self.theme.dim)
+            };
 
-                if e.is_pc {
-                    let extracted = extract_register_values_from_asm(&e.text, &x_regs);
-                    if !extracted.is_empty() {
-                        let mut reg_str = String::from(" // ");
-                        for (idx, (name, val)) in extracted.iter().enumerate() {
-                            reg_str.push_str(&format!("{}={:#x} ({})", name, val, *val as i64));
-                            if idx < extracted.len() - 1 {
-                                reg_str.push_str(", ");
-                            }
-                        }
+            let bg = if is_cursor {
+                self.theme.cursor_bg
+            } else {
+                Color::Reset
+            };
+
+            let mut spans = vec![
+                marker,
+                Span::styled(format!(" {:#010x} ", e.addr), addr_style.bg(bg)),
+            ];
+
+            spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));
+
+            if self.ui.show_targets {
+                match &e.jump_target {
+                    Some(JumpTarget::Known(addr)) => {
                         spans.push(Span::styled(
-                            reg_str,
+                            format!(" → {:#x}", addr),
+                            Style::default().fg(self.theme.target).bg(bg),
+                        ));
+                    }
+                    Some(JumpTarget::Unknown) => {
+                        spans.push(Span::styled(
+                            " → ???",
                             Style::default().fg(self.theme.dim).bg(bg),
                         ));
                     }
+                    None => {}
                 }
+            }
 
-                // Show source file:line from DWARF debug info
-                if let Some(loc) = self.source_lines.get(&e.addr) {
+            if e.is_pc {
+                let extracted = extract_register_values_from_asm(&e.text, &x_regs);
+                if !extracted.is_empty() {
+                    let mut reg_str = String::from(" // ");
+                    for (idx, (name, val)) in extracted.iter().enumerate() {
+                        reg_str.push_str(&format!("{}={:#x} ({})", name, val, *val as i64));
+                        if idx < extracted.len() - 1 {
+                            reg_str.push_str(", ");
+                        }
+                    }
                     spans.push(Span::styled(
-                        format!(" @ {}", loc),
-                        Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
+                        reg_str,
+                        Style::default().fg(self.theme.dim).bg(bg),
                     ));
                 }
+            }
 
-                Line::from(spans)
-            })
-            .collect();
+            // Show source file:line from DWARF debug info
+            if let Some(loc) = self.source_lines.get(&e.addr) {
+                spans.push(Span::styled(
+                    format!(" @ {}", loc),
+                    Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
+                ));
+            }
 
-        let paragraph = Paragraph::new(lines).block(self.panel_block(&title, focused));
+            all_lines.push(Line::from(spans));
+        }
+
+        let half = visible_height / 2;
+        let view_start = if cursor_line_idx < half {
+            0
+        } else if cursor_line_idx + half >= all_lines.len() {
+            all_lines.len().saturating_sub(visible_height)
+        } else {
+            cursor_line_idx.saturating_sub(half)
+        };
+        let view_end = (view_start + visible_height).min(all_lines.len());
+        let visible_lines = all_lines[view_start..view_end].to_vec();
+
+        let paragraph = Paragraph::new(visible_lines).block(self.panel_block(&title, focused));
         frame.render_widget(paragraph, area);
     }
 

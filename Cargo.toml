@@ -21,5 +21,6 @@ crossterm = "0.28"
 addr2line = "0.24"
 gimli = { version = "0.31", default-features = false, features = ["read"] }
 object = { version = "0.36", default-features = false, features = ["read"] }
+rustc-demangle = "0.1.24"
 
 emulator = { path = "crates/emulator" }

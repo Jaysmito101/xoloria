@@ -287,6 +287,7 @@ dependencies = [
  "gimli",
  "object",
  "ratatui",
+ "rustc-demangle",
  "tracing",
  "tracing-subscriber",
 ]

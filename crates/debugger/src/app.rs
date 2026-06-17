@@ -36,6 +36,7 @@ pub struct Debugger {
     pub(crate) disasm_cache: Option<DisasmCache>,
 
     pub(crate) source_lines: HashMap<u64, String>,
+    pub(crate) symbols: HashMap<u64, String>,
 }
 
 pub(crate) struct DisasmCache {
@@ -49,16 +50,17 @@ pub(crate) struct DisasmCache {
 impl Debugger {
     pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
-        let source_lines = match elf_path {
+        let (source_lines, symbols) = match elf_path {
             Some(path) => Self::load_elf_symbols(path),
-            None => HashMap::new(),
+            None => (HashMap::new(), HashMap::new()),
         };
         let mut console_log = Vec::new();
-        if !source_lines.is_empty() {
+        if !source_lines.is_empty() || !symbols.is_empty() {
             console_log.push(ConsoleEntry {
                 message: format!(
-                    "Loaded {} source locations from ELF debug info",
-                    source_lines.len()
+                    "Loaded {} source locations and {} symbols from ELF debug info",
+                    source_lines.len(),
+                    symbols.len()
                 ),
                 level: ConsoleLevel::Info,
                 tick: 0,
@@ -82,16 +84,18 @@ impl Debugger {
             ui: UiState::new(),
             disasm_cache: None,
             source_lines,
+            symbols,
         })
     }
 
-    fn load_elf_symbols(path: &str) -> HashMap<u64, String> {
-        let mut map = HashMap::new();
+    fn load_elf_symbols(path: &str) -> (HashMap<u64, String>, HashMap<u64, String>) {
+        let mut source_map = HashMap::new();
+        let mut symbol_map = HashMap::new();
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not read ELF file: {}", e);
-                return map;
+                return (source_map, symbol_map);
             }
         };
 
@@ -99,11 +103,22 @@ impl Debugger {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("Warning: could not parse ELF: {}", e);
-                return map;
+                return (source_map, symbol_map);
             }
         };
 
-        use object::{Object, ObjectSection};
+        use object::{Object, ObjectSection, ObjectSymbol};
+
+        for sym in obj.symbols() {
+            if sym.is_definition() {
+                if let Ok(name) = sym.name() {
+                    if !name.is_empty() && !name.starts_with(".L") {
+                        let demangled = rustc_demangle::demangle(name).to_string();
+                        symbol_map.insert(sym.address(), demangled);
+                    }
+                }
+            }
+        }
         let endian = if obj.is_little_endian() {
             gimli::RunTimeEndian::Little
         } else {
@@ -129,7 +144,7 @@ impl Debugger {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not load DWARF sections: {}", e);
-                return map;
+                return (source_map, symbol_map);
             }
         };
 
@@ -137,7 +152,7 @@ impl Debugger {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("Warning: could not build addr2line context: {}", e);
-                return map;
+                return (source_map, symbol_map);
             }
         };
 
@@ -154,13 +169,13 @@ impl Debugger {
                     && let (Some(file), Some(line)) = (loc.file, loc.line)
                 {
                     let short: &str = file.rsplit(['/', '\\']).next().unwrap_or(file);
-                    map.insert(pc, format!("{}:{}", short, line));
+                    source_map.insert(pc, format!("{}:{}", short, line));
                 }
                 offset += 2;
             }
         }
 
-        map
+        (source_map, symbol_map)
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {
@@ -593,9 +608,14 @@ impl Debugger {
                     is_pc: addr == pc,
                     is_bp: false,
                     jump_target: None,
+                    symbol: None,
                 });
                 addr += 2;
             }
+        }
+
+        for entry in &mut entries {
+            entry.symbol = self.symbols.get(&entry.addr).cloned();
         }
 
         self.disasm_cache = Some(DisasmCache {
@@ -640,6 +660,7 @@ impl Debugger {
             is_pc: addr == pc,
             is_bp: breakpoints.contains(&addr),
             jump_target,
+            symbol: None, // Filled in later by disassemble_around
         };
         Some((entry, step))
     }
@@ -694,6 +715,7 @@ pub struct DisasmEntry {
     pub is_pc: bool,
     pub is_bp: bool,
     pub jump_target: Option<JumpTarget>,
+    pub symbol: Option<String>,
 }
 
 impl Clone for JumpTarget {
