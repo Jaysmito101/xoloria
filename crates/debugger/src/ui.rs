@@ -418,8 +418,11 @@ impl Debugger {
         };
 
         let x_regs = {
-            let machine = self.machine.as_ref().unwrap();
-            *machine.harts()[self.ui.selected_hart].registers().x()
+            if let Some(machine) = self.machine.as_ref() {
+                *machine.harts()[self.ui.selected_hart].registers().x()
+            } else {
+                [0; 32]
+            }
         };
 
         let lines: Vec<Line> = visible
@@ -511,15 +514,26 @@ impl Debugger {
                 if e.is_pc {
                     let extracted = extract_register_values_from_asm(&e.text, &x_regs);
                     if !extracted.is_empty() {
-                        let mut reg_str = String::from("  // ");
+                        let mut reg_str = String::from(" // ");
                         for (idx, (name, val)) in extracted.iter().enumerate() {
                             reg_str.push_str(&format!("{}={:#x} ({})", name, val, *val as i64));
                             if idx < extracted.len() - 1 {
                                 reg_str.push_str(", ");
                             }
                         }
-                        spans.push(Span::styled(reg_str, Style::default().fg(self.theme.dim).bg(bg)));
+                        spans.push(Span::styled(
+                            reg_str,
+                            Style::default().fg(self.theme.dim).bg(bg),
+                        ));
                     }
+                }
+
+                // Show source file:line from DWARF debug info
+                if let Some(loc) = self.source_lines.get(&e.addr) {
+                    spans.push(Span::styled(
+                        format!(" @ {}", loc),
+                        Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
+                    ));
                 }
 
                 Line::from(spans)
@@ -939,7 +953,7 @@ fn format_binary_grouped(val: u64) -> String {
 fn extract_register_values_from_asm(asm: &str, x_regs: &[u64; 32]) -> Vec<(String, u64)> {
     let mut regs = Vec::new();
     let mut seen_indices = Vec::new();
-    
+
     let tokens = asm.split(|c: char| c == ' ' || c == ',' || c == '(' || c == ')');
     for token in tokens {
         let token = token.trim();

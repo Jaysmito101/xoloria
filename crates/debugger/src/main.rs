@@ -60,6 +60,9 @@ impl<'a> MakeWriter<'a> for TuiWriter {
 struct Opts {
     #[arg(short)]
     binary: String,
+
+    #[arg(short, long)]
+    elf: Option<String>,
 }
 
 thread_local! {
@@ -68,7 +71,7 @@ thread_local! {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let dbg_instance = Debugger::new(&opts.binary)?;
+    let dbg_instance = Debugger::new(&opts.binary, opts.elf.as_deref())?;
     let tracing_log = Arc::clone(&dbg_instance.tracing_log);
     let dbg = Arc::new(Mutex::new(dbg_instance));
 

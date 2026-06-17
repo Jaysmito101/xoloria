@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use emulator::instructions::Instruction;
 use emulator::{BusIO, Machine, MachineBuilder};
@@ -34,22 +34,41 @@ pub struct Debugger {
     pub(crate) ui: UiState,
 
     pub(crate) disasm_cache: Option<DisasmCache>,
+
+    pub(crate) source_lines: HashMap<u64, String>,
 }
 
 pub(crate) struct DisasmCache {
     pub hart: usize,
     pub pc: u64,
     pub breakpoint_gen: u64,
+    pub cursor: i32,
     pub entries: Vec<DisasmEntry>,
 }
 
 impl Debugger {
-    pub fn new(binary_path: &str) -> anyhow::Result<Self> {
+    pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
+        let source_lines = match elf_path {
+            Some(path) => Self::load_elf_symbols(path),
+            None => HashMap::new(),
+        };
+        let mut console_log = Vec::new();
+        if !source_lines.is_empty() {
+            console_log.push(ConsoleEntry {
+                message: format!(
+                    "Loaded {} source locations from ELF debug info",
+                    source_lines.len()
+                ),
+                level: ConsoleLevel::Info,
+                tick: 0,
+            });
+        }
+        let min_ram = (binary.len() as u64).next_power_of_two().ilog2() - 10;
         Ok(Self {
             binary,
             config_harts: 1,
-            config_memory_exp: 5,
+            config_memory_exp: min_ram.clamp(4, 20),
             machine: None,
             hart_modes: vec![HartMode::Debug; 1],
             screen: Screen::Setup,
@@ -57,12 +76,91 @@ impl Debugger {
             tick_count: 0,
             last_message: None,
             breakpoints: HashSet::new(),
-            console_log: Vec::new(),
+            console_log,
             tracing_log: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             theme: Theme::default(),
             ui: UiState::new(),
             disasm_cache: None,
+            source_lines,
         })
+    }
+
+    fn load_elf_symbols(path: &str) -> HashMap<u64, String> {
+        let mut map = HashMap::new();
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("Warning: could not read ELF file: {}", e);
+                return map;
+            }
+        };
+
+        let obj = match object::File::parse(&*data) {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("Warning: could not parse ELF: {}", e);
+                return map;
+            }
+        };
+
+        use object::{Object, ObjectSection};
+        let endian = if obj.is_little_endian() {
+            gimli::RunTimeEndian::Little
+        } else {
+            gimli::RunTimeEndian::Big
+        };
+
+        let load_section = |id: gimli::SectionId| -> Result<
+            gimli::EndianSlice<'_, gimli::RunTimeEndian>,
+            gimli::Error,
+        > {
+            let section_data = obj
+                .section_by_name(id.name())
+                .and_then(|s| s.uncompressed_data().ok());
+            let slice = match section_data {
+                Some(std::borrow::Cow::Borrowed(bytes)) => bytes,
+                Some(std::borrow::Cow::Owned(_)) => &[],
+                None => &[],
+            };
+            Ok(gimli::EndianSlice::new(slice, endian))
+        };
+
+        let dwarf = match gimli::Dwarf::load(&load_section) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("Warning: could not load DWARF sections: {}", e);
+                return map;
+            }
+        };
+
+        let ctx = match addr2line::Context::from_dwarf(dwarf) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Warning: could not build addr2line context: {}", e);
+                return map;
+            }
+        };
+
+        for section in obj.sections() {
+            let addr = section.address();
+            let size = section.size();
+            if size == 0 {
+                continue;
+            }
+            let mut offset = 0u64;
+            while offset < size {
+                let pc = addr + offset;
+                if let Ok(Some(loc)) = ctx.find_location(pc)
+                    && let (Some(file), Some(line)) = (loc.file, loc.line)
+                {
+                    let short: &str = file.rsplit(['/', '\\']).next().unwrap_or(file);
+                    map.insert(pc, format!("{}:{}", short, line));
+                }
+                offset += 2;
+            }
+        }
+
+        map
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {
@@ -443,6 +541,7 @@ impl Debugger {
             && cache.hart == self.ui.selected_hart
             && cache.pc == pc
             && cache.breakpoint_gen == bp_gen
+            && cache.cursor == self.ui.disasm_cursor
         {
             return cache.entries.clone();
         }
@@ -450,8 +549,18 @@ impl Debugger {
         let x_regs = hart.registers().x();
         let bus = machine.bus();
 
-        let before = count / 3;
-        let after = count - before;
+        let cursor = self.ui.disasm_cursor;
+        let before = if cursor < 0 {
+            count / 3 + (-cursor) as usize + 50
+        } else {
+            count / 3
+        };
+
+        let after = if cursor > 0 {
+            count - count / 3 + cursor as usize + 50
+        } else {
+            count - count / 3
+        };
 
         let mut entries: Vec<DisasmEntry> = Vec::new();
 
@@ -493,6 +602,7 @@ impl Debugger {
             hart: self.ui.selected_hart,
             pc,
             breakpoint_gen: bp_gen,
+            cursor: self.ui.disasm_cursor,
             entries: entries.clone(),
         });
 
