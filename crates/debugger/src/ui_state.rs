@@ -27,6 +27,8 @@ pub struct UiState {
     pub disasm_tab: DisasmTab,
     pub source_scroll: usize,
     pub source_cursor: usize,
+    pub command_history: Vec<String>,
+    pub history_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -61,12 +63,46 @@ impl UiState {
             disasm_tab: DisasmTab::Assembly,
             source_scroll: 0,
             source_cursor: 0,
+            command_history: Vec::new(),
+            history_index: None,
         }
     }
 
     pub fn set_input_mode(&mut self, mode: InputMode) {
         self.input_mode = mode;
         self.input_buffer.clear();
+        self.history_index = None;
+    }
+
+    pub fn push_command_history(&mut self, cmd: String) {
+        if cmd.is_empty() { return; }
+        if self.command_history.last() != Some(&cmd) {
+            self.command_history.push(cmd);
+        }
+        self.history_index = None;
+    }
+
+    pub fn history_up(&mut self) {
+        if self.command_history.is_empty() { return; }
+        let new_idx = match self.history_index {
+            None => self.command_history.len().saturating_sub(1),
+            Some(idx) => idx.saturating_sub(1),
+        };
+        self.history_index = Some(new_idx);
+        self.input_buffer = self.command_history[new_idx].clone();
+    }
+
+    pub fn history_down(&mut self) {
+        if let Some(idx) = self.history_index {
+            let new_idx = idx + 1;
+            if new_idx >= self.command_history.len() {
+                self.history_index = None;
+                self.input_buffer.clear();
+            } else {
+                self.history_index = Some(new_idx);
+                self.input_buffer = self.command_history[new_idx].clone();
+            }
+        }
     }
 
     pub fn input_buffer(&self) -> &str {

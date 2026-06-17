@@ -42,6 +42,8 @@ impl Debugger {
                 self.ui.set_input_mode(InputMode::Normal);
             }
             KeyCode::Enter => self.execute_command(),
+            KeyCode::Up => self.ui.history_up(),
+            KeyCode::Down => self.ui.history_down(),
             KeyCode::Backspace => {
                 if self.ui.input_buffer_is_empty() {
                     self.ui.set_input_mode(InputMode::Normal);

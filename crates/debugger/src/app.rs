@@ -513,6 +513,8 @@ impl Debugger {
             return;
         }
 
+        self.ui.push_command_history(cmd.clone());
+
         match DebugCommand::parse(&cmd) {
             Err(msg) => {
                 if !msg.is_empty() {
