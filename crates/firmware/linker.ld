@@ -9,6 +9,7 @@ SECTIONS
 {
     .text :
     {
+        KEEP(*(.text.start))
         *(.text*)
         *(.rodata*)
     } > RAM

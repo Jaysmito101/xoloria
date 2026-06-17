@@ -13,6 +13,7 @@ fn panic(_info: &PanicInfo) -> ! {
 
 #[unsafe(no_mangle)]
 #[unsafe(naked)]
+#[unsafe(link_section = ".text.start")]
 pub unsafe extern "C" fn _start() -> ! {
     naked_asm!(
         r#"
