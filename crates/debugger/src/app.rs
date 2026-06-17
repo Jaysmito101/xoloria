@@ -98,7 +98,13 @@ impl Debugger {
         })
     }
 
-    fn load_elf_symbols(path: &str) -> (HashMap<u64, String>, HashMap<u64, (String, u32)>, HashMap<u64, String>) {
+    fn load_elf_symbols(
+        path: &str,
+    ) -> (
+        HashMap<u64, String>,
+        HashMap<u64, (String, u32)>,
+        HashMap<u64, String>,
+    ) {
         let mut source_map = HashMap::new();
         let mut source_locs = HashMap::new();
         let mut symbol_map = HashMap::new();
@@ -192,13 +198,19 @@ impl Debugger {
 
     pub(crate) fn get_source_file(&mut self, path: &str) -> Option<&Vec<String>> {
         if !self.source_files_cache.contains_key(path) {
-            let content = std::fs::read_to_string(path).ok().map(|s| s.lines().map(|l| l.to_string()).collect());
+            let content = std::fs::read_to_string(path)
+                .ok()
+                .map(|s| s.lines().map(|l| l.to_string()).collect());
             self.source_files_cache.insert(path.to_string(), content);
         }
         self.source_files_cache.get(path).unwrap().as_ref()
     }
 
-    pub(crate) fn map_addr_to_source(&self, target_addr: u64, local_entries: Option<&[DisasmEntry]>) -> Option<(String, u32)> {
+    pub(crate) fn map_addr_to_source(
+        &self,
+        target_addr: u64,
+        local_entries: Option<&[DisasmEntry]>,
+    ) -> Option<(String, u32)> {
         if let Some(entries) = local_entries {
             if let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr) {
                 for i in (0..=abs_cursor).rev() {
@@ -217,7 +229,7 @@ impl Debugger {
                 }
             }
         }
-        
+
         let mut best_addr = None;
         for &addr in self.source_locations.keys() {
             if addr <= target_addr {
@@ -684,7 +696,9 @@ impl Debugger {
 
         let mut addr = pc;
         for _ in 0..after {
-            if let Some((entry, step)) = Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs) {
+            if let Some((entry, step)) =
+                Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs)
+            {
                 entries.push(entry);
                 addr += step;
             } else {
@@ -746,7 +760,7 @@ impl Debugger {
             is_pc: addr == pc,
             is_bp: breakpoints.contains(&addr),
             jump_target,
-            symbol: None, // Filled in later by disassemble_around
+            symbol: None,
         };
         Some((entry, step))
     }

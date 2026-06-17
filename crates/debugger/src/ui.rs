@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs, Wrap, Clear},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs, Wrap},
 };
 
 use emulator::registers::{ControlRegisterName, GeneralRegisterName};
@@ -187,47 +187,52 @@ impl Debugger {
         let modal_height = 35;
         let x = area.x + (area.width.saturating_sub(modal_width)) / 2;
         let y = area.y + (area.height.saturating_sub(modal_height)) / 2;
-        let modal_area = Rect::new(x, y, modal_width.min(area.width), modal_height.min(area.height));
+        let modal_area = Rect::new(
+            x,
+            y,
+            modal_width.min(area.width),
+            modal_height.min(area.height),
+        );
 
         frame.render_widget(Clear, modal_area);
 
         let help_text = vec![
             "=== General Navigation ===",
-            "  Tab / Shift+Tab   : Switch active Hart",
-            "  1, 2, 3...        : Switch active Hart (direct)",
-            "  Arrows            : Navigate panels",
-            "  f                 : Next panel",
-            "  ?                 : Toggle this help",
-            "  q                 : Quit",
+            " Tab / Shift+Tab : Switch active Hart",
+            " 1, 2, 3... : Switch active Hart (direct)",
+            " Arrows : Navigate panels",
+            " f : Next panel",
+            " ? : Toggle this help",
+            " q : Quit",
             "",
             "=== Execution ===",
-            "  c                 : Continue (Running mode)",
-            "  p                 : Pause (Debug mode)",
-            "  n / Space         : Step Instruction",
-            "  x                 : Stalled mode",
+            " c : Continue (Running mode)",
+            " p : Pause (Debug mode)",
+            " n / Space : Step Instruction",
+            " x : Stalled mode",
             "",
             "=== Disassembly ===",
-            "  b                 : Toggle breakpoint at cursor",
-            "  g / Enter         : Follow jump / Jump to selected symbol",
-            "  u / Backspace     : Go back in history",
-            "  t                 : Toggle jump target labels",
-            "  j / k             : Scroll down/up",
-            "  PageUp/PageDown   : Scroll page down/up",
-            "  Home              : Center on current PC",
-            "  Click on jump     : Jump to target",
+            " b : Toggle breakpoint at cursor",
+            " g / Enter : Follow jump / Jump to selected symbol",
+            " u / Backspace : Go back in history",
+            " t : Toggle jump target labels",
+            " j / k : Scroll down/up",
+            " PageUp/PageDown : Scroll page down/up",
+            " Home : Center on current PC",
+            " Click on jump : Jump to target",
             "",
             "=== Memory ===",
-            "  m                 : Goto memory address (Enter to confirm)",
-            "  j / k             : Scroll memory by 16 bytes",
+            " m : Goto memory address (Enter to confirm)",
+            " j / k : Scroll memory by 16 bytes",
             "",
             "=== Symbols ===",
-            "  /                 : Search symbols",
-            "  j / k             : Navigate symbol list",
-            "  Enter / Click     : Jump to symbol in disassembly",
+            " / : Search symbols",
+            " j / k : Navigate symbol list",
+            " Enter / Click : Jump to symbol in disassembly",
             "",
             "=== Console ===",
-            "  v                 : Switch console tab (Logs vs Tracing)",
-            "  :                 : Command prompt",
+            " v : Switch console tab (Logs vs Tracing)",
+            " : : Command prompt",
         ];
 
         let visible_lines: Vec<Line> = help_text
@@ -241,7 +246,7 @@ impl Debugger {
             .title(" Help (Scroll: j/k, Close: ?, Esc) ")
             .borders(Borders::ALL)
             .border_style(Style::default().fg(self.theme.accent));
-            
+
         let paragraph = Paragraph::new(visible_lines).block(block);
         frame.render_widget(paragraph, modal_area);
     }
@@ -457,10 +462,17 @@ impl Debugger {
 
         let all_entries = self.disassemble_around(200);
 
-        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+        let hw_pc = self
+            .machine
+            .as_ref()
+            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+            .unwrap_or(0);
         let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
 
-        let center_idx = all_entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+        let center_idx = all_entries
+            .iter()
+            .position(|e| e.addr == center_addr)
+            .unwrap_or(0) as i32;
         let abs_cursor = (center_idx + self.ui.disasm_cursor).max(0) as usize;
         let abs_cursor = abs_cursor.min(all_entries.len().saturating_sub(1));
 
@@ -478,25 +490,42 @@ impl Debugger {
         let target_abs_idx =
             cursor_target_addr.and_then(|addr| all_entries.iter().position(|e| e.addr == addr));
 
-        let titles = vec![
-            Line::from(vec![
-                Span::styled(
-                    if self.ui.disasm_tab == DisasmTab::Assembly { " [Assembly] " } else { " Assembly " },
-                    Style::default().fg(if self.ui.disasm_tab == DisasmTab::Assembly { self.theme.accent } else { self.theme.dim }),
-                ),
-                Span::styled(
-                    if self.ui.disasm_tab == DisasmTab::Source { " [Source] " } else { " Source " },
-                    Style::default().fg(if self.ui.disasm_tab == DisasmTab::Source { self.theme.accent } else { self.theme.dim }),
-                ),
-            ])
-        ];
-        
+        let titles = vec![Line::from(vec![
+            Span::styled(
+                if self.ui.disasm_tab == DisasmTab::Assembly {
+                    " [Assembly] "
+                } else {
+                    " Assembly "
+                },
+                Style::default().fg(if self.ui.disasm_tab == DisasmTab::Assembly {
+                    self.theme.accent
+                } else {
+                    self.theme.dim
+                }),
+            ),
+            Span::styled(
+                if self.ui.disasm_tab == DisasmTab::Source {
+                    " [Source] "
+                } else {
+                    " Source "
+                },
+                Style::default().fg(if self.ui.disasm_tab == DisasmTab::Source {
+                    self.theme.accent
+                } else {
+                    self.theme.dim
+                }),
+            ),
+        ])];
+
         let title = if self.breakpoints.is_empty() {
             "Disassembly (s: toggle tab)".into()
         } else {
-            format!("Disassembly ({} bp) (s: toggle tab)", self.breakpoints.len())
+            format!(
+                "Disassembly ({} bp) (s: toggle tab)",
+                self.breakpoints.len()
+            )
         };
-        
+
         let block = self.panel_block(&title, focused);
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
@@ -505,29 +534,35 @@ impl Debugger {
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(1)])
             .split(inner_area);
-        
+
         let tabs = Tabs::new(titles);
         frame.render_widget(tabs, layout[0]);
         let content_area = layout[1];
-        
+
         let visible_height = content_area.height as usize;
 
         if self.ui.disasm_tab == DisasmTab::Source {
-            let target_addr = all_entries.get(abs_cursor).map(|e| e.addr).unwrap_or(center_addr);
+            let target_addr = all_entries
+                .get(abs_cursor)
+                .map(|e| e.addr)
+                .unwrap_or(center_addr);
             let source_loc = self.map_addr_to_source(target_addr, Some(&all_entries));
-            
+
             if let Some((path, _)) = source_loc {
                 let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
                 if lines_len > 0 {
                     self.ui.source_cursor = self.ui.source_cursor.min(lines_len.saturating_sub(1));
                     let target_line = self.ui.source_cursor + 1;
-                    
+
                     if self.ui.source_cursor < self.ui.source_scroll {
                         self.ui.source_scroll = self.ui.source_cursor;
                     } else if self.ui.source_cursor >= self.ui.source_scroll + visible_height {
-                        self.ui.source_scroll = self.ui.source_cursor.saturating_sub(visible_height.saturating_sub(1));
+                        self.ui.source_scroll = self
+                            .ui
+                            .source_cursor
+                            .saturating_sub(visible_height.saturating_sub(1));
                     }
-                    
+
                     let max_scroll = lines_len.saturating_sub(visible_height);
                     self.ui.source_scroll = self.ui.source_scroll.min(max_scroll);
                     let scroll = self.ui.source_scroll;
@@ -537,57 +572,75 @@ impl Debugger {
                     let theme_accent = self.theme.accent;
                     let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
                     let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
-                    
+
                     let lines = self.get_source_file(&path).unwrap();
 
                     for (i, line) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                         let is_target = i + 1 == target_line;
                         let is_pc = Some(i + 1) == hw_pc_line;
                         let line_num = format!("{:4} | ", i + 1);
-                        
-                        let mut spans = vec![
-                            Span::styled(line_num, Style::default().fg(theme_dim)),
-                        ];
-                        
+
+                        let mut spans =
+                            vec![Span::styled(line_num, Style::default().fg(theme_dim))];
+
                         let marker = if is_pc {
-                            Span::styled("► ", Style::default().fg(theme_accent).add_modifier(Modifier::BOLD))
+                            Span::styled(
+                                "► ",
+                                Style::default()
+                                    .fg(theme_accent)
+                                    .add_modifier(Modifier::BOLD),
+                            )
                         } else {
-                            Span::raw("  ")
+                            Span::raw(" ")
                         };
                         spans.push(marker);
-                        
+
                         if is_target {
                             if let Some(addr) = mapped_addr {
-                                spans.push(Span::styled(format!("[{:#010x}] ", addr), Style::default().fg(theme_dim)));
+                                spans.push(Span::styled(
+                                    format!("[{:#010x}] ", addr),
+                                    Style::default().fg(theme_dim),
+                                ));
                             }
                         }
-                        
+
                         let text_style = if is_target && is_pc {
-                            Style::default().fg(theme_accent).add_modifier(Modifier::BOLD).add_modifier(Modifier::REVERSED)
+                            Style::default()
+                                .fg(theme_accent)
+                                .add_modifier(Modifier::BOLD)
+                                .add_modifier(Modifier::REVERSED)
                         } else if is_target {
                             Style::default().add_modifier(Modifier::REVERSED)
                         } else if is_pc {
-                            Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(theme_accent)
+                                .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default()
                         };
-                        
+
                         spans.push(Span::styled(line, text_style));
-                        
+
                         source_lines.push(Line::from(spans));
                     }
-                    
+
                     let paragraph = Paragraph::new(source_lines);
                     frame.render_widget(paragraph, content_area);
                     return;
                 } else {
                     let text = format!("Could not load source file: {}", path);
-                    frame.render_widget(Paragraph::new(text).style(Style::default().fg(self.theme.error)), content_area);
+                    frame.render_widget(
+                        Paragraph::new(text).style(Style::default().fg(self.theme.error)),
+                        content_area,
+                    );
                     return;
                 }
             } else {
                 let text = "No source information available for current address.";
-                frame.render_widget(Paragraph::new(text).style(Style::default().fg(self.theme.dim)), content_area);
+                frame.render_widget(
+                    Paragraph::new(text).style(Style::default().fg(self.theme.dim)),
+                    content_area,
+                );
                 return;
             }
         }
@@ -610,7 +663,9 @@ impl Debugger {
             if let Some(sym) = &e.symbol {
                 all_lines.push(Line::from(Span::styled(
                     format!("<{}>:", sym),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 )));
             }
 
@@ -715,7 +770,6 @@ impl Debugger {
                 }
             }
 
-            // Show source file:line from DWARF debug info
             if let Some(loc) = self.source_lines.get(&e.addr) {
                 spans.push(Span::styled(
                     format!(" @ {}", loc),
@@ -835,10 +889,15 @@ impl Debugger {
                 Span::styled(" Search: ", Style::default().fg(self.theme.accent)),
                 Span::styled(
                     self.ui.input_buffer(),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("_", Style::default().fg(self.theme.accent)),
-                Span::styled(" (Enter=apply, Esc=cancel)", Style::default().fg(self.theme.dim)),
+                Span::styled(
+                    " (Enter=apply, Esc=cancel)",
+                    Style::default().fg(self.theme.dim),
+                ),
             ]);
             frame.render_widget(
                 Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
@@ -850,37 +909,63 @@ impl Debugger {
         };
 
         let search = self.ui.symbols_search.to_lowercase();
-        let filtered: Vec<_> = self.sorted_symbols.iter().filter(|(_, name)| {
-            search.is_empty() || name.to_lowercase().contains(&search)
-        }).collect();
+        let filtered: Vec<_> = self
+            .sorted_symbols
+            .iter()
+            .filter(|(_, name)| search.is_empty() || name.to_lowercase().contains(&search))
+            .collect();
 
         self.ui.symbols_cursor = self.ui.symbols_cursor.min(filtered.len().saturating_sub(1));
-        
+
         let visible_height = inner.height.saturating_sub(2) as usize;
-        
+
         if self.ui.symbols_cursor < self.ui.symbols_scroll {
             self.ui.symbols_scroll = self.ui.symbols_cursor;
         } else if self.ui.symbols_cursor >= self.ui.symbols_scroll + visible_height {
-            self.ui.symbols_scroll = self.ui.symbols_cursor.saturating_sub(visible_height.saturating_sub(1));
+            self.ui.symbols_scroll = self
+                .ui
+                .symbols_cursor
+                .saturating_sub(visible_height.saturating_sub(1));
         }
-        
+
         let max_scroll = filtered.len().saturating_sub(visible_height);
         let scroll = self.ui.symbols_scroll.min(max_scroll);
 
-        let lines: Vec<Line> = filtered.into_iter().enumerate().skip(scroll).take(visible_height).map(|(i, (addr, name))| {
-            let mut spans = vec![];
-            let selected = focused && i == self.ui.symbols_cursor;
-            
-            if selected {
-                spans.push(Span::styled(" ► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)));
-            } else {
-                spans.push(Span::raw("   "));
-            }
-            
-            spans.push(Span::styled(format!("{:#010x} ", addr), Style::default().fg(if selected { self.theme.accent } else { self.theme.highlight })));
-            spans.push(Span::styled(name.clone(), Style::default().fg(if selected { Color::White } else { Color::Cyan })));
-            Line::from(spans)
-        }).collect();
+        let lines: Vec<Line> = filtered
+            .into_iter()
+            .enumerate()
+            .skip(scroll)
+            .take(visible_height)
+            .map(|(i, (addr, name))| {
+                let mut spans = vec![];
+                let selected = focused && i == self.ui.symbols_cursor;
+
+                if selected {
+                    spans.push(Span::styled(
+                        " ► ",
+                        Style::default()
+                            .fg(self.theme.accent)
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                } else {
+                    spans.push(Span::raw(" "));
+                }
+
+                spans.push(Span::styled(
+                    format!("{:#010x} ", addr),
+                    Style::default().fg(if selected {
+                        self.theme.accent
+                    } else {
+                        self.theme.highlight
+                    }),
+                ));
+                spans.push(Span::styled(
+                    name.clone(),
+                    Style::default().fg(if selected { Color::White } else { Color::Cyan }),
+                ));
+                Line::from(spans)
+            })
+            .collect();
 
         let title = if search.is_empty() {
             format!("Symbols [{}/{}]", scroll, max_scroll)
