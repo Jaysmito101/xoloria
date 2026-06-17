@@ -49,7 +49,7 @@ impl Debugger {
         Ok(Self {
             binary,
             config_harts: 1,
-            config_memory_exp: 3,
+            config_memory_exp: 5,
             machine: None,
             hart_modes: vec![HartMode::Debug; 1],
             screen: Screen::Setup,
