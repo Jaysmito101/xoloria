@@ -63,7 +63,7 @@ struct Opts {
 }
 
 thread_local! {
-    pub static SUPPRESS_PANIC_HOOK: std::cell::Cell<bool> = std::cell::Cell::new(false);
+    pub static SUPPRESS_PANIC_HOOK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn main() -> anyhow::Result<()> {

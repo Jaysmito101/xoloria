@@ -558,13 +558,13 @@ impl Debugger {
                     Style::default().fg(self.theme.highlight),
                 )];
 
-                for (i, &byte) in chunk.iter().enumerate() {
+                for &byte in chunk.iter() {
                     let color = if byte == 0 {
                         self.theme.dim
                     } else {
                         Color::White
                     };
-                    let sep = if i == 7 { " " } else { " " };
+                    let sep = " ";
                     spans.push(Span::styled(
                         format!("{:02x}{}", byte, sep),
                         Style::default().fg(color),
