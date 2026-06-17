@@ -417,6 +417,11 @@ impl Debugger {
             format!("Disassembly ({} bp)", self.breakpoints.len())
         };
 
+        let x_regs = {
+            let machine = self.machine.as_ref().unwrap();
+            *machine.harts()[self.ui.selected_hart].registers().x()
+        };
+
         let lines: Vec<Line> = visible
             .iter()
             .enumerate()
@@ -500,6 +505,20 @@ impl Debugger {
                             ));
                         }
                         None => {}
+                    }
+                }
+
+                if e.is_pc {
+                    let extracted = extract_register_values_from_asm(&e.text, &x_regs);
+                    if !extracted.is_empty() {
+                        let mut reg_str = String::from("  // ");
+                        for (idx, (name, val)) in extracted.iter().enumerate() {
+                            reg_str.push_str(&format!("{}={:#x} ({})", name, val, *val as i64));
+                            if idx < extracted.len() - 1 {
+                                reg_str.push_str(", ");
+                            }
+                        }
+                        spans.push(Span::styled(reg_str, Style::default().fg(self.theme.dim).bg(bg)));
                     }
                 }
 
@@ -915,4 +934,60 @@ fn format_binary_grouped(val: u64) -> String {
         .map(|c| std::str::from_utf8(c).unwrap())
         .collect::<Vec<_>>()
         .join("_")
+}
+
+fn extract_register_values_from_asm(asm: &str, x_regs: &[u64; 32]) -> Vec<(String, u64)> {
+    let mut regs = Vec::new();
+    let mut seen_indices = Vec::new();
+    
+    let tokens = asm.split(|c: char| c == ' ' || c == ',' || c == '(' || c == ')');
+    for token in tokens {
+        let token = token.trim();
+        if let Some(idx) = parse_register_name(token) {
+            if idx != 0 && !seen_indices.contains(&idx) {
+                seen_indices.push(idx);
+                let val = x_regs[idx];
+                regs.push((token.to_string(), val));
+            }
+        }
+    }
+    regs
+}
+
+fn parse_register_name(name: &str) -> Option<usize> {
+    match name {
+        "zero" | "x0" => Some(0),
+        "ra" | "x1" => Some(1),
+        "sp" | "x2" => Some(2),
+        "gp" | "x3" => Some(3),
+        "tp" | "x4" => Some(4),
+        "t0" | "x5" => Some(5),
+        "t1" | "x6" => Some(6),
+        "t2" | "x7" => Some(7),
+        "s0" | "fp" | "x8" => Some(8),
+        "s1" | "x9" => Some(9),
+        "a0" | "x10" => Some(10),
+        "a1" | "x11" => Some(11),
+        "a2" | "x12" => Some(12),
+        "a3" | "x13" => Some(13),
+        "a4" | "x14" => Some(14),
+        "a5" | "x15" => Some(15),
+        "a6" | "x16" => Some(16),
+        "a7" | "x17" => Some(17),
+        "s2" | "x18" => Some(18),
+        "s3" | "x19" => Some(19),
+        "s4" | "x20" => Some(20),
+        "s5" | "x21" => Some(21),
+        "s6" | "x22" => Some(22),
+        "s7" | "x23" => Some(23),
+        "s8" | "x24" => Some(24),
+        "s9" | "x25" => Some(25),
+        "s10" | "x26" => Some(26),
+        "s11" | "x27" => Some(27),
+        "t3" | "x28" => Some(28),
+        "t4" | "x29" => Some(29),
+        "t5" | "x30" => Some(30),
+        "t6" | "x31" => Some(31),
+        _ => None,
+    }
 }
