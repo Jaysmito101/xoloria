@@ -572,6 +572,12 @@ impl Instruction {
     }
 
     #[inline(always)]
+    fn try_parse_reg(raw: u16) -> InstructionResult<GeneralRegisterName> {
+        GeneralRegisterName::try_from(raw as u8)
+            .map_err(|_| InstructionError::UnknownRegister(raw as u8))
+    }
+
+    #[inline(always)]
     fn try_compressed_q0(value: u16) -> InstructionResult<Self> {
         let funct3 = value.bits(13, 3);
         match funct3 {
@@ -580,12 +586,8 @@ impl Instruction {
             2 => unimplemented!("C.LW"),
             3 => {
                 let imm = (value.bits(5, 2) << 6) | (value.bits(10, 3) << 3);
-                let rd_raw = value.bits(2, 3) as u8;
-                let rd = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
-                let rs1_raw = value.bits(7, 3) as u8;
-                let rs1 = GeneralRegisterName::try_from(rs1_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rs1_raw))?;
+                let rd = Self::try_parse_reg(value.bits(2, 3))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
                 Ok(Self::Ld {
                     rd,
                     rs1,
@@ -604,9 +606,7 @@ impl Instruction {
         let funct3 = value.bits(13, 3);
         match funct3 {
             0 => {
-                let rd_raw = value.bits(7, 5) as u8;
-                let rd = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
                 let imm = (value.bits(2, 5) as i32) | (value.bits(12, 1) as i32) << 5;
                 match rd {
                     GeneralRegisterName::Zero => Ok(Self::Noop),
@@ -623,10 +623,7 @@ impl Instruction {
             }
             1 => unimplemented!("C.JAL | C.ADDIW"),
             2 => {
-                // C.LI
-                let rd_raw = value.bits(7, 5) as u8;
-                let rd = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 26 | value.bits(2, 5) as i32;
                 match rd {
                     GeneralRegisterName::Zero => Ok(Self::Noop),
@@ -642,9 +639,7 @@ impl Instruction {
                 }
             }
             3 => {
-                let rd_raw = value.bits(7, 5) as u8;
-                let rd = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
                 match rd {
                     GeneralRegisterName::Zero => Err(InstructionError::IllegalInstruction),
                     GeneralRegisterName::Sp => {
@@ -684,9 +679,7 @@ impl Instruction {
             }
             4 => {
                 let funct2 = value.bits(10, 2);
-                let rd_raw = value.bits(7, 3) as u8;
-                let rd_creg = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rd_creg = Self::try_parse_reg(value.bits(7, 3))?;
                 match funct2 {
                     0b00 => {
                         let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
@@ -716,10 +709,7 @@ impl Instruction {
                     0b11 => {
                         let bit12 = value.bits(12, 1);
                         let funct1 = value.bits(5, 2);
-                        let rs2_creg = GeneralRegisterName::try_from(value.bits(2, 3) as u8)
-                            .map_err(|_| {
-                                InstructionError::UnknownRegister(value.bits(2, 3) as u8)
-                            })?;
+                        let rs2_creg = Self::try_parse_reg(value.bits(2, 3))?;
                         match (bit12, funct1) {
                             (0, 0b00) => Ok(Self::Sub {
                                 rd: rd_creg,
@@ -776,10 +766,7 @@ impl Instruction {
                 })
             }
             6 => {
-                // C.BEQZ
-                let reg_raw = value.bits(7, 3) as u8;
-                let rs1 = GeneralRegisterName::try_from(reg_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(reg_raw))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 23
                     | (value.bits(5, 2) as i32) << 6
                     | (value.bits(2, 1) as i32) << 5
@@ -792,10 +779,7 @@ impl Instruction {
                 })
             }
             7 => {
-                // C.BNEZ
-                let reg_raw = value.bits(7, 3) as u8;
-                let rs1 = GeneralRegisterName::try_from(reg_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(reg_raw))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 23
                     | (value.bits(5, 2) as i32) << 6
                     | (value.bits(2, 1) as i32) << 5
@@ -817,9 +801,7 @@ impl Instruction {
         match funct3 {
             0 => {
                 let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
-                let rd_raw = value.bits(7, 5) as u8;
-                let rd = GeneralRegisterName::try_from(rd_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rd_raw))?;
+                let rd = Self::try_parse_reg(value.bits(7, 5))?;
                 Ok(Self::Slli {
                     rd,
                     rs1: rd,
@@ -831,12 +813,8 @@ impl Instruction {
             3 => unimplemented!("C.LDSP"),
             4 => {
                 let bit12 = value.bits(12, 1);
-                let rs1_raw = value.bits(7, 5) as u8;
-                let rs1 = GeneralRegisterName::try_from(rs1_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rs1_raw))?;
-                let rs2_raw = value.bits(2, 5) as u8;
-                let rs2 = GeneralRegisterName::try_from(rs2_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rs2_raw))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 5))?;
+                let rs2 = Self::try_parse_reg(value.bits(2, 5))?;
 
                 if bit12 == 0 {
                     if rs2 == GeneralRegisterName::Zero {
@@ -879,10 +857,7 @@ impl Instruction {
             5 => unimplemented!("C.FSDSP"),
             6 => unimplemented!("C.SWSP"),
             7 => {
-                // C.SDSP
-                let rs2_raw = value.bits(2, 5) as u8;
-                let rs2 = GeneralRegisterName::try_from(rs2_raw)
-                    .map_err(|_| InstructionError::UnknownRegister(rs2_raw))?;
+                let rs2 = Self::try_parse_reg(value.bits(2, 5))?;
                 let imm = (value.bits(7, 3) << 6) | (value.bits(10, 3) << 3);
                 Ok(Self::Sd {
                     imm: imm as i32,
