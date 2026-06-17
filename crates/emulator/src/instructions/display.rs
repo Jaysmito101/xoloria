@@ -97,9 +97,15 @@ impl Display for Instruction {
             Instruction::Or { rd, rs1, rs2 } => write!(f, "or {}, {}, {}", rd, rs1, rs2),
             Instruction::And { rd, rs1, rs2 } => write!(f, "and {}, {}, {}", rd, rs1, rs2),
 
-            Instruction::Ld { rd, imm, rs1, .. } => write!(f, "ld {}, {}({})", rd, imm, rs1),
-            Instruction::Lwu { rd, imm, rs1, .. } => write!(f, "lwu {}, {}({})", rd, imm, rs1),
-            Instruction::Sd { imm, rs1, rs2 } => write!(f, "sd {}, {}({})", rs2, imm, rs1),
+            Instruction::Ld { rd, imm, rs1, .. } => {
+                write!(f, "ld {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Lwu { rd, imm, rs1, .. } => {
+                write!(f, "lwu {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Sd { imm, rs1, rs2 } => {
+                write!(f, "sd {}, {:#x}({})", rs2, SignedHexView(imm), rs1)
+            }
 
             Instruction::Addiw { rd, rs1, imm } => {
                 write!(f, "addiw {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
