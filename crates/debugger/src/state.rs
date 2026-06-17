@@ -298,5 +298,9 @@ impl DebugCommand {
 
 fn parse_addr(s: &str) -> Result<u64, String> {
     let s = s.trim().trim_start_matches("0x").trim_start_matches("0X");
-    u64::from_str_radix(s, 16).map_err(|_| format!("Invalid address: {}", s))
+    let mut addr = u64::from_str_radix(s, 16).map_err(|_| format!("Invalid address: {}", s))?;
+    if addr < 0x80000000 {
+        addr |= 0x80000000;
+    }
+    Ok(addr)
 }

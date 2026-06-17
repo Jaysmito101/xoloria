@@ -370,9 +370,12 @@ impl Debugger {
     }
 
     pub(crate) fn submit_goto_memory(&mut self, input: &str) {
-        let input = input.trim().trim_start_matches("0x");
+        let input = input.trim().trim_start_matches("0x").trim_start_matches("0X");
         match u64::from_str_radix(input, 16) {
-            Ok(addr) => {
+            Ok(mut addr) => {
+                if addr < 0x80000000 {
+                    addr |= 0x80000000;
+                }
                 self.ui.memory_addr = addr;
                 self.ui.panel = Panel::Memory;
             }
