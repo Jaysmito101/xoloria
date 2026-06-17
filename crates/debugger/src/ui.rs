@@ -162,10 +162,16 @@ impl Debugger {
             .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
             .split(mid[0]);
 
+        let lower_mid = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(layout[2]);
+
         self.render_registers(frame, left[0]);
         self.render_csr(frame, left[1]);
         self.render_disassembly(frame, mid[1]);
-        self.render_memory(frame, layout[2]);
+        self.render_memory(frame, lower_mid[0]);
+        self.render_symbols(frame, lower_mid[1]);
         self.render_console(frame, layout[3]);
         self.render_bottom_bar(frame, layout[4]);
     }
@@ -634,6 +640,79 @@ impl Debugger {
             .collect();
 
         let paragraph = Paragraph::new(lines).block(self.panel_block("Memory", focused));
+        frame.render_widget(paragraph, inner);
+    }
+
+    fn render_symbols(&mut self, frame: &mut Frame, area: Rect) {
+        self.ui.panel_rects.insert(Panel::Symbols, area);
+        let focused = self.ui.panel == Panel::Symbols;
+
+        let (inner, _) = if self.ui.input_mode == InputMode::SearchSymbols {
+            let splits = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(3), Constraint::Length(1)])
+                .split(area);
+
+            let input_line = Line::from(vec![
+                Span::styled(" Search: ", Style::default().fg(self.theme.accent)),
+                Span::styled(
+                    self.ui.input_buffer(),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("_", Style::default().fg(self.theme.accent)),
+                Span::styled(" (Enter=apply, Esc=cancel)", Style::default().fg(self.theme.dim)),
+            ]);
+            frame.render_widget(
+                Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
+                splits[1],
+            );
+            (splits[0], true)
+        } else {
+            (area, false)
+        };
+
+        let search = self.ui.symbols_search.to_lowercase();
+        let filtered: Vec<_> = self.sorted_symbols.iter().filter(|(_, name)| {
+            search.is_empty() || name.to_lowercase().contains(&search)
+        }).collect();
+
+        self.ui.symbols_cursor = self.ui.symbols_cursor.min(filtered.len().saturating_sub(1));
+        
+        let visible_height = inner.height.saturating_sub(2) as usize;
+        
+        if self.ui.symbols_cursor < self.ui.symbols_scroll {
+            self.ui.symbols_scroll = self.ui.symbols_cursor;
+        } else if self.ui.symbols_cursor >= self.ui.symbols_scroll + visible_height {
+            self.ui.symbols_scroll = self.ui.symbols_cursor.saturating_sub(visible_height.saturating_sub(1));
+        }
+        
+        let max_scroll = filtered.len().saturating_sub(visible_height);
+        let scroll = self.ui.symbols_scroll.min(max_scroll);
+
+        let lines: Vec<Line> = filtered.into_iter().enumerate().skip(scroll).take(visible_height).map(|(i, (addr, name))| {
+            let mut spans = vec![];
+            let selected = focused && i == self.ui.symbols_cursor;
+            
+            if selected {
+                spans.push(Span::styled(" ► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)));
+            } else {
+                spans.push(Span::raw("   "));
+            }
+            
+            spans.push(Span::styled(format!("{:#010x} ", addr), Style::default().fg(if selected { self.theme.accent } else { self.theme.highlight })));
+            spans.push(Span::styled(name.clone(), Style::default().fg(if selected { Color::White } else { Color::Cyan })));
+            Line::from(spans)
+        }).collect();
+
+        let title = if search.is_empty() {
+            format!("Symbols [{}/{}]", scroll, max_scroll)
+        } else if self.ui.input_mode == InputMode::SearchSymbols {
+            "Symbols (Searching...)".to_string()
+        } else {
+            format!("Symbols (Search: {}) [{}/{}]", search, scroll, max_scroll)
+        };
+
+        let paragraph = Paragraph::new(lines).block(self.panel_block(&title, focused));
         frame.render_widget(paragraph, inner);
     }
 

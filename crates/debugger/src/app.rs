@@ -37,6 +37,7 @@ pub struct Debugger {
 
     pub(crate) source_lines: HashMap<u64, String>,
     pub(crate) symbols: HashMap<u64, String>,
+    pub(crate) sorted_symbols: Vec<(u64, String)>,
 }
 
 pub(crate) struct DisasmCache {
@@ -84,7 +85,12 @@ impl Debugger {
             ui: UiState::new(),
             disasm_cache: None,
             source_lines,
-            symbols,
+            symbols: symbols.clone(),
+            sorted_symbols: {
+                let mut s: Vec<_> = symbols.into_iter().collect();
+                s.sort_by_key(|(addr, _)| *addr);
+                s
+            },
         })
     }
 

@@ -8,6 +8,7 @@ impl Debugger {
         match self.ui.input_mode {
             InputMode::GotoMemory => self.handle_input_key(key),
             InputMode::Command => self.handle_command_key(key),
+            InputMode::SearchSymbols => self.handle_search_symbols_key(key),
             InputMode::Normal => match self.screen {
                 Screen::Setup => self.handle_setup_key(key),
                 Screen::Debug => self.handle_debug_key(key),
@@ -50,6 +51,25 @@ impl Debugger {
             KeyCode::Char(c) => self.ui.input_buffer_push(c),
             _ => {}
         }
+    }
+
+    fn handle_search_symbols_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                self.ui.set_input_mode(InputMode::Normal);
+            }
+            KeyCode::Backspace => {
+                if self.ui.input_buffer_is_empty() {
+                    self.ui.set_input_mode(InputMode::Normal);
+                } else {
+                    self.ui.input_buffer_pop();
+                }
+            }
+            KeyCode::Char(c) => self.ui.input_buffer_push(c),
+            _ => {}
+        }
+        self.ui.symbols_search = self.ui.input_buffer().to_string();
+        self.ui.symbols_scroll = 0;
     }
 
     fn handle_setup_key(&mut self, key: KeyEvent) {
@@ -165,6 +185,28 @@ impl Debugger {
                             self.disasm_cache = None;
                         }
                     }
+                } else if self.ui.panel == Panel::Symbols {
+                    let search = self.ui.symbols_search.to_lowercase();
+                    let filtered: Vec<_> = self.sorted_symbols.iter().filter(|(_, name)| {
+                        search.is_empty() || name.to_lowercase().contains(&search)
+                    }).collect();
+                    
+                    let target_addr = filtered.get(self.ui.symbols_cursor).map(|t| t.0);
+                    if let Some(t_addr) = target_addr {
+                        let entries = self.disassemble_around(200);
+                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                        let center_idx = entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+                        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                        let abs = abs.min(entries.len().saturating_sub(1));
+                        if let Some(entry) = entries.get(abs) {
+                            self.ui.view_history.push(entry.addr);
+                        }
+                        self.ui.view_center_addr = Some(t_addr);
+                        self.ui.disasm_cursor = 0;
+                        self.disasm_cache = None;
+                        self.ui.panel = Panel::Disassembly;
+                    }
                 }
             }
             KeyCode::Backspace | KeyCode::Char('u') => {
@@ -208,6 +250,11 @@ impl Debugger {
             }
             KeyCode::Char('m') => {
                 self.ui.set_input_mode(InputMode::GotoMemory);
+            }
+            KeyCode::Char('/') => {
+                if self.ui.panel == Panel::Symbols {
+                    self.ui.set_input_mode(InputMode::SearchSymbols);
+                }
             }
 
             KeyCode::Home => {
@@ -264,11 +311,14 @@ impl Debugger {
             Panel::Console => {
                 self.ui.console_scroll = (self.ui.console_scroll as i32 + delta).max(0) as usize;
             }
+            Panel::Symbols => {
+                self.ui.symbols_cursor = (self.ui.symbols_cursor as i32 + delta).max(0) as usize;
+            }
         }
     }
 
     pub fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) {
-        use crossterm::event::MouseEventKind;
+        use crossterm::event::{MouseButton, MouseEventKind};
         if self.screen != Screen::Debug {
             return;
         }
@@ -276,6 +326,7 @@ impl Debugger {
         let delta = match mouse.kind {
             MouseEventKind::ScrollDown => 1,
             MouseEventKind::ScrollUp => -1,
+            MouseEventKind::Down(MouseButton::Left) => 0,
             _ => return,
         };
 
@@ -287,24 +338,45 @@ impl Debugger {
             {
                 self.ui.panel = *panel;
 
-                match panel {
-                    Panel::Disassembly => {
-                        self.ui.disasm_cursor += delta;
+                if delta != 0 {
+                    match panel {
+                        Panel::Disassembly => self.ui.disasm_cursor += delta,
+                        Panel::Memory => {
+                            let byte_delta = delta as i64 * 16;
+                            self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
+                        }
+                        Panel::Registers => self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize,
+                        Panel::Csr => self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize,
+                        Panel::Console => self.ui.console_scroll = (self.ui.console_scroll as i32 + delta).max(0) as usize,
+                        Panel::Symbols => self.ui.symbols_cursor = (self.ui.symbols_cursor as i32 + delta).max(0) as usize,
                     }
-                    Panel::Memory => {
-                        let byte_delta = delta as i64 * 16;
-                        self.ui.memory_addr =
-                            (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
-                    }
-                    Panel::Registers => {
-                        self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;
-                    }
-                    Panel::Csr => {
-                        self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize;
-                    }
-                    Panel::Console => {
-                        self.ui.console_scroll =
-                            (self.ui.console_scroll as i32 + delta).max(0) as usize;
+                } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+                    if *panel == Panel::Symbols && mouse.row > rect.y {
+                        let row_idx = (mouse.row - rect.y - 1) as usize;
+                        let search = self.ui.symbols_search.to_lowercase();
+                        let filtered: Vec<_> = self.sorted_symbols.iter().filter(|(_, name)| {
+                            search.is_empty() || name.to_lowercase().contains(&search)
+                        }).collect();
+                        
+                        let symbol_idx = self.ui.symbols_scroll + row_idx;
+                        let target_addr = filtered.get(symbol_idx).map(|t| t.0);
+                        
+                        if let Some(t_addr) = target_addr {
+                            self.ui.symbols_cursor = symbol_idx;
+                            let entries = self.disassemble_around(200);
+                            let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                            let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                            let center_idx = entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+                            let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                            let abs = abs.min(entries.len().saturating_sub(1));
+                            if let Some(entry) = entries.get(abs) {
+                                self.ui.view_history.push(entry.addr);
+                            }
+                            self.ui.view_center_addr = Some(t_addr);
+                            self.ui.disasm_cursor = 0;
+                            self.disasm_cache = None;
+                            self.ui.panel = Panel::Disassembly;
+                        }
                     }
                 }
                 break;

@@ -43,6 +43,7 @@ pub enum Panel {
     Disassembly,
     Csr,
     Memory,
+    Symbols,
     Console,
 }
 
@@ -67,7 +68,8 @@ impl Panel {
             Self::Registers => Self::Disassembly,
             Self::Disassembly => Self::Csr,
             Self::Csr => Self::Memory,
-            Self::Memory => Self::Console,
+            Self::Memory => Self::Symbols,
+            Self::Symbols => Self::Console,
             Self::Console => Self::Registers,
         }
     }
@@ -80,14 +82,17 @@ impl Panel {
             (Self::Csr, Direction::Up) => Self::Registers,
             (Self::Csr, Direction::Down) => Self::Memory,
             (Self::Disassembly, Direction::Left) => Self::Registers,
-            (Self::Disassembly, Direction::Down) => Self::Memory,
+            (Self::Disassembly, Direction::Down) => Self::Symbols,
             (Self::Memory, Direction::Up) => Self::Csr,
             (Self::Memory, Direction::Left) => Self::Csr,
-            (Self::Memory, Direction::Right) => Self::Disassembly,
+            (Self::Memory, Direction::Right) => Self::Symbols,
             (Self::Memory, Direction::Down) => Self::Console,
+            (Self::Symbols, Direction::Up) => Self::Disassembly,
+            (Self::Symbols, Direction::Left) => Self::Memory,
+            (Self::Symbols, Direction::Down) => Self::Console,
             (Self::Console, Direction::Up) => Self::Memory,
             (Self::Console, Direction::Left) => Self::Csr,
-            (Self::Console, Direction::Right) => Self::Disassembly,
+            (Self::Console, Direction::Right) => Self::Symbols,
             _ => self,
         }
     }
@@ -112,6 +117,7 @@ pub enum InputMode {
     Normal,
     GotoMemory,
     Command,
+    SearchSymbols,
 }
 
 pub struct Theme {

@@ -19,6 +19,9 @@ pub struct UiState {
     pub panel_rects: HashMap<Panel, Rect>,
     pub view_center_addr: Option<u64>,
     pub view_history: Vec<u64>,
+    pub symbols_scroll: usize,
+    pub symbols_cursor: usize,
+    pub symbols_search: String,
 }
 
 impl UiState {
@@ -39,6 +42,9 @@ impl UiState {
             panel_rects: HashMap::new(),
             view_center_addr: None,
             view_history: Vec::new(),
+            symbols_scroll: 0,
+            symbols_cursor: 0,
+            symbols_search: String::new(),
         }
     }
 
