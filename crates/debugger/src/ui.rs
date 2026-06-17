@@ -513,41 +513,66 @@ impl Debugger {
         let visible_height = content_area.height as usize;
 
         if self.ui.disasm_tab == DisasmTab::Source {
-            let source_loc = self.source_locations.get(&center_addr).cloned();
-            if let Some((path, target_line)) = source_loc {
+            let target_addr = all_entries.get(abs_cursor).map(|e| e.addr).unwrap_or(center_addr);
+            let source_loc = self.map_addr_to_source(target_addr, Some(&all_entries));
+            
+            if let Some((path, _)) = source_loc {
                 let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
                 if lines_len > 0 {
-                    let target_line = target_line as usize;
-                    let max_scroll = lines_len.saturating_sub(visible_height);
+                    self.ui.source_cursor = self.ui.source_cursor.min(lines_len.saturating_sub(1));
+                    let target_line = self.ui.source_cursor + 1;
                     
-                    if self.ui.source_scroll == 0 {
-                        self.ui.source_scroll = target_line.saturating_sub(visible_height / 2);
+                    if self.ui.source_cursor < self.ui.source_scroll {
+                        self.ui.source_scroll = self.ui.source_cursor;
+                    } else if self.ui.source_cursor >= self.ui.source_scroll + visible_height {
+                        self.ui.source_scroll = self.ui.source_cursor.saturating_sub(visible_height.saturating_sub(1));
                     }
                     
+                    let max_scroll = lines_len.saturating_sub(visible_height);
                     self.ui.source_scroll = self.ui.source_scroll.min(max_scroll);
                     let scroll = self.ui.source_scroll;
 
                     let mut source_lines = Vec::new();
                     let theme_dim = self.theme.dim;
                     let theme_accent = self.theme.accent;
+                    let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
+                    let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
                     
                     let lines = self.get_source_file(&path).unwrap();
 
                     for (i, line) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                         let is_target = i + 1 == target_line;
+                        let is_pc = Some(i + 1) == hw_pc_line;
                         let line_num = format!("{:4} | ", i + 1);
                         
                         let mut spans = vec![
                             Span::styled(line_num, Style::default().fg(theme_dim)),
                         ];
                         
-                        if is_target {
-                            spans.push(Span::styled("► ", Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)));
-                            spans.push(Span::styled(line, Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)));
+                        let marker = if is_pc {
+                            Span::styled("► ", Style::default().fg(theme_accent).add_modifier(Modifier::BOLD))
                         } else {
-                            spans.push(Span::raw("  "));
-                            spans.push(Span::raw(line));
+                            Span::raw("  ")
+                        };
+                        spans.push(marker);
+                        
+                        if is_target {
+                            if let Some(addr) = mapped_addr {
+                                spans.push(Span::styled(format!("[{:#010x}] ", addr), Style::default().fg(theme_dim)));
+                            }
                         }
+                        
+                        let text_style = if is_target && is_pc {
+                            Style::default().fg(theme_accent).add_modifier(Modifier::BOLD).add_modifier(Modifier::REVERSED)
+                        } else if is_target {
+                            Style::default().add_modifier(Modifier::REVERSED)
+                        } else if is_pc {
+                            Style::default().fg(theme_accent).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        };
+                        
+                        spans.push(Span::styled(line, text_style));
                         
                         source_lines.push(Line::from(spans));
                     }

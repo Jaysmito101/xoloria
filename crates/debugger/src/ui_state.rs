@@ -26,6 +26,7 @@ pub struct UiState {
     pub help_scroll: usize,
     pub disasm_tab: DisasmTab,
     pub source_scroll: usize,
+    pub source_cursor: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,6 +60,7 @@ impl UiState {
             help_scroll: 0,
             disasm_tab: DisasmTab::Assembly,
             source_scroll: 0,
+            source_cursor: 0,
         }
     }
 

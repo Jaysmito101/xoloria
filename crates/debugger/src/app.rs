@@ -198,6 +198,71 @@ impl Debugger {
         self.source_files_cache.get(path).unwrap().as_ref()
     }
 
+    pub(crate) fn map_addr_to_source(&self, target_addr: u64, local_entries: Option<&[DisasmEntry]>) -> Option<(String, u32)> {
+        if let Some(entries) = local_entries {
+            if let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr) {
+                for i in (0..=abs_cursor).rev() {
+                    if let Some(entry) = entries.get(i) {
+                        if let Some(loc) = self.source_locations.get(&entry.addr) {
+                            return Some(loc.clone());
+                        }
+                    }
+                }
+                for i in (abs_cursor + 1)..entries.len() {
+                    if let Some(entry) = entries.get(i) {
+                        if let Some(loc) = self.source_locations.get(&entry.addr) {
+                            return Some(loc.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        let mut best_addr = None;
+        for &addr in self.source_locations.keys() {
+            if addr <= target_addr {
+                if best_addr.is_none() || addr > best_addr.unwrap() {
+                    best_addr = Some(addr);
+                }
+            }
+        }
+        best_addr.and_then(|addr| self.source_locations.get(&addr).cloned())
+    }
+
+    pub(crate) fn map_source_to_addr(&self, path: &str, line: u32, hw_pc: u64) -> Option<u64> {
+        let mut best_addr = None;
+        let mut min_diff = u64::MAX;
+        for (addr, (loc_path, loc_line)) in &self.source_locations {
+            if *loc_path == path && *loc_line == line {
+                let diff = addr.abs_diff(hw_pc);
+                if best_addr.is_none() || diff < min_diff {
+                    min_diff = diff;
+                    best_addr = Some(*addr);
+                }
+            }
+        }
+        best_addr
+    }
+
+    pub(crate) fn get_hw_pc_line(&self, path: &str, hw_pc: u64) -> Option<u32> {
+        let mut best_addr = None;
+        for &addr in self.source_locations.keys() {
+            if addr <= hw_pc {
+                if best_addr.is_none() || addr > best_addr.unwrap() {
+                    best_addr = Some(addr);
+                }
+            }
+        }
+        if let Some(addr) = best_addr {
+            if let Some((p, l)) = self.source_locations.get(&addr) {
+                if *p == path {
+                    return Some(*l);
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {
         let message = msg.into();
         self.console_log.push(ConsoleEntry {
