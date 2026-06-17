@@ -679,7 +679,7 @@ impl Instruction {
             }
             4 => {
                 let funct2 = value.bits(10, 2);
-                let rd_creg = Self::try_parse_reg(value.bits(7, 3))?;
+                let rd_creg = Self::try_parse_reg(value.bits(7, 3) + 8)?;
                 match funct2 {
                     0b00 => {
                         let shamt = (value.bits(12, 1) << 5) | value.bits(2, 5);
@@ -709,7 +709,7 @@ impl Instruction {
                     0b11 => {
                         let bit12 = value.bits(12, 1);
                         let funct1 = value.bits(5, 2);
-                        let rs2_creg = Self::try_parse_reg(value.bits(2, 3))?;
+                        let rs2_creg = Self::try_parse_reg(value.bits(2, 3) + 8)?;
                         match (bit12, funct1) {
                             (0, 0b00) => Ok(Self::Sub {
                                 rd: rd_creg,
@@ -766,7 +766,7 @@ impl Instruction {
                 })
             }
             6 => {
-                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3) + 8)?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 23
                     | (value.bits(5, 2) as i32) << 6
                     | (value.bits(2, 1) as i32) << 5
@@ -779,7 +779,7 @@ impl Instruction {
                 })
             }
             7 => {
-                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3) + 8)?;
                 let imm = ((value.bits(12, 1) as i32) << 31) >> 23
                     | (value.bits(5, 2) as i32) << 6
                     | (value.bits(2, 1) as i32) << 5
