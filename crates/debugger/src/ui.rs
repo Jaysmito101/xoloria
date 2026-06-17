@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs, Wrap},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs, Wrap, Clear},
 };
 
 use emulator::registers::{ControlRegisterName, GeneralRegisterName};
@@ -174,6 +174,75 @@ impl Debugger {
         self.render_symbols(frame, lower_mid[1]);
         self.render_console(frame, layout[3]);
         self.render_bottom_bar(frame, layout[4]);
+
+        if self.ui.show_help {
+            self.render_help_modal(frame);
+        }
+    }
+
+    fn render_help_modal(&self, frame: &mut Frame) {
+        let area = frame.area();
+        let modal_width = 80;
+        let modal_height = 35;
+        let x = area.x + (area.width.saturating_sub(modal_width)) / 2;
+        let y = area.y + (area.height.saturating_sub(modal_height)) / 2;
+        let modal_area = Rect::new(x, y, modal_width.min(area.width), modal_height.min(area.height));
+
+        frame.render_widget(Clear, modal_area);
+
+        let help_text = vec![
+            "=== General Navigation ===",
+            "  Tab / Shift+Tab   : Switch active Hart",
+            "  1, 2, 3...        : Switch active Hart (direct)",
+            "  Arrows            : Navigate panels",
+            "  f                 : Next panel",
+            "  ?                 : Toggle this help",
+            "  q                 : Quit",
+            "",
+            "=== Execution ===",
+            "  c                 : Continue (Running mode)",
+            "  p                 : Pause (Debug mode)",
+            "  n / Space         : Step Instruction",
+            "  x                 : Stalled mode",
+            "",
+            "=== Disassembly ===",
+            "  b                 : Toggle breakpoint at cursor",
+            "  g / Enter         : Follow jump / Jump to selected symbol",
+            "  u / Backspace     : Go back in history",
+            "  t                 : Toggle jump target labels",
+            "  j / k             : Scroll down/up",
+            "  PageUp/PageDown   : Scroll page down/up",
+            "  Home              : Center on current PC",
+            "  Click on jump     : Jump to target",
+            "",
+            "=== Memory ===",
+            "  m                 : Goto memory address (Enter to confirm)",
+            "  j / k             : Scroll memory by 16 bytes",
+            "",
+            "=== Symbols ===",
+            "  /                 : Search symbols",
+            "  j / k             : Navigate symbol list",
+            "  Enter / Click     : Jump to symbol in disassembly",
+            "",
+            "=== Console ===",
+            "  v                 : Switch console tab (Logs vs Tracing)",
+            "  :                 : Command prompt",
+        ];
+
+        let visible_lines: Vec<Line> = help_text
+            .into_iter()
+            .skip(self.ui.help_scroll)
+            .take((modal_area.height.saturating_sub(2)) as usize)
+            .map(|s| Line::from(s))
+            .collect();
+
+        let block = Block::default()
+            .title(" Help (Scroll: j/k, Close: ?, Esc) ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(self.theme.accent));
+            
+        let paragraph = Paragraph::new(visible_lines).block(block);
+        frame.render_widget(paragraph, modal_area);
     }
 
     fn render_hart_tabs(&self, frame: &mut Frame, area: Rect) {

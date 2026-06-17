@@ -22,6 +22,8 @@ pub struct UiState {
     pub symbols_scroll: usize,
     pub symbols_cursor: usize,
     pub symbols_search: String,
+    pub show_help: bool,
+    pub help_scroll: usize,
 }
 
 impl UiState {
@@ -45,6 +47,8 @@ impl UiState {
             symbols_scroll: 0,
             symbols_cursor: 0,
             symbols_search: String::new(),
+            show_help: false,
+            help_scroll: 0,
         }
     }
 

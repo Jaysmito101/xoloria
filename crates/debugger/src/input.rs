@@ -134,7 +134,27 @@ impl Debugger {
     }
 
     fn handle_debug_key(&mut self, key: KeyEvent) {
+        if self.ui.show_help {
+            match key.code {
+                KeyCode::Char('?') | KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                    self.ui.show_help = false;
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.ui.help_scroll = self.ui.help_scroll.saturating_add(1);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.ui.help_scroll = self.ui.help_scroll.saturating_sub(1);
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match key.code {
+            KeyCode::Char('?') => {
+                self.ui.show_help = true;
+                self.ui.help_scroll = 0;
+            }
             KeyCode::Char('q') => self.running = false,
 
             KeyCode::Char('n') | KeyCode::Char(' ') => {
