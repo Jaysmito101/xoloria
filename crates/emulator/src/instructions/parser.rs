@@ -581,7 +581,25 @@ impl Instruction {
     fn try_compressed_q0(value: u16) -> InstructionResult<Self> {
         let funct3 = value.bits(13, 3);
         match funct3 {
-            0 => unimplemented!("C.ADDI4SPN"),
+            0 => {
+                let imm = (value.bits(7, 4) << 6)
+                    | (value.bits(11, 2) << 4)
+                    | (value.bits(5, 1) << 3)
+                    | (value.bits(6, 1) << 2);
+                let imm = if imm & (1 << 8) != 0 {
+                    (imm | !0 << 9) as i16 as i32
+                } else {
+                    imm as i16 as i32
+                };
+                if imm == 0 {
+                    return Err(InstructionError::InvalidInstruction);
+                }
+                Ok(Self::Addi {
+                    rd: Self::try_parse_reg(value.bits(2, 3))?,
+                    rs1: GeneralRegisterName::Sp,
+                    imm: imm,
+                })
+            }
             1 => unimplemented!("C.FLD"),
             2 => unimplemented!("C.LW"),
             3 => {
