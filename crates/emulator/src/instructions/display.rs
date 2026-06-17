@@ -52,15 +52,31 @@ impl Display for Instruction {
                 write!(f, "bgeu {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
             }
 
-            Instruction::Lb { rd, imm, rs1, .. } => write!(f, "lb {}, {}({})", rd, imm, rs1),
-            Instruction::Lh { rd, imm, rs1, .. } => write!(f, "lh {}, {}({})", rd, imm, rs1),
-            Instruction::Lw { rd, imm, rs1, .. } => write!(f, "lw {}, {}({})", rd, imm, rs1),
-            Instruction::Lbu { rd, imm, rs1, .. } => write!(f, "lbu {}, {}({})", rd, imm, rs1),
-            Instruction::Lhu { rd, imm, rs1, .. } => write!(f, "lhu {}, {}({})", rd, imm, rs1),
+            Instruction::Lb { rd, imm, rs1, .. } => {
+                write!(f, "lb {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Lh { rd, imm, rs1, .. } => {
+                write!(f, "lh {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Lw { rd, imm, rs1, .. } => {
+                write!(f, "lw {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Lbu { rd, imm, rs1, .. } => {
+                write!(f, "lbu {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
+            Instruction::Lhu { rd, imm, rs1, .. } => {
+                write!(f, "lhu {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
 
-            Instruction::Sb { imm, rs1, rs2 } => write!(f, "sb {}, {}({})", rs2, imm, rs1),
-            Instruction::Sh { imm, rs1, rs2 } => write!(f, "sh {}, {}({})", rs2, imm, rs1),
-            Instruction::Sw { imm, rs1, rs2 } => write!(f, "sw {}, {}({})", rs2, imm, rs1),
+            Instruction::Sb { imm, rs1, rs2 } => {
+                write!(f, "sb {}, {:#x}({})", rs2, SignedHexView(imm), rs1)
+            }
+            Instruction::Sh { imm, rs1, rs2 } => {
+                write!(f, "sh {}, {:#x}({})", rs2, SignedHexView(imm), rs1)
+            }
+            Instruction::Sw { imm, rs1, rs2 } => {
+                write!(f, "sw {}, {:#x}({})", rs2, SignedHexView(imm), rs1)
+            }
 
             Instruction::Addi { rd, rs1, imm } => {
                 write!(f, "addi {}, {}, {:#x}", rd, rs1, SignedHexView(imm))
