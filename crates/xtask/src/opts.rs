@@ -10,7 +10,10 @@ pub enum Command {
     Check,
     Clippy,
     Clean,
-    BuildFirmware,
+    BuildFirmware {
+        #[clap(short, long, default_value_t = false)]
+        debug: bool,
+    },
     DumpFirmware,
     BuildOs {
         #[clap(short, long, default_value_t = false)]

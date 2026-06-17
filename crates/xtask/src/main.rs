@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
         opts::Command::Check => lints::run_check()?,
         opts::Command::Clippy => lints::run_clippy()?,
         opts::Command::Clean => clean::clean()?,
-        opts::Command::BuildFirmware => build::build_firmware()?,
+        opts::Command::BuildFirmware { debug } => build::build_firmware(!debug)?,
         opts::Command::DumpFirmware => build::dump_firmware()?,
         opts::Command::BuildOs { debug } => {
             let _ = debug;
