@@ -597,11 +597,25 @@ impl Instruction {
                 Ok(Self::Addi {
                     rd: Self::try_parse_reg(value.bits(2, 3))?,
                     rs1: GeneralRegisterName::Sp,
-                    imm: imm,
+                    imm,
                 })
             }
-            1 => unimplemented!("C.FLD"),
-            2 => unimplemented!("C.LW"),
+            1 => unimplemented!("C.FLD"), // TODO: implement compressed floating point instructions
+            2 => {
+                // C.LW
+                let imm =
+                    (value.bits(5, 1) << 6) | (value.bits(10, 3) << 3) | (value.bits(6, 1) << 2);
+                let imm = if imm & (1 << 8) != 0 {
+                    (imm | !0 << 9) as i16 as i32
+                } else {
+                    imm as i16 as i32
+                };
+                Ok(Self::Lw {
+                    rd: Self::try_parse_reg(value.bits(2, 3) + 8)?,
+                    rs1: Self::try_parse_reg(value.bits(7, 3) + 8)?,
+                    imm,
+                })
+            }
             3 => {
                 let imm = (value.bits(5, 2) << 6) | (value.bits(10, 3) << 3);
                 let rd = Self::try_parse_reg(value.bits(2, 3))?;
@@ -613,8 +627,34 @@ impl Instruction {
                 })
             }
             5 => unimplemented!("C.FSD"),
-            6 => unimplemented!("C.SW"),
-            7 => unimplemented!("C.SD"),
+            6 => {
+                // C.SW
+                let imm =
+                    (value.bits(5, 1) << 6) | (value.bits(10, 3) << 3) | (value.bits(6, 1) << 2);
+                let imm = if imm & (1 << 8) != 0 {
+                    (imm | !0 << 9) as i16 as i32
+                } else {
+                    imm as i16 as i32
+                };
+                Ok(Self::Sw {
+                    rs1: Self::try_parse_reg(value.bits(7, 3) + 8)?,
+                    rs2: Self::try_parse_reg(value.bits(2, 3) + 8)?,
+                    imm,
+                })
+            }
+            7 => {
+                let imm = (value.bits(5, 2) << 6) | (value.bits(10, 3) << 3);
+                let imm = if imm & (1 << 8) != 0 {
+                    (imm | !0 << 9) as i16 as i32
+                } else {
+                    imm as i16 as i32
+                };
+                Ok(Self::Sd {
+                    rs1: Self::try_parse_reg(value.bits(7, 3) + 8)?,
+                    rs2: Self::try_parse_reg(value.bits(2, 3) + 8)?,
+                    imm,
+                })
+            }
             _ => Err(InstructionError::InvalidInstruction),
         }
     }
