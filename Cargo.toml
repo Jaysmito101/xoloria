@@ -15,5 +15,7 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 buddy_system_allocator = "0.13.0"
 num-traits = "0.2.19"
+ratatui = "0.29"
+crossterm = "0.28"
 
 emulator = { path = "crates/emulator" }
