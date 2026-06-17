@@ -381,8 +381,11 @@ impl Debugger {
 
         let all_entries = self.disassemble_around(200);
 
-        let pc_idx = all_entries.iter().position(|e| e.is_pc).unwrap_or(0) as i32;
-        let abs_cursor = (pc_idx + self.ui.disasm_cursor).max(0) as usize;
+        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+
+        let center_idx = all_entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+        let abs_cursor = (center_idx + self.ui.disasm_cursor).max(0) as usize;
         let abs_cursor = abs_cursor.min(all_entries.len().saturating_sub(1));
 
         let cursor_target_addr = if self.ui.show_targets {

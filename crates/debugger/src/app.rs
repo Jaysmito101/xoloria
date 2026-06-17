@@ -549,8 +549,9 @@ impl Debugger {
         };
 
         let hart = &machine.harts()[self.ui.selected_hart];
-        let pc = hart.registers().pc();
+        let hw_pc = hart.registers().pc();
         let bp_gen = self.breakpoints.len() as u64;
+        let pc = self.ui.view_center_addr.unwrap_or(hw_pc);
 
         if let Some(ref cache) = self.disasm_cache
             && cache.hart == self.ui.selected_hart
@@ -584,7 +585,7 @@ impl Debugger {
             let mut addr = scan_start;
             while addr < pc {
                 if let Some((entry, step)) =
-                    Self::decode_at(addr, bus, pc, &self.breakpoints, x_regs)
+                    Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs)
                 {
                     entries.push(entry);
                     addr += step;
@@ -598,7 +599,7 @@ impl Debugger {
 
         let mut addr = pc;
         for _ in 0..after {
-            if let Some((entry, step)) = Self::decode_at(addr, bus, pc, &self.breakpoints, x_regs) {
+            if let Some((entry, step)) = Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs) {
                 entries.push(entry);
                 addr += step;
             } else {

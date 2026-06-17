@@ -17,6 +17,8 @@ pub struct UiState {
     pub show_targets: bool,
     pub selected_hart: usize,
     pub panel_rects: HashMap<Panel, Rect>,
+    pub view_center_addr: Option<u64>,
+    pub view_history: Vec<u64>,
 }
 
 impl UiState {
@@ -35,6 +37,8 @@ impl UiState {
             show_targets: true,
             selected_hart: 0,
             panel_rects: HashMap::new(),
+            view_center_addr: None,
+            view_history: Vec::new(),
         }
     }
 

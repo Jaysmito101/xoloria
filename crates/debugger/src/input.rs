@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::app::Debugger;
+use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
 
 impl Debugger {
@@ -149,10 +149,43 @@ impl Debugger {
             KeyCode::PageUp => self.scroll(-16),
             KeyCode::PageDown => self.scroll(16),
 
+            KeyCode::Char('g') | KeyCode::Enter => {
+                if self.ui.panel == Panel::Disassembly {
+                    let entries = self.disassemble_around(200);
+                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                    let center_idx = entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                    let abs = abs.min(entries.len().saturating_sub(1));
+                    if let Some(entry) = entries.get(abs) {
+                        if let Some(JumpTarget::Known(target_addr)) = entry.jump_target {
+                            self.ui.view_history.push(entry.addr); // Push current cursor addr before jumping
+                            self.ui.view_center_addr = Some(target_addr);
+                            self.ui.disasm_cursor = 0;
+                            self.disasm_cache = None;
+                        }
+                    }
+                }
+            }
+            KeyCode::Backspace | KeyCode::Char('u') => {
+                if self.ui.panel == Panel::Disassembly {
+                    if let Some(prev) = self.ui.view_history.pop() {
+                        self.ui.view_center_addr = Some(prev);
+                        self.ui.disasm_cursor = 0;
+                        self.disasm_cache = None;
+                    } else {
+                        self.ui.view_center_addr = None;
+                        self.ui.disasm_cursor = 0;
+                        self.disasm_cache = None;
+                    }
+                }
+            }
             KeyCode::Char('b') => {
                 let entries = self.disassemble_around(200);
-                let pc_idx = entries.iter().position(|e| e.is_pc).unwrap_or(0);
-                let abs = (pc_idx as i32 + self.ui.disasm_cursor).max(0) as usize;
+                let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                let center_idx = entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+                let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
                 let abs = abs.min(entries.len().saturating_sub(1));
                 if let Some(entry) = entries.get(abs) {
                     let addr = entry.addr;
@@ -180,8 +213,24 @@ impl Debugger {
             KeyCode::Home => {
                 if let Some(m) = self.machine.as_ref() {
                     let pc = m.harts()[self.ui.selected_hart].registers().pc();
-                    self.ui.memory_addr = pc;
-                    self.ui.panel = Panel::Memory;
+                    if self.ui.panel == Panel::Memory {
+                        self.ui.memory_addr = pc;
+                    } else if self.ui.panel == Panel::Disassembly {
+                        let entries = self.disassemble_around(200);
+                        let center_addr = self.ui.view_center_addr.unwrap_or(pc);
+                        let center_idx = entries.iter().position(|e| e.addr == center_addr).unwrap_or(0) as i32;
+                        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                        let abs = abs.min(entries.len().saturating_sub(1));
+                        if let Some(entry) = entries.get(abs) {
+                            self.ui.view_history.push(entry.addr);
+                        }
+                        self.ui.view_center_addr = None;
+                        self.ui.disasm_cursor = 0;
+                        self.disasm_cache = None;
+                    } else {
+                        self.ui.memory_addr = pc;
+                        self.ui.panel = Panel::Memory;
+                    }
                 }
             }
 
