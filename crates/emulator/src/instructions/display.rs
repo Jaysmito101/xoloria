@@ -28,8 +28,10 @@ impl Display for Instruction {
             Instruction::Lui { rd, imm } => write!(f, "lui {}, {:#x}", rd, imm >> 12),
             Instruction::Auipc { rd, imm } => write!(f, "auipc {}, {:#x}", rd, imm),
 
-            Instruction::Jal { rd, imm } => write!(f, "jal {}, {:#x}", rd, imm),
-            Instruction::Jalr { rd, rs1, imm } => write!(f, "jalr {}, {}({})", rd, imm, rs1),
+            Instruction::Jal { rd, imm } => write!(f, "jal {}, {:#x}", rd, SignedHexView(imm)),
+            Instruction::Jalr { rd, rs1, imm } => {
+                write!(f, "jalr {}, {:#x}({})", rd, SignedHexView(imm), rs1)
+            }
 
             Instruction::Beq { rs1, rs2, imm } => {
                 write!(f, "beq {}, {}, {:#x}", rs1, rs2, SignedHexView(imm))
