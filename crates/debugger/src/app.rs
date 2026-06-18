@@ -37,9 +37,20 @@ pub struct Debugger {
 
     pub(crate) source_lines: HashMap<u64, String>,
     pub(crate) source_locations: HashMap<u64, (String, u32)>,
-    pub(crate) source_files_cache: HashMap<String, Option<Vec<String>>>,
+    pub(crate) source_files_cache: HashMap<String, Option<Vec<Vec<(String, ratatui::style::Style)>>>>,
     pub(crate) symbols: HashMap<u64, String>,
     pub(crate) sorted_symbols: Vec<(u64, String)>,
+
+    pub(crate) syntax_set: syntect::parsing::SyntaxSet,
+    pub(crate) theme_set: syntect::highlighting::ThemeSet,
+}
+
+fn syntect_style_to_ratatui(style: syntect::highlighting::Style) -> ratatui::style::Style {
+    ratatui::style::Style::default().fg(ratatui::style::Color::Rgb(
+        style.foreground.r,
+        style.foreground.g,
+        style.foreground.b,
+    ))
 }
 
 pub(crate) struct DisasmCache {
@@ -95,6 +106,8 @@ impl Debugger {
                 s.sort_by_key(|(addr, _)| *addr);
                 s
             },
+            syntax_set: syntect::parsing::SyntaxSet::load_defaults_newlines(),
+            theme_set: syntect::highlighting::ThemeSet::load_defaults(),
         })
     }
 
@@ -196,12 +209,24 @@ impl Debugger {
         (source_map, source_locs, symbol_map)
     }
 
-    pub(crate) fn get_source_file(&mut self, path: &str) -> Option<&Vec<String>> {
+    pub(crate) fn get_source_file(&mut self, path: &str) -> Option<&Vec<Vec<(String, ratatui::style::Style)>>> {
         if !self.source_files_cache.contains_key(path) {
-            let content = std::fs::read_to_string(path)
-                .ok()
-                .map(|s| s.lines().map(|l| l.to_string()).collect());
-            self.source_files_cache.insert(path.to_string(), content);
+            let content = std::fs::read_to_string(path).ok();
+            let parsed = content.map(|s| {
+                let syntax = self.syntax_set.find_syntax_for_file(path).unwrap_or(None)
+                    .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+                
+                let theme = &self.theme_set.themes["base16-ocean.dark"];
+                let mut h = syntect::easy::HighlightLines::new(syntax, theme);
+                
+                s.lines().map(|line| {
+                    let ranges: Vec<(syntect::highlighting::Style, &str)> = h.highlight_line(line, &self.syntax_set).unwrap_or_default();
+                    ranges.into_iter().map(|(style, text)| {
+                        (text.to_string(), syntect_style_to_ratatui(style))
+                    }).collect()
+                }).collect()
+            });
+            self.source_files_cache.insert(path.to_string(), parsed);
         }
         self.source_files_cache.get(path).unwrap().as_ref()
     }

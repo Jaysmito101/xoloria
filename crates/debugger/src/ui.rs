@@ -586,7 +586,7 @@ impl Debugger {
 
                     let lines = self.get_source_file(&path).unwrap();
 
-                    for (i, line) in lines.iter().enumerate().skip(scroll).take(visible_height) {
+                    for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                         let is_target = i + 1 == target_line;
                         let is_pc = Some(i + 1) == hw_pc_line;
                         let has_bp = bp_lines.contains(&(i + 1));
@@ -621,22 +621,17 @@ impl Debugger {
                             ));
                         }
 
-                        let text_style = if is_target && is_pc {
-                            Style::default()
-                                .fg(theme_accent)
-                                .add_modifier(Modifier::BOLD)
-                                .add_modifier(Modifier::REVERSED)
-                        } else if is_target {
-                            Style::default().add_modifier(Modifier::REVERSED)
-                        } else if is_pc {
-                            Style::default()
-                                .fg(theme_accent)
-                                .add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default()
-                        };
-
-                        spans.push(Span::styled(line, text_style));
+                        for (text, token_style) in line_tokens {
+                            let mut style = *token_style;
+                            if is_target && is_pc {
+                                style = style.add_modifier(Modifier::BOLD).add_modifier(Modifier::REVERSED);
+                            } else if is_target {
+                                style = style.add_modifier(Modifier::REVERSED);
+                            } else if is_pc {
+                                style = style.add_modifier(Modifier::BOLD);
+                            }
+                            spans.push(Span::styled(text.clone(), style));
+                        }
 
                         source_lines.push(Line::from(spans));
                     }

@@ -20,3 +20,4 @@ serde.workspace = true
 serde_json.workspace = true
 evalexpr.workspace = true
 regex.workspace = true
+syntect.workspace = true
