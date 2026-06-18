@@ -561,14 +561,8 @@ impl Debugger {
                     self.ui.source_cursor = self.ui.source_cursor.min(lines_len.saturating_sub(1));
                     let target_line = self.ui.source_cursor + 1;
 
-                    if self.ui.source_cursor < self.ui.source_scroll {
-                        self.ui.source_scroll = self.ui.source_cursor;
-                    } else if self.ui.source_cursor >= self.ui.source_scroll + visible_height {
-                        self.ui.source_scroll = self
-                            .ui
-                            .source_cursor
-                            .saturating_sub(visible_height.saturating_sub(1));
-                    }
+                    let half = visible_height / 2;
+                    self.ui.source_scroll = self.ui.source_cursor.saturating_sub(half);
 
                     let max_scroll = lines_len.saturating_sub(visible_height);
                     self.ui.source_scroll = self.ui.source_scroll.min(max_scroll);
