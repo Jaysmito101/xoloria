@@ -524,14 +524,26 @@ impl Debugger {
             ),
         ])];
 
-        let title = if self.breakpoints.is_empty() {
-            "Disassembly (s: toggle tab)".into()
+        let target_addr = all_entries
+            .get(abs_cursor)
+            .map(|e| e.addr)
+            .unwrap_or(center_addr);
+
+        let mut title = if self.breakpoints.is_empty() {
+            "Disassembly (s: toggle tab)".to_string()
         } else {
             format!(
                 "Disassembly ({} bp) (s: toggle tab)",
                 self.breakpoints.len()
             )
         };
+
+        if self.ui.disasm_tab == DisasmTab::Source {
+            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&all_entries)) {
+                let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
+                title = format!("{} [{}]", title, short_path);
+            }
+        }
 
         let block = self.panel_block(&title, focused);
         let inner_area = block.inner(area);
@@ -549,13 +561,14 @@ impl Debugger {
         let visible_height = content_area.height as usize;
 
         if self.ui.disasm_tab == DisasmTab::Source {
-            let target_addr = all_entries
-                .get(abs_cursor)
-                .map(|e| e.addr)
-                .unwrap_or(center_addr);
             let source_loc = self.map_addr_to_source(target_addr, Some(&all_entries));
 
-            if let Some((path, _)) = source_loc {
+            if let Some((path, target_line_from_loc)) = source_loc {
+                if Some(target_addr) != self.ui.last_target_addr {
+                    self.ui.source_cursor = target_line_from_loc.saturating_sub(1) as usize;
+                    self.ui.last_target_addr = Some(target_addr);
+                }
+
                 let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
                 if lines_len > 0 {
                     self.ui.source_cursor = self.ui.source_cursor.min(lines_len.saturating_sub(1));

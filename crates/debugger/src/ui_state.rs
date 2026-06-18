@@ -30,6 +30,7 @@ pub struct UiState {
     pub command_history: Vec<String>,
     pub history_index: Option<usize>,
     pub panel_focused: bool,
+    pub last_target_addr: Option<u64>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -67,6 +68,7 @@ impl UiState {
             command_history: Vec::new(),
             history_index: None,
             panel_focused: true,
+            last_target_addr: None,
         }
     }
 
