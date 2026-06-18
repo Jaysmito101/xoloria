@@ -22,6 +22,11 @@ pub struct UiState {
     pub symbols_scroll: usize,
     pub symbols_cursor: usize,
     pub symbols_search: String,
+    pub symbols_tab: SymbolsTab,
+    pub(crate) trace_stack: Vec<u64>,
+    pub(crate) trace_forward_stack: Vec<u64>,
+    pub(crate) trace_scroll: usize,
+    pub trace_cursor: usize,
     pub show_help: bool,
     pub help_scroll: usize,
     pub disasm_tab: DisasmTab,
@@ -37,6 +42,12 @@ pub struct UiState {
 pub enum DisasmTab {
     Assembly,
     Source,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SymbolsTab {
+    Trace,
+    Symbols,
 }
 
 impl UiState {
@@ -60,6 +71,11 @@ impl UiState {
             symbols_scroll: 0,
             symbols_cursor: 0,
             symbols_search: String::new(),
+            symbols_tab: SymbolsTab::Trace,
+            trace_stack: Vec::new(),
+            trace_forward_stack: Vec::new(),
+            trace_scroll: 0,
+            trace_cursor: 0,
             show_help: false,
             help_scroll: 0,
             disasm_tab: DisasmTab::Assembly,

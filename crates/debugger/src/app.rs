@@ -443,6 +443,7 @@ impl Debugger {
 
     pub fn step_hart(&mut self, n: usize) {
         for _ in 0..n {
+            let old_pc = self.machine.as_ref().unwrap().harts()[self.ui.selected_hart].registers().pc();
             match self.tick_hart(self.ui.selected_hart) {
                 TickResult::Ok => {
                     self.tick_count += 1;
@@ -461,6 +462,10 @@ impl Debugger {
                     self.log_panic(format!("PANIC: {}", msg));
                     break;
                 }
+            }
+            if self.ui.trace_stack.last() != Some(&old_pc) {
+                self.ui.trace_stack.push(old_pc);
+                self.ui.trace_forward_stack.clear();
             }
         }
         self.ui.disasm_cursor = 0;
@@ -974,6 +979,25 @@ impl Debugger {
             is_compressed,
         };
         Some((entry, step))
+    }
+
+    pub(crate) fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
+        let machine = self.machine.as_ref()?;
+        let bus = machine.bus();
+        let raw: u32 = bus.read(addr).ok()?;
+        let is_compressed = raw & 0b11 != 0b11;
+        
+        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
+        let decode_result = std::panic::catch_unwind(|| Instruction::try_from(raw));
+        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+        
+        match decode_result {
+            Ok(Ok(instr)) => Some(format!("{}", instr)),
+            Ok(Err(_)) if is_compressed => Some(format!(".half {:#06x}", raw & 0xFFFF)),
+            Ok(Err(_)) => Some(format!(".word {:#010x}", raw)),
+            Err(_) if is_compressed => Some(format!("<unimpl> {:#06x}", raw & 0xFFFF)),
+            Err(_) => Some(format!("<unimpl> {:#010x}", raw)),
+        }
     }
 
     fn extract_jump_target(raw: u32, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<JumpTarget> {

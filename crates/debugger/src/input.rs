@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
-use crate::ui_state::DisasmTab;
+use crate::ui_state::{DisasmTab, SymbolsTab};
 
 impl Debugger {
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -247,16 +247,23 @@ impl Debugger {
                             self.disasm_cache = None;
                         }
                     } else if self.ui.panel == Panel::Symbols {
-                        let search = self.ui.symbols_search.to_lowercase();
-                        let filtered: Vec<_> = self
-                            .sorted_symbols
-                            .iter()
-                            .filter(|(_, name)| {
-                                search.is_empty() || name.to_lowercase().contains(&search)
-                            })
-                            .collect();
+                        let target_addr = if self.ui.symbols_tab == SymbolsTab::Symbols {
+                            let search = self.ui.symbols_search.to_lowercase();
+                            let filtered: Vec<_> = self
+                                .sorted_symbols
+                                .iter()
+                                .filter(|(_, name)| {
+                                    search.is_empty() || name.to_lowercase().contains(&search)
+                                })
+                                .collect();
+                            filtered.get(self.ui.symbols_cursor).map(|t| t.0)
+                        } else {
+                            let trace_len = self.ui.trace_stack.len();
+                            let cursor = self.ui.trace_cursor.min(trace_len.saturating_sub(1));
+                            let idx = trace_len.saturating_sub(1).saturating_sub(cursor);
+                            self.ui.trace_stack.get(idx).copied()
+                        };
 
-                        let target_addr = filtered.get(self.ui.symbols_cursor).map(|t| t.0);
                         if let Some(t_addr) = target_addr {
                             let entries = self.disassemble_around(200);
                             let hw_pc = self
@@ -293,6 +300,62 @@ impl Debugger {
                         self.ui.disasm_cursor = 0;
                         self.disasm_cache = None;
                     }
+                }
+            }
+            KeyCode::Char('t') => {
+                if let Some(addr) = self.ui.trace_stack.pop() {
+                    let hw_pc = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .unwrap_or(0);
+                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                    self.ui.trace_forward_stack.push(center_addr);
+
+                    let entries = self.disassemble_around(200);
+                    let center_idx = entries
+                        .iter()
+                        .position(|e| e.addr == center_addr)
+                        .unwrap_or(0) as i32;
+                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                    let abs = abs.min(entries.len().saturating_sub(1));
+                    if let Some(entry) = entries.get(abs) {
+                        self.ui.view_history.push(entry.addr);
+                    }
+                    self.ui.view_center_addr = Some(addr);
+                    self.ui.disasm_cursor = 0;
+                    self.disasm_cache = None;
+                    self.ui.panel = Panel::Disassembly;
+                } else {
+                    self.set_info("Trace stack is empty");
+                }
+            }
+            KeyCode::Char('T') => {
+                if let Some(addr) = self.ui.trace_forward_stack.pop() {
+                    let hw_pc = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .unwrap_or(0);
+                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                    self.ui.trace_stack.push(center_addr);
+
+                    let entries = self.disassemble_around(200);
+                    let center_idx = entries
+                        .iter()
+                        .position(|e| e.addr == center_addr)
+                        .unwrap_or(0) as i32;
+                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                    let abs = abs.min(entries.len().saturating_sub(1));
+                    if let Some(entry) = entries.get(abs) {
+                        self.ui.view_history.push(entry.addr);
+                    }
+                    self.ui.view_center_addr = Some(addr);
+                    self.ui.disasm_cursor = 0;
+                    self.disasm_cache = None;
+                    self.ui.panel = Panel::Disassembly;
+                } else {
+                    self.set_info("Forward trace stack is empty");
                 }
             }
             KeyCode::Char('b') => {
@@ -351,7 +414,7 @@ impl Debugger {
             KeyCode::Char('l') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                 self.load_breakpoints();
             }
-            KeyCode::Char('t') => {
+            KeyCode::Char('J') => {
                 self.ui.show_targets = !self.ui.show_targets;
                 self.set_info(if self.ui.show_targets {
                     "Jump targets: ON"
@@ -435,6 +498,11 @@ impl Debugger {
                             self.set_info("Selected source line has no assembly, jumped to PC instead.");
                         }
                     }
+                } else if self.ui.panel == Panel::Symbols {
+                    self.ui.symbols_tab = match self.ui.symbols_tab {
+                        SymbolsTab::Symbols => SymbolsTab::Trace,
+                        SymbolsTab::Trace => SymbolsTab::Symbols,
+                    };
                 }
             }
             KeyCode::Char('v') => {
@@ -531,7 +599,11 @@ impl Debugger {
                 self.ui.console_scroll = (self.ui.console_scroll as i32 + delta).max(0) as usize;
             }
             Panel::Symbols => {
-                self.ui.symbols_cursor = (self.ui.symbols_cursor as i32 + delta).max(0) as usize;
+                if self.ui.symbols_tab == SymbolsTab::Symbols {
+                    self.ui.symbols_cursor = (self.ui.symbols_cursor as i32 + delta).max(0) as usize;
+                } else {
+                    self.ui.trace_cursor = (self.ui.trace_cursor as i32 + delta).max(0) as usize;
+                }
             }
         }
     }
@@ -583,8 +655,13 @@ impl Debugger {
                                 (self.ui.console_scroll as i32 + delta).max(0) as usize
                         }
                         Panel::Symbols => {
-                            self.ui.symbols_cursor =
-                                (self.ui.symbols_cursor as i32 + delta).max(0) as usize
+                            if self.ui.symbols_tab == SymbolsTab::Symbols {
+                                self.ui.symbols_cursor =
+                                    (self.ui.symbols_cursor as i32 + delta).max(0) as usize;
+                            } else {
+                                self.ui.trace_cursor =
+                                    (self.ui.trace_cursor as i32 + delta).max(0) as usize;
+                            }
                         }
                     }
                 } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {

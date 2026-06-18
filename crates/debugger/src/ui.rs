@@ -10,7 +10,7 @@ use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 
 use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
-use crate::ui_state::DisasmTab;
+use crate::ui_state::{DisasmTab, SymbolsTab};
 
 impl Debugger {
     pub fn render(&mut self, frame: &mut Frame) {
@@ -221,7 +221,7 @@ impl Debugger {
             " Ctrl+L : Load breakpoints",
             " g / Enter : Follow jump / Jump to selected symbol",
             " u / Backspace : Go back in history",
-            " t : Toggle jump target labels",
+            " j : Toggle jump target labels",
             " j / k : Scroll down/up",
             " PageUp/PageDown : Scroll page down/up",
             " Home : Center on current PC",
@@ -917,6 +917,112 @@ impl Debugger {
         self.ui.panel_rects.insert(Panel::Symbols, area);
         let focused = self.ui.panel == Panel::Symbols;
 
+        let title = "Symbols / Trace (s: toggle tab)";
+        let block = self.panel_block(&title, focused);
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner_area.height == 0 {
+            return;
+        }
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(inner_area);
+
+        let titles = vec![
+            Line::from(Span::styled(
+                " Trace ",
+                if self.ui.symbols_tab == SymbolsTab::Trace {
+                    Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(self.theme.dim)
+                },
+            )),
+            Line::from(Span::styled(
+                " Symbols ",
+                if self.ui.symbols_tab == SymbolsTab::Symbols {
+                    Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(self.theme.dim)
+                },
+            )),
+        ];
+
+        let tabs = Tabs::new(titles)
+            .select(match self.ui.symbols_tab {
+                SymbolsTab::Trace => 0,
+                SymbolsTab::Symbols => 1,
+            })
+            .divider("│");
+        frame.render_widget(tabs, layout[0]);
+
+        if layout[1].height == 0 {
+            return;
+        }
+        let content_area = layout[1];
+
+        if self.ui.symbols_tab == SymbolsTab::Trace {
+            let trace_len = self.ui.trace_stack.len();
+            self.ui.trace_cursor = self.ui.trace_cursor.min(trace_len.saturating_sub(1));
+            
+            let visible_height = content_area.height as usize;
+            
+            if self.ui.trace_cursor < self.ui.trace_scroll {
+                self.ui.trace_scroll = self.ui.trace_cursor;
+            } else if self.ui.trace_cursor >= self.ui.trace_scroll + visible_height {
+                self.ui.trace_scroll = self.ui.trace_cursor.saturating_sub(visible_height.saturating_sub(1));
+            }
+            
+            let max_scroll = trace_len.saturating_sub(visible_height);
+            let scroll = self.ui.trace_scroll.min(max_scroll);
+
+            let lines: Vec<Line> = self.ui.trace_stack
+                .iter()
+                .rev()
+                .enumerate()
+                .skip(scroll)
+                .take(visible_height)
+                .map(|(i, &addr)| {
+                    let mut spans = vec![];
+                    let selected = focused && i == self.ui.trace_cursor;
+
+                    if selected {
+                        spans.push(Span::styled(" ► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)));
+                    } else {
+                        spans.push(Span::raw("   "));
+                    }
+
+                    spans.push(Span::styled(
+                        format!("{:#010x} ", addr),
+                        Style::default().fg(if selected { self.theme.accent } else { self.theme.highlight }),
+                    ));
+
+                    if let Some(inst) = self.disassemble_instruction_at(addr) {
+                        spans.push(Span::styled(format!("{{{}}} ", inst), Style::default().fg(self.theme.dim)));
+                    }
+
+                    let sym_name = self.sorted_symbols.iter().find(|(a, _)| a == &addr).map(|(_, n)| n.as_str());
+                    if let Some(sym) = sym_name {
+                        spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
+                    } else if let Some((path, line)) = self.source_locations.get(&addr) {
+                        let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
+                        spans.push(Span::styled(format!("{}:{}", short, line), Style::default().fg(self.theme.dim)));
+                    }
+
+                    Line::from(spans)
+                })
+                .collect();
+
+            if lines.is_empty() {
+                frame.render_widget(Paragraph::new(" No trace available").style(Style::default().fg(self.theme.dim)), content_area);
+            } else {
+                frame.render_widget(Paragraph::new(lines), content_area);
+            }
+            return;
+        }
+
         let (inner, _) = if self.ui.input_mode == InputMode::SearchSymbols {
             let splits = Layout::default()
                 .direction(Direction::Vertical)
@@ -1005,15 +1111,7 @@ impl Debugger {
             })
             .collect();
 
-        let title = if search.is_empty() {
-            format!("Symbols [{}/{}]", scroll, max_scroll)
-        } else if self.ui.input_mode == InputMode::SearchSymbols {
-            "Symbols (Searching...)".to_string()
-        } else {
-            format!("Symbols (Search: {}) [{}/{}]", search, scroll, max_scroll)
-        };
-
-        let paragraph = Paragraph::new(lines).block(self.panel_block(&title, focused));
+        let paragraph = Paragraph::new(lines);
         frame.render_widget(paragraph, inner);
     }
 
@@ -1254,6 +1352,11 @@ impl Debugger {
             Span::raw("BP "),
             Span::styled(
                 " t ",
+                Style::default().fg(self.theme.target),
+            ),
+            Span::raw("Trace "),
+            Span::styled(
+                " T ",
                 Style::default().fg(if self.ui.show_targets {
                     self.theme.target
                 } else {
