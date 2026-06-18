@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
 
     let machine = emulator::MachineBuilder::new("Xoloria/VM")
         // .with_harts(4)?
-        .with_memory(1024 * 32)?
+        .with_memory(1024 * 1024)?
         .build()?;
 
     machine.load_binary(0x80000000, &binary)?;
