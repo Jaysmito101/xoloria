@@ -595,7 +595,7 @@ impl Instruction {
                     return Err(InstructionError::InvalidInstruction);
                 }
                 Ok(Self::Addi {
-                    rd: Self::try_parse_reg(value.bits(2, 3))?,
+                    rd: Self::try_parse_reg(value.bits(2, 3) + 8)?,
                     rs1: GeneralRegisterName::Sp,
                     imm,
                 })
@@ -618,8 +618,8 @@ impl Instruction {
             }
             3 => {
                 let imm = (value.bits(5, 2) << 6) | (value.bits(10, 3) << 3);
-                let rd = Self::try_parse_reg(value.bits(2, 3))?;
-                let rs1 = Self::try_parse_reg(value.bits(7, 3))?;
+                let rd = Self::try_parse_reg(value.bits(2, 3) + 8)?;
+                let rs1 = Self::try_parse_reg(value.bits(7, 3) + 8)?;
                 Ok(Self::Ld {
                     rd,
                     rs1,
