@@ -385,7 +385,15 @@ impl Debugger {
                             self.ui.source_cursor = target_line.saturating_sub(1) as usize;
                             self.ui.disasm_tab = DisasmTab::Source;
                         } else {
-                            self.set_info("No source mapped to this instruction or its vicinity.");
+                            if let Some((_, target_line)) =
+                                self.map_addr_to_source(hw_pc, Some(&entries))
+                            {
+                                self.ui.source_cursor = target_line.saturating_sub(1) as usize;
+                                self.ui.disasm_tab = DisasmTab::Source;
+                                self.set_info("Selected instruction has no source, jumped to PC instead.");
+                            } else {
+                                self.set_info("No source mapped to this instruction or the PC.");
+                            }
                         }
                     } else {
                         let entries = self.disassemble_around(200);
@@ -413,10 +421,18 @@ impl Debugger {
                                 self.disasm_cache = None;
                                 self.ui.disasm_tab = DisasmTab::Assembly;
                             } else {
-                                self.set_info("No assembly mapped to this source line.");
+                                self.ui.view_center_addr = Some(hw_pc);
+                                self.ui.disasm_cursor = 0;
+                                self.disasm_cache = None;
+                                self.ui.disasm_tab = DisasmTab::Assembly;
+                                self.set_info("Selected source line has no assembly, jumped to PC instead.");
                             }
                         } else {
-                            self.set_info("No assembly mapped to this source line.");
+                            self.ui.view_center_addr = Some(hw_pc);
+                            self.ui.disasm_cursor = 0;
+                            self.disasm_cache = None;
+                            self.ui.disasm_tab = DisasmTab::Assembly;
+                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
                         }
                     }
                 }
