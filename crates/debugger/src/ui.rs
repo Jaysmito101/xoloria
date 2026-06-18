@@ -200,7 +200,10 @@ impl Debugger {
             "=== General Navigation ===",
             " Tab / Shift+Tab : Switch active Hart",
             " 1, 2, 3... : Switch active Hart (direct)",
-            " Arrows : Navigate panels",
+            " Arrows : Navigate panels (unfocused) or inside panel (focused)",
+            " Ctrl+Arrows : Navigate panels (always)",
+            " Enter : Focus panel",
+            " Esc : Unfocus panel",
             " f : Next panel",
             " ? : Toggle this help",
             " q : Quit",
@@ -1273,7 +1276,11 @@ impl Debugger {
 
     fn panel_block(&self, title: &str, focused: bool) -> Block<'_> {
         let border_style = if focused {
-            Style::default().fg(self.theme.accent)
+            if self.ui.panel_focused {
+                Style::default().fg(self.theme.highlight).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(self.theme.accent)
+            }
         } else {
             Style::default().fg(self.theme.border)
         };
@@ -1282,7 +1289,11 @@ impl Debugger {
             .border_style(border_style)
             .title(format!(" {} ", title))
             .title_style(Style::default().fg(if focused {
-                self.theme.accent
+                if self.ui.panel_focused {
+                    self.theme.highlight
+                } else {
+                    self.theme.accent
+                }
             } else {
                 Color::White
             }))

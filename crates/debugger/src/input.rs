@@ -158,6 +158,11 @@ impl Debugger {
                 self.ui.show_help = true;
                 self.ui.help_scroll = 0;
             }
+            KeyCode::Esc => {
+                if self.ui.panel_focused {
+                    self.ui.panel_focused = false;
+                }
+            }
             KeyCode::Char('q') => self.running = false,
 
             KeyCode::Char('n') | KeyCode::Char(' ') => {
@@ -184,10 +189,30 @@ impl Debugger {
                 }
             }
 
-            KeyCode::Left => self.ui.panel = self.ui.panel.nav(Direction::Left),
-            KeyCode::Right => self.ui.panel = self.ui.panel.nav(Direction::Right),
-            KeyCode::Up => self.ui.panel = self.ui.panel.nav(Direction::Up),
-            KeyCode::Down => self.ui.panel = self.ui.panel.nav(Direction::Down),
+            KeyCode::Left => {
+                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) || !self.ui.panel_focused {
+                    self.ui.panel = self.ui.panel.nav(Direction::Left);
+                }
+            }
+            KeyCode::Right => {
+                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) || !self.ui.panel_focused {
+                    self.ui.panel = self.ui.panel.nav(Direction::Right);
+                }
+            }
+            KeyCode::Up => {
+                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) || !self.ui.panel_focused {
+                    self.ui.panel = self.ui.panel.nav(Direction::Up);
+                } else {
+                    self.scroll(-1);
+                }
+            }
+            KeyCode::Down => {
+                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) || !self.ui.panel_focused {
+                    self.ui.panel = self.ui.panel.nav(Direction::Down);
+                } else {
+                    self.scroll(1);
+                }
+            }
             KeyCode::Char('f') => self.ui.panel = self.ui.panel.next(),
 
             KeyCode::Char('j') => self.scroll(1),
@@ -196,40 +221,10 @@ impl Debugger {
             KeyCode::PageDown => self.scroll(16),
 
             KeyCode::Char('g') | KeyCode::Enter => {
-                if self.ui.panel == Panel::Disassembly {
-                    let entries = self.disassemble_around(200);
-                    let hw_pc = self
-                        .machine
-                        .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                        .unwrap_or(0);
-                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                    let center_idx = entries
-                        .iter()
-                        .position(|e| e.addr == center_addr)
-                        .unwrap_or(0) as i32;
-                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                    let abs = abs.min(entries.len().saturating_sub(1));
-                    if let Some(entry) = entries.get(abs)
-                        && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
-                    {
-                        self.ui.view_history.push(entry.addr);
-                        self.ui.view_center_addr = Some(target_addr);
-                        self.ui.disasm_cursor = 0;
-                        self.disasm_cache = None;
-                    }
-                } else if self.ui.panel == Panel::Symbols {
-                    let search = self.ui.symbols_search.to_lowercase();
-                    let filtered: Vec<_> = self
-                        .sorted_symbols
-                        .iter()
-                        .filter(|(_, name)| {
-                            search.is_empty() || name.to_lowercase().contains(&search)
-                        })
-                        .collect();
-
-                    let target_addr = filtered.get(self.ui.symbols_cursor).map(|t| t.0);
-                    if let Some(t_addr) = target_addr {
+                if key.code == KeyCode::Enter && !self.ui.panel_focused {
+                    self.ui.panel_focused = true;
+                } else {
+                    if self.ui.panel == Panel::Disassembly {
                         let entries = self.disassemble_around(200);
                         let hw_pc = self
                             .machine
@@ -243,13 +238,47 @@ impl Debugger {
                             .unwrap_or(0) as i32;
                         let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
                         let abs = abs.min(entries.len().saturating_sub(1));
-                        if let Some(entry) = entries.get(abs) {
+                        if let Some(entry) = entries.get(abs)
+                            && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
+                        {
                             self.ui.view_history.push(entry.addr);
+                            self.ui.view_center_addr = Some(target_addr);
+                            self.ui.disasm_cursor = 0;
+                            self.disasm_cache = None;
                         }
-                        self.ui.view_center_addr = Some(t_addr);
-                        self.ui.disasm_cursor = 0;
-                        self.disasm_cache = None;
-                        self.ui.panel = Panel::Disassembly;
+                    } else if self.ui.panel == Panel::Symbols {
+                        let search = self.ui.symbols_search.to_lowercase();
+                        let filtered: Vec<_> = self
+                            .sorted_symbols
+                            .iter()
+                            .filter(|(_, name)| {
+                                search.is_empty() || name.to_lowercase().contains(&search)
+                            })
+                            .collect();
+
+                        let target_addr = filtered.get(self.ui.symbols_cursor).map(|t| t.0);
+                        if let Some(t_addr) = target_addr {
+                            let entries = self.disassemble_around(200);
+                            let hw_pc = self
+                                .machine
+                                .as_ref()
+                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                                .unwrap_or(0);
+                            let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                            let center_idx = entries
+                                .iter()
+                                .position(|e| e.addr == center_addr)
+                                .unwrap_or(0) as i32;
+                            let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                            let abs = abs.min(entries.len().saturating_sub(1));
+                            if let Some(entry) = entries.get(abs) {
+                                self.ui.view_history.push(entry.addr);
+                            }
+                            self.ui.view_center_addr = Some(t_addr);
+                            self.ui.disasm_cursor = 0;
+                            self.disasm_cache = None;
+                            self.ui.panel = Panel::Disassembly;
+                        }
                     }
                 }
             }

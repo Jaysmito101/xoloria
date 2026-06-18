@@ -29,6 +29,7 @@ pub struct UiState {
     pub source_cursor: usize,
     pub command_history: Vec<String>,
     pub history_index: Option<usize>,
+    pub panel_focused: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,6 +66,7 @@ impl UiState {
             source_cursor: 0,
             command_history: Vec::new(),
             history_index: None,
+            panel_focused: false,
         }
     }
 
