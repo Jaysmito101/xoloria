@@ -363,8 +363,15 @@ impl Hart {
                 Ok(VmOutput::NextInstruction)
             }
 
-            Instruction::Fence => todo!(),
-            Instruction::Fencei => todo!(),
+            Instruction::Fence => {
+                /* its a no op for the vm */
+                Ok(VmOutput::NextInstruction)
+            }
+            Instruction::Fencei => {
+                /* its a no op for the vm */
+                Ok(VmOutput::NextInstruction)
+            }
+
             Instruction::Ebreak => todo!(),
             Instruction::Sret => todo!(),
             Instruction::Mret => todo!(),
