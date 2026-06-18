@@ -44,7 +44,7 @@ impl UiState {
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             setup_cursor: 0,
-            panel: Panel::Registers,
+            panel: Panel::Disassembly,
             disasm_cursor: 0,
             reg_scroll: 0,
             csr_scroll: 0,
@@ -66,7 +66,7 @@ impl UiState {
             source_cursor: 0,
             command_history: Vec::new(),
             history_index: None,
-            panel_focused: false,
+            panel_focused: true,
         }
     }
 
