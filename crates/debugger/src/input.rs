@@ -296,22 +296,50 @@ impl Debugger {
                 }
             }
             KeyCode::Char('b') => {
-                let entries = self.disassemble_around(200);
-                let hw_pc = self
-                    .machine
-                    .as_ref()
-                    .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                    .unwrap_or(0);
-                let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                let center_idx = entries
-                    .iter()
-                    .position(|e| e.addr == center_addr)
-                    .unwrap_or(0) as i32;
-                let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                let abs = abs.min(entries.len().saturating_sub(1));
-                if let Some(entry) = entries.get(abs) {
-                    let addr = entry.addr;
-                    self.toggle_breakpoint_at(addr);
+                if self.ui.panel == Panel::Disassembly && self.ui.disasm_tab == DisasmTab::Source {
+                    let entries = self.disassemble_around(200);
+                    let hw_pc = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .unwrap_or(0);
+                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                    let center_idx = entries
+                        .iter()
+                        .position(|e| e.addr == center_addr)
+                        .unwrap_or(0) as i32;
+                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                    let abs = abs.min(entries.len().saturating_sub(1));
+                    
+                    let target_addr = entries.get(abs).map(|e| e.addr).unwrap_or(center_addr);
+                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                        let target_line = (self.ui.source_cursor + 1) as u32;
+                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                            self.toggle_breakpoint_at(addr);
+                        } else {
+                            self.set_error("No mapping for this source line");
+                        }
+                    } else {
+                        self.set_error("No source mapping available");
+                    }
+                } else {
+                    let entries = self.disassemble_around(200);
+                    let hw_pc = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .unwrap_or(0);
+                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+                    let center_idx = entries
+                        .iter()
+                        .position(|e| e.addr == center_addr)
+                        .unwrap_or(0) as i32;
+                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+                    let abs = abs.min(entries.len().saturating_sub(1));
+                    if let Some(entry) = entries.get(abs) {
+                        let addr = entry.addr;
+                        self.toggle_breakpoint_at(addr);
+                    }
                 }
             }
             KeyCode::Char('D') => {

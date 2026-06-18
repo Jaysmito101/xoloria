@@ -571,14 +571,25 @@ impl Debugger {
                     let mut source_lines = Vec::new();
                     let theme_dim = self.theme.dim;
                     let theme_accent = self.theme.accent;
+                    let theme_breakpoint = self.theme.breakpoint;
                     let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
                     let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
+
+                    let mut bp_lines = std::collections::HashSet::new();
+                    for &bp in &self.breakpoints {
+                        if let Some((p, l)) = self.source_locations.get(&bp) {
+                            if p == &path {
+                                bp_lines.insert(*l as usize);
+                            }
+                        }
+                    }
 
                     let lines = self.get_source_file(&path).unwrap();
 
                     for (i, line) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                         let is_target = i + 1 == target_line;
                         let is_pc = Some(i + 1) == hw_pc_line;
+                        let has_bp = bp_lines.contains(&(i + 1));
                         let line_num = format!("{:4} | ", i + 1);
 
                         let mut spans =
@@ -591,8 +602,15 @@ impl Debugger {
                                     .fg(theme_accent)
                                     .add_modifier(Modifier::BOLD),
                             )
+                        } else if has_bp {
+                            Span::styled(
+                                "● ",
+                                Style::default()
+                                    .fg(theme_breakpoint)
+                                    .add_modifier(Modifier::BOLD),
+                            )
                         } else {
-                            Span::raw(" ")
+                            Span::raw("  ")
                         };
                         spans.push(marker);
 
