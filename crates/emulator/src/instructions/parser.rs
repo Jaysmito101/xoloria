@@ -600,7 +600,7 @@ impl Instruction {
                     imm,
                 })
             }
-            1 => unimplemented!("C.FLD"), // TODO: implement compressed floating point instructions
+            1 => Err(InstructionError::UnsupportedInstruction(value as u32)),
             2 => {
                 // C.LW
                 let imm =
@@ -626,7 +626,7 @@ impl Instruction {
                     imm: imm as i32,
                 })
             }
-            5 => unimplemented!("C.FSD"),
+            5 => Err(InstructionError::UnsupportedInstruction(value as u32)),
             6 => {
                 // C.SW
                 let imm =
@@ -878,7 +878,7 @@ impl Instruction {
                     imm: shamt as u8,
                 })
             }
-            1 => unimplemented!("C.FLDSP"), // we dont support floating point instructions
+            1 => Err(InstructionError::UnsupportedInstruction(value as u32)),
             2 => {
                 let imm =
                     (value.bits(2, 2) << 6) | (value.bits(12, 1) << 5) | (value.bits(4, 3) << 2);
@@ -948,7 +948,7 @@ impl Instruction {
                     Ok(Self::Add { rd: rs1, rs1, rs2 })
                 }
             }
-            5 => unimplemented!("C.FSDSP"), // we dont support floating point instructions
+            5 => Err(InstructionError::UnsupportedInstruction(value as u32)),
             6 => {
                 let imm = (value.bits(7, 2) << 6) | (value.bits(9, 4) << 2);
                 Ok(Self::Sw {
