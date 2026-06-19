@@ -72,7 +72,7 @@ impl BusIO for Memory {
             )
         };
         mem_data[offset as usize..offset as usize + size].copy_from_slice(new_bytes);
-        Ok(new_value)
+        Ok(value)
     }
 }
 
