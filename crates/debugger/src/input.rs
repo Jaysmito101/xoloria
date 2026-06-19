@@ -225,20 +225,9 @@ impl Debugger {
                     self.ui.panel_focused = true;
                 } else {
                     if self.ui.panel == Panel::Disassembly {
-                        let entries = self.disassemble_around(200);
-                        let hw_pc = self
-                            .machine
-                            .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                            .unwrap_or(0);
-                        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                        let center_idx = entries
-                            .iter()
-                            .position(|e| e.addr == center_addr)
-                            .unwrap_or(0) as i32;
-                        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                        let abs = abs.min(entries.len().saturating_sub(1));
-                        if let Some(entry) = entries.get(abs)
+                        let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                        let _hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                        if let Some(entry) = target_entry.as_ref()
                             && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
                         {
                             self.ui.view_history.push(entry.addr);
@@ -265,20 +254,9 @@ impl Debugger {
                         };
 
                         if let Some(t_addr) = target_addr {
-                            let entries = self.disassemble_around(200);
-                            let hw_pc = self
-                                .machine
-                                .as_ref()
-                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                                .unwrap_or(0);
-                            let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                            let center_idx = entries
-                                .iter()
-                                .position(|e| e.addr == center_addr)
-                                .unwrap_or(0) as i32;
-                            let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                            let abs = abs.min(entries.len().saturating_sub(1));
-                            if let Some(entry) = entries.get(abs) {
+                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                            let _hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                            if let Some(entry) = target_entry.as_ref() {
                                 self.ui.view_history.push(entry.addr);
                             }
                             self.ui.view_center_addr = Some(t_addr);
@@ -312,14 +290,8 @@ impl Debugger {
                     let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
                     self.ui.trace_forward_stack.push(center_addr);
 
-                    let entries = self.disassemble_around(200);
-                    let center_idx = entries
-                        .iter()
-                        .position(|e| e.addr == center_addr)
-                        .unwrap_or(0) as i32;
-                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                    let abs = abs.min(entries.len().saturating_sub(1));
-                    if let Some(entry) = entries.get(abs) {
+                    let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                    if let Some(entry) = target_entry.as_ref() {
                         self.ui.view_history.push(entry.addr);
                     }
                     self.ui.view_center_addr = Some(addr);
@@ -340,14 +312,8 @@ impl Debugger {
                     let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
                     self.ui.trace_stack.push(center_addr);
 
-                    let entries = self.disassemble_around(200);
-                    let center_idx = entries
-                        .iter()
-                        .position(|e| e.addr == center_addr)
-                        .unwrap_or(0) as i32;
-                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                    let abs = abs.min(entries.len().saturating_sub(1));
-                    if let Some(entry) = entries.get(abs) {
+                    let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                    if let Some(entry) = target_entry.as_ref() {
                         self.ui.view_history.push(entry.addr);
                     }
                     self.ui.view_center_addr = Some(addr);
@@ -360,21 +326,10 @@ impl Debugger {
             }
             KeyCode::Char('b') => {
                 if self.ui.panel == Panel::Disassembly && self.ui.disasm_tab == DisasmTab::Source {
-                    let entries = self.disassemble_around(200);
-                    let hw_pc = self
-                        .machine
-                        .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                        .unwrap_or(0);
-                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                    let center_idx = entries
-                        .iter()
-                        .position(|e| e.addr == center_addr)
-                        .unwrap_or(0) as i32;
-                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                    let abs = abs.min(entries.len().saturating_sub(1));
+                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
                     
-                    let target_addr = entries.get(abs).map(|e| e.addr).unwrap_or(center_addr);
+                    let target_addr = target_addr;
                     if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
                         let target_line = (self.ui.source_cursor + 1) as u32;
                         if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
@@ -386,20 +341,9 @@ impl Debugger {
                         self.set_error("No source mapping available");
                     }
                 } else {
-                    let entries = self.disassemble_around(200);
-                    let hw_pc = self
-                        .machine
-                        .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                        .unwrap_or(0);
-                    let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                    let center_idx = entries
-                        .iter()
-                        .position(|e| e.addr == center_addr)
-                        .unwrap_or(0) as i32;
-                    let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                    let abs = abs.min(entries.len().saturating_sub(1));
-                    if let Some(entry) = entries.get(abs) {
+                    let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                    let _hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                    if let Some(entry) = target_entry.as_ref() {
                         let addr = entry.addr;
                         self.toggle_breakpoint_at(addr);
                     }
@@ -427,21 +371,10 @@ impl Debugger {
                     self.save_breakpoints();
                 } else if self.ui.panel == Panel::Disassembly {
                     if self.ui.disasm_tab == DisasmTab::Assembly {
-                        let entries = self.disassemble_around(200);
-                        let hw_pc = self
-                            .machine
-                            .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                            .unwrap_or(0);
-                        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                        let center_idx = entries
-                            .iter()
-                            .position(|e| e.addr == center_addr)
-                            .unwrap_or(0) as i32;
-                        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                        let abs = abs.min(entries.len().saturating_sub(1));
+                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
 
-                        let target_addr = entries.get(abs).map(|e| e.addr).unwrap_or(center_addr);
+                        let target_addr = target_addr;
                         if let Some((_, target_line)) =
                             self.map_addr_to_source(target_addr, Some(&entries))
                         {
@@ -459,21 +392,10 @@ impl Debugger {
                             }
                         }
                     } else {
-                        let entries = self.disassemble_around(200);
-                        let hw_pc = self
-                            .machine
-                            .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                            .unwrap_or(0);
-                        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                        let center_idx = entries
-                            .iter()
-                            .position(|e| e.addr == center_addr)
-                            .unwrap_or(0) as i32;
-                        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                        let abs = abs.min(entries.len().saturating_sub(1));
+                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
 
-                        let target_addr = entries.get(abs).map(|e| e.addr).unwrap_or(center_addr);
+                        let target_addr = target_addr;
                         if let Some((path, _)) =
                             self.map_addr_to_source(target_addr, Some(&entries))
                         {
@@ -542,15 +464,9 @@ impl Debugger {
                                 self.disasm_cache = None;
                             }
                         } else {
-                            let entries = self.disassemble_around(200);
-                            let center_addr = self.ui.view_center_addr.unwrap_or(pc);
-                            let center_idx = entries
-                                .iter()
-                                .position(|e| e.addr == center_addr)
-                                .unwrap_or(0) as i32;
-                            let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                            let abs = abs.min(entries.len().saturating_sub(1));
-                            if let Some(entry) = entries.get(abs) {
+                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                            let _hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                            if let Some(entry) = target_entry.as_ref() {
                                 self.ui.view_history.push(entry.addr);
                             }
                             self.ui.view_center_addr = None;
@@ -630,40 +546,7 @@ impl Debugger {
                 self.ui.panel = *panel;
 
                 if delta != 0 {
-                    match panel {
-                        Panel::Disassembly => {
-                            if self.ui.disasm_tab == DisasmTab::Source {
-                                self.ui.source_cursor =
-                                    (self.ui.source_cursor as i32 + delta).max(0) as usize;
-                            } else {
-                                self.ui.disasm_cursor += delta;
-                            }
-                        }
-                        Panel::Memory => {
-                            let byte_delta = delta as i64 * 16;
-                            self.ui.memory_addr =
-                                (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
-                        }
-                        Panel::Registers => {
-                            self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize
-                        }
-                        Panel::Csr => {
-                            self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize
-                        }
-                        Panel::Console => {
-                            self.ui.console_scroll =
-                                (self.ui.console_scroll as i32 + delta).max(0) as usize
-                        }
-                        Panel::Symbols => {
-                            if self.ui.symbols_tab == SymbolsTab::Symbols {
-                                self.ui.symbols_cursor =
-                                    (self.ui.symbols_cursor as i32 + delta).max(0) as usize;
-                            } else {
-                                self.ui.trace_cursor =
-                                    (self.ui.trace_cursor as i32 + delta).max(0) as usize;
-                            }
-                        }
-                    }
+                    self.scroll(delta);
                 } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
                     if *panel == Panel::Symbols && mouse.row > rect.y {
                         let row_idx = (mouse.row - rect.y - 1) as usize;
@@ -681,20 +564,9 @@ impl Debugger {
 
                         if let Some(t_addr) = target_addr {
                             self.ui.symbols_cursor = symbol_idx;
-                            let entries = self.disassemble_around(200);
-                            let hw_pc = self
-                                .machine
-                                .as_ref()
-                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
-                                .unwrap_or(0);
-                            let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
-                            let center_idx = entries
-                                .iter()
-                                .position(|e| e.addr == center_addr)
-                                .unwrap_or(0) as i32;
-                            let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
-                            let abs = abs.min(entries.len().saturating_sub(1));
-                            if let Some(entry) = entries.get(abs) {
+                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                            let _hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                            if let Some(entry) = target_entry.as_ref() {
                                 self.ui.view_history.push(entry.addr);
                             }
                             self.ui.view_center_addr = Some(t_addr);

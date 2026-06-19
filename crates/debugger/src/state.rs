@@ -369,25 +369,8 @@ impl DebugCommand {
     }
 }
 
-pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
+pub(crate) fn parse_expr(s: &str) -> Result<u64, String> {
     let re = regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").expect("Failed to create regex for parsing expr");
-    let expr_str = re.replace_all(s, "0x$1");
-
-    match evalexpr::eval(&expr_str) {
-        Ok(evalexpr::Value::Int(val)) => {
-            let mut addr = val as u64;
-            if addr < 0x80000000 {
-                addr |= 0x80000000;
-            }
-            Ok(addr)
-        }
-        Ok(_) => Err(format!("Expression evaluated to non-integer: {}", s)),
-        Err(e) => Err(format!("Failed to evaluate expression '{}': {}", s, e)),
-    }
-}
-
-pub(crate) fn parse_value(s: &str) -> Result<u64, String> {
-    let re = regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").unwrap();
     let expr_str = re.replace_all(s, "0x$1");
 
     match evalexpr::eval(&expr_str) {
@@ -395,4 +378,13 @@ pub(crate) fn parse_value(s: &str) -> Result<u64, String> {
         Ok(_) => Err(format!("Expression evaluated to non-integer: {}", s)),
         Err(e) => Err(format!("Failed to evaluate expression '{}': {}", s, e)),
     }
+}
+
+pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
+    parse_expr(s).map(|mut addr| {
+        if addr < 0x80000000 {
+            addr |= 0x80000000;
+        }
+        addr
+    })
 }
