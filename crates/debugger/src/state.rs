@@ -47,8 +47,9 @@ pub enum Panel {
     Console,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConsoleTab {
+    #[default]
     Debugger,
     Tracing,
 }
@@ -370,7 +371,10 @@ impl DebugCommand {
 }
 
 pub(crate) fn parse_expr(s: &str) -> Result<u64, String> {
-    let re = regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").expect("Failed to create regex for parsing expr");
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").expect("Failed to create regex for parsing expr")
+    });
     let expr_str = re.replace_all(s, "0x$1");
 
     match evalexpr::eval(&expr_str) {

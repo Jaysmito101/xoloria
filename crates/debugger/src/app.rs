@@ -415,11 +415,10 @@ impl Debugger {
         };
         let bus = machine.bus().clone();
         let hart = &mut machine.harts_mut()[hart_idx];
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| hart.tick(&bus)));
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+        
+        let result = hart.tick(&bus);
         match result {
-            Ok(Ok(())) => {
+            Ok(()) => {
                 let pc = hart.registers().pc();
                 if self.breakpoints.contains(&pc) {
                     TickResult::Breakpoint(pc)
@@ -427,17 +426,7 @@ impl Debugger {
                     TickResult::Ok
                 }
             }
-            Ok(Err(e)) => TickResult::Error(format!("{}", e)),
-            Err(panic) => {
-                let msg = if let Some(s) = panic.downcast_ref::<&str>() {
-                    s.to_string()
-                } else if let Some(s) = panic.downcast_ref::<String>() {
-                    s.clone()
-                } else {
-                    "unknown panic".into()
-                };
-                TickResult::Panic(msg)
-            }
+            Err(e) => TickResult::Error(format!("{}", e)),
         }
     }
 
@@ -463,12 +452,12 @@ impl Debugger {
                     break;
                 }
             }
-            if self.ui.trace_stack.last() != Some(&old_pc) {
-                self.ui.trace_stack.push(old_pc);
-                self.ui.trace_forward_stack.clear();
+            if self.ui.trace.stack.last() != Some(&old_pc) {
+                self.ui.trace.stack.push(old_pc);
+                self.ui.trace.forward_stack.clear();
             }
         }
-        self.ui.disasm_cursor = 0;
+        self.ui.disasm.cursor = 0;
         self.disasm_cache = None;
     }
 
@@ -500,19 +489,15 @@ impl Debugger {
                 if !running[i] {
                     continue;
                 }
-                crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
-                let result =
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| hart.tick(&bus)));
-                crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+                let result = hart.tick(&bus);
                 match result {
-                    Ok(Ok(())) => {
+                    Ok(()) => {
                         let pc = hart.registers().pc();
                         if self.breakpoints.contains(&pc) {
                             bp_hits.push((i, pc));
                         }
                     }
-                    Ok(Err(e)) => stalls.push((i, format!("Hart {}: {}", i, e))),
-                    Err(_) => stalls.push((i, format!("Hart {}: unimplemented instruction", i))),
+                    Err(e) => stalls.push((i, format!("Hart {}: {}", i, e))),
                 }
             }
 
@@ -523,7 +508,7 @@ impl Debugger {
             if let Some((i, pc)) = bp_hits.into_iter().next() {
                 self.hart_modes[i] = HartMode::Debug;
                 self.ui.selected_hart = i;
-                self.ui.disasm_cursor = 0;
+                self.ui.disasm.cursor = 0;
                 self.tick_count += 1;
                 self.set_info(format!("Breakpoint at {:#x}", pc));
                 self.disasm_cache = None;
@@ -541,15 +526,28 @@ impl Debugger {
             Some(m) => m.bus(),
             None => return self.set_error("Machine not loaded"),
         };
+
+        macro_rules! read_mem {
+            ($ty:ty, $cast:ty, $name:expr) => {
+                match bus.read::<$ty>(addr) {
+                    Ok(v) => {
+                        let v = v as $cast;
+                        self.set_info(format!("Read {} at {:#x}: {:#x} ({})", $name, addr, v, v))
+                    }
+                    Err(e) => self.set_error(format!("Read failed: {:?}", e)),
+                }
+            };
+        }
+
         match data_type {
-            crate::state::DataType::U8 => match bus.read::<u8>(addr) { Ok(v) => self.set_info(format!("Read u8 at {:#x}: {:#x} ({})", addr, v, v)), Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::U16 => match bus.read::<u16>(addr) { Ok(v) => self.set_info(format!("Read u16 at {:#x}: {:#x} ({})", addr, v, v)), Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::U32 => match bus.read::<u32>(addr) { Ok(v) => self.set_info(format!("Read u32 at {:#x}: {:#x} ({})", addr, v, v)), Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::U64 => match bus.read::<u64>(addr) { Ok(v) => self.set_info(format!("Read u64 at {:#x}: {:#x} ({})", addr, v, v)), Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::I8 => match bus.read::<u8>(addr) { Ok(v) => { let v = v as i8; self.set_info(format!("Read i8 at {:#x}: {:#x} ({})", addr, v, v)) }, Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::I16 => match bus.read::<u16>(addr) { Ok(v) => { let v = v as i16; self.set_info(format!("Read i16 at {:#x}: {:#x} ({})", addr, v, v)) }, Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::I32 => match bus.read::<u32>(addr) { Ok(v) => { let v = v as i32; self.set_info(format!("Read i32 at {:#x}: {:#x} ({})", addr, v, v)) }, Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
-            crate::state::DataType::I64 => match bus.read::<u64>(addr) { Ok(v) => { let v = v as i64; self.set_info(format!("Read i64 at {:#x}: {:#x} ({})", addr, v, v)) }, Err(e) => self.set_error(format!("Read failed: {:?}", e)) },
+            crate::state::DataType::U8 => read_mem!(u8, u8, "u8"),
+            crate::state::DataType::U16 => read_mem!(u16, u16, "u16"),
+            crate::state::DataType::U32 => read_mem!(u32, u32, "u32"),
+            crate::state::DataType::U64 => read_mem!(u64, u64, "u64"),
+            crate::state::DataType::I8 => read_mem!(u8, i8, "i8"),
+            crate::state::DataType::I16 => read_mem!(u16, i16, "i16"),
+            crate::state::DataType::I32 => read_mem!(u32, i32, "i32"),
+            crate::state::DataType::I64 => read_mem!(u64, i64, "i64"),
         }
     }
 
@@ -560,11 +558,21 @@ impl Debugger {
             Some(m) => m.bus(),
             None => return self.set_error("Machine not loaded"),
         };
+
+        macro_rules! write_mem {
+            ($ty:ty) => {
+                match bus.write::<$ty>(addr, val as $ty) {
+                    Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as $ty, addr)),
+                    Err(e) => self.set_error(format!("Write failed: {:?}", e)),
+                }
+            };
+        }
+
         match data_type {
-            crate::state::DataType::U8 | crate::state::DataType::I8 => match bus.write::<u8>(addr, val as u8) { Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u8, addr)), Err(e) => self.set_error(format!("Write failed: {:?}", e)) },
-            crate::state::DataType::U16 | crate::state::DataType::I16 => match bus.write::<u16>(addr, val as u16) { Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u16, addr)), Err(e) => self.set_error(format!("Write failed: {:?}", e)) },
-            crate::state::DataType::U32 | crate::state::DataType::I32 => match bus.write::<u32>(addr, val as u32) { Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u32, addr)), Err(e) => self.set_error(format!("Write failed: {:?}", e)) },
-            crate::state::DataType::U64 | crate::state::DataType::I64 => match bus.write::<u64>(addr, val as u64) { Ok(_) => self.set_info(format!("Wrote {:#x} to {:#x}", val as u64, addr)), Err(e) => self.set_error(format!("Write failed: {:?}", e)) },
+            crate::state::DataType::U8 | crate::state::DataType::I8 => write_mem!(u8),
+            crate::state::DataType::U16 | crate::state::DataType::I16 => write_mem!(u16),
+            crate::state::DataType::U32 | crate::state::DataType::I32 => write_mem!(u32),
+            crate::state::DataType::U64 | crate::state::DataType::I64 => write_mem!(u64),
         }
     }
 
@@ -679,7 +687,7 @@ impl Debugger {
                 DebugCommand::Hart(idx) => {
                     if idx < self.hart_modes.len() {
                         self.ui.selected_hart = idx;
-                        self.ui.disasm_cursor = 0;
+                        self.ui.disasm.cursor = 0;
                         self.set_info(format!("Selected hart {}", idx));
                         self.disasm_cache = None;
                     } else {
@@ -697,12 +705,12 @@ impl Debugger {
                     };
                     self.rebuild_machine(config);
                     self.tick_count = 0;
-                    self.ui.disasm_cursor = 0;
+                    self.ui.disasm.cursor = 0;
                     self.set_info("Machine reset");
                 }
                 DebugCommand::Targets => {
-                    self.ui.show_targets = !self.ui.show_targets;
-                    self.set_info(if self.ui.show_targets {
+                    self.ui.disasm.show_targets = !self.ui.disasm.show_targets;
+                    self.set_info(if self.ui.disasm.show_targets {
                         "Jump targets: ON"
                     } else {
                         "Jump targets: OFF"
@@ -807,12 +815,12 @@ impl Debugger {
             .as_ref()
             .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
             .unwrap_or(0);
-        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+        let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
         let center_idx = entries
             .iter()
             .position(|e| e.addr == center_addr)
             .unwrap_or(0) as i32;
-        let abs = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+        let abs = (center_idx + self.ui.disasm.cursor).max(0) as usize;
         let abs = abs.min(entries.len().saturating_sub(1));
         
         let target_entry = entries.get(abs).cloned();
@@ -828,13 +836,13 @@ impl Debugger {
         let hart = &machine.harts()[self.ui.selected_hart];
         let hw_pc = hart.registers().pc();
         let bp_gen = self.breakpoints.len() as u64;
-        let pc = self.ui.view_center_addr.unwrap_or(hw_pc);
+        let pc = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
 
         if let Some(ref cache) = self.disasm_cache
             && cache.hart == self.ui.selected_hart
             && cache.pc == pc
             && cache.breakpoint_gen == bp_gen
-            && cache.cursor == self.ui.disasm_cursor
+            && cache.cursor == self.ui.disasm.cursor
         {
             return cache.entries.clone();
         }
@@ -842,7 +850,7 @@ impl Debugger {
         let x_regs = hart.registers().x();
         let bus = machine.bus();
 
-        let cursor = self.ui.disasm_cursor;
+        let cursor = self.ui.disasm.cursor;
         let before = if cursor < 0 {
             count / 3 + (-cursor) as usize + 50
         } else {
@@ -903,7 +911,7 @@ impl Debugger {
             hart: self.ui.selected_hart,
             pc,
             breakpoint_gen: bp_gen,
-            cursor: self.ui.disasm_cursor,
+            cursor: self.ui.disasm.cursor,
             entries: entries.clone(),
         });
 
@@ -921,16 +929,12 @@ impl Debugger {
         let is_compressed = raw & 0b11 != 0b11;
         let step = if is_compressed { 2 } else { 4 };
 
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
-        let decode_result = std::panic::catch_unwind(|| Instruction::try_from(raw));
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+        let decode_result = Instruction::try_from(raw);
 
         let text = match decode_result {
-            Ok(Ok(instr)) => format!("{}", instr),
-            Ok(Err(_)) if is_compressed => format!(".half {:#06x}", raw & 0xFFFF),
-            Ok(Err(_)) => format!(".word {:#010x}", raw),
-            Err(_) if is_compressed => format!("<unimpl> {:#06x}", raw & 0xFFFF),
-            Err(_) => format!("<unimpl> {:#010x}", raw),
+            Ok(instr) => format!("{}", instr),
+            Err(_) if is_compressed => format!(".half {:#06x}", raw & 0xFFFF),
+            Err(_) => format!(".word {:#010x}", raw),
         };
 
         let jump_target = Self::extract_jump_target(raw, addr, pc, x_regs);
@@ -953,27 +957,21 @@ impl Debugger {
         let raw: u32 = bus.read(addr).ok()?;
         let is_compressed = raw & 0b11 != 0b11;
         
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
-        let decode_result = std::panic::catch_unwind(|| Instruction::try_from(raw));
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+        let decode_result = Instruction::try_from(raw);
         
         match decode_result {
-            Ok(Ok(instr)) => Some(format!("{}", instr)),
-            Ok(Err(_)) if is_compressed => Some(format!(".half {:#06x}", raw & 0xFFFF)),
-            Ok(Err(_)) => Some(format!(".word {:#010x}", raw)),
-            Err(_) if is_compressed => Some(format!("<unimpl> {:#06x}", raw & 0xFFFF)),
-            Err(_) => Some(format!("<unimpl> {:#010x}", raw)),
+            Ok(instr) => Some(format!("{}", instr)),
+            Err(_) if is_compressed => Some(format!(".half {:#06x}", raw & 0xFFFF)),
+            Err(_) => Some(format!(".word {:#010x}", raw)),
         }
     }
 
     fn extract_jump_target(raw: u32, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<JumpTarget> {
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(true));
-        let decode_result = std::panic::catch_unwind(|| Instruction::try_from(raw));
-        crate::SUPPRESS_PANIC_HOOK.with(|f| f.set(false));
+        let decode_result = Instruction::try_from(raw);
 
         let instr = match decode_result {
-            Ok(Ok(instr)) => instr,
-            _ => return None,
+            Ok(instr) => instr,
+            Err(_) => return None,
         };
 
         match instr {

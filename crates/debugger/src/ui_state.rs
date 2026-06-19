@@ -3,49 +3,78 @@ use std::collections::HashMap;
 
 use crate::state::*;
 
+#[derive(Default)]
+pub struct DisasmState {
+    pub cursor: i32,
+    pub tab: DisasmTab,
+    pub source_scroll: usize,
+    pub source_cursor: usize,
+    pub show_targets: bool,
+    pub view_center_addr: Option<u64>,
+    pub view_history: Vec<u64>,
+    pub last_target_addr: Option<u64>,
+}
+
+#[derive(Default)]
+pub struct ConsoleState {
+    pub scroll: usize,
+    pub tab: ConsoleTab,
+    pub command_history: Vec<String>,
+    pub history_index: Option<usize>,
+}
+
+#[derive(Default)]
+pub struct SymbolsState {
+    pub scroll: usize,
+    pub cursor: usize,
+    pub search: String,
+    pub tab: SymbolsTab,
+}
+
+#[derive(Default)]
+pub struct TraceState {
+    pub stack: Vec<u64>,
+    pub forward_stack: Vec<u64>,
+    pub scroll: usize,
+    pub cursor: usize,
+}
+
+#[derive(Default)]
+pub struct HelpState {
+    pub show: bool,
+    pub scroll: usize,
+}
+
 pub struct UiState {
     pub input_mode: InputMode,
     input_buffer: String,
     pub setup_cursor: usize,
     pub panel: Panel,
-    pub disasm_cursor: i32,
+
+    pub disasm: DisasmState,
+    pub console: ConsoleState,
+    pub symbols: SymbolsState,
+    pub trace: TraceState,
+    pub help: HelpState,
+
     pub reg_scroll: usize,
     pub csr_scroll: usize,
-    pub console_scroll: usize,
-    pub console_tab: ConsoleTab,
     pub memory_addr: u64,
-    pub show_targets: bool,
     pub selected_hart: usize,
     pub panel_rects: HashMap<Panel, Rect>,
-    pub view_center_addr: Option<u64>,
-    pub view_history: Vec<u64>,
-    pub symbols_scroll: usize,
-    pub symbols_cursor: usize,
-    pub symbols_search: String,
-    pub symbols_tab: SymbolsTab,
-    pub(crate) trace_stack: Vec<u64>,
-    pub(crate) trace_forward_stack: Vec<u64>,
-    pub(crate) trace_scroll: usize,
-    pub trace_cursor: usize,
-    pub show_help: bool,
-    pub help_scroll: usize,
-    pub disasm_tab: DisasmTab,
-    pub source_scroll: usize,
-    pub source_cursor: usize,
-    pub command_history: Vec<String>,
-    pub history_index: Option<usize>,
     pub panel_focused: bool,
-    pub last_target_addr: Option<u64>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum DisasmTab {
+    #[default]
     Assembly,
     Source,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum SymbolsTab {
+    #[default]
     Trace,
     Symbols,
 }
@@ -57,70 +86,55 @@ impl UiState {
             input_buffer: String::new(),
             setup_cursor: 0,
             panel: Panel::Disassembly,
-            disasm_cursor: 0,
+            
+            disasm: DisasmState::default(),
+            console: ConsoleState::default(),
+            symbols: SymbolsState::default(),
+            trace: TraceState::default(),
+            help: HelpState::default(),
+
             reg_scroll: 0,
             csr_scroll: 0,
-            console_scroll: 0,
-            console_tab: ConsoleTab::Debugger,
-            memory_addr: 0x80000000,
-            show_targets: true,
+            memory_addr: 0x8000_0000,
             selected_hart: 0,
             panel_rects: HashMap::new(),
-            view_center_addr: None,
-            view_history: Vec::new(),
-            symbols_scroll: 0,
-            symbols_cursor: 0,
-            symbols_search: String::new(),
-            symbols_tab: SymbolsTab::Trace,
-            trace_stack: Vec::new(),
-            trace_forward_stack: Vec::new(),
-            trace_scroll: 0,
-            trace_cursor: 0,
-            show_help: false,
-            help_scroll: 0,
-            disasm_tab: DisasmTab::Assembly,
-            source_scroll: 0,
-            source_cursor: 0,
-            command_history: Vec::new(),
-            history_index: None,
-            panel_focused: true,
-            last_target_addr: None,
+            panel_focused: false,
         }
     }
 
     pub fn set_input_mode(&mut self, mode: InputMode) {
         self.input_mode = mode;
         self.input_buffer.clear();
-        self.history_index = None;
+        self.console.history_index = None;
     }
 
     pub fn push_command_history(&mut self, cmd: String) {
         if cmd.is_empty() { return; }
-        if self.command_history.last() != Some(&cmd) {
-            self.command_history.push(cmd);
+        if self.console.command_history.last() != Some(&cmd) {
+            self.console.command_history.push(cmd);
         }
-        self.history_index = None;
+        self.console.history_index = None;
     }
 
     pub fn history_up(&mut self) {
-        if self.command_history.is_empty() { return; }
-        let new_idx = match self.history_index {
-            None => self.command_history.len().saturating_sub(1),
+        if self.console.command_history.is_empty() { return; }
+        let new_idx = match self.console.history_index {
+            None => self.console.command_history.len().saturating_sub(1),
             Some(idx) => idx.saturating_sub(1),
         };
-        self.history_index = Some(new_idx);
-        self.input_buffer = self.command_history[new_idx].clone();
+        self.console.history_index = Some(new_idx);
+        self.input_buffer = self.console.command_history[new_idx].clone();
     }
 
     pub fn history_down(&mut self) {
-        if let Some(idx) = self.history_index {
+        if let Some(idx) = self.console.history_index {
             let new_idx = idx + 1;
-            if new_idx >= self.command_history.len() {
-                self.history_index = None;
+            if new_idx >= self.console.command_history.len() {
+                self.console.history_index = None;
                 self.input_buffer.clear();
             } else {
-                self.history_index = Some(new_idx);
-                self.input_buffer = self.command_history[new_idx].clone();
+                self.console.history_index = Some(new_idx);
+                self.input_buffer = self.console.command_history[new_idx].clone();
             }
         }
     }

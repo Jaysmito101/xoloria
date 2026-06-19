@@ -65,10 +65,6 @@ struct Opts {
     elf: Option<String>,
 }
 
-thread_local! {
-    pub static SUPPRESS_PANIC_HOOK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let dbg_instance = Debugger::new(&opts.binary, opts.elf.as_deref())?;
@@ -84,10 +80,6 @@ fn main() -> anyhow::Result<()> {
     {
         let original_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            if SUPPRESS_PANIC_HOOK.with(|flag| flag.get()) {
-                return;
-            }
-
             let _ = crossterm::terminal::disable_raw_mode();
             let _ =
                 crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);

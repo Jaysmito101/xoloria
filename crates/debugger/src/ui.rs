@@ -1,3 +1,5 @@
+use crate::app::DisasmEntry;
+use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -5,8 +7,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs, Wrap},
 };
-
-use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 
 use crate::app::{Debugger, JumpTarget};
 use crate::state::*;
@@ -176,7 +176,7 @@ impl Debugger {
         self.render_console(frame, layout[3]);
         self.render_bottom_bar(frame, layout[4]);
 
-        if self.ui.show_help {
+        if self.ui.help.show {
             self.render_help_modal(frame);
         }
     }
@@ -246,7 +246,7 @@ impl Debugger {
 
         let visible_lines: Vec<Line> = help_text
             .into_iter()
-            .skip(self.ui.help_scroll)
+            .skip(self.ui.help.scroll)
             .take((modal_area.height.saturating_sub(2)) as usize)
             .map(Line::from)
             .collect();
@@ -474,16 +474,16 @@ impl Debugger {
             .as_ref()
             .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
             .unwrap_or(0);
-        let center_addr = self.ui.view_center_addr.unwrap_or(hw_pc);
+        let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
 
         let center_idx = all_entries
             .iter()
             .position(|e| e.addr == center_addr)
             .unwrap_or(0) as i32;
-        let abs_cursor = (center_idx + self.ui.disasm_cursor).max(0) as usize;
+        let abs_cursor = (center_idx + self.ui.disasm.cursor).max(0) as usize;
         let abs_cursor = abs_cursor.min(all_entries.len().saturating_sub(1));
 
-        let cursor_target_addr = if self.ui.show_targets {
+        let cursor_target_addr = if self.ui.disasm.show_targets {
             all_entries
                 .get(abs_cursor)
                 .and_then(|e| match &e.jump_target {
@@ -499,24 +499,24 @@ impl Debugger {
 
         let titles = vec![Line::from(vec![
             Span::styled(
-                if self.ui.disasm_tab == DisasmTab::Assembly {
+                if self.ui.disasm.tab == DisasmTab::Assembly {
                     " [Assembly] "
                 } else {
                     " Assembly "
                 },
-                Style::default().fg(if self.ui.disasm_tab == DisasmTab::Assembly {
+                Style::default().fg(if self.ui.disasm.tab == DisasmTab::Assembly {
                     self.theme.accent
                 } else {
                     self.theme.dim
                 }),
             ),
             Span::styled(
-                if self.ui.disasm_tab == DisasmTab::Source {
+                if self.ui.disasm.tab == DisasmTab::Source {
                     " [Source] "
                 } else {
                     " Source "
                 },
-                Style::default().fg(if self.ui.disasm_tab == DisasmTab::Source {
+                Style::default().fg(if self.ui.disasm.tab == DisasmTab::Source {
                     self.theme.accent
                 } else {
                     self.theme.dim
@@ -538,7 +538,7 @@ impl Debugger {
             )
         };
 
-        if self.ui.disasm_tab == DisasmTab::Source {
+        if self.ui.disasm.tab == DisasmTab::Source {
             if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&all_entries)) {
                 let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
                 title = format!("{} [{}]", title, short_path);
@@ -558,118 +558,149 @@ impl Debugger {
         frame.render_widget(tabs, layout[0]);
         let content_area = layout[1];
 
+        if self.ui.disasm.tab == DisasmTab::Source {
+            self.render_source_view(frame, content_area, target_addr, &all_entries, hw_pc);
+        } else {
+            self.render_assembly_view(
+                frame,
+                content_area,
+                &all_entries,
+                focused,
+                abs_cursor,
+                target_abs_idx,
+            );
+        }
+    }
+
+    fn render_source_view(
+        &mut self,
+        frame: &mut Frame,
+        content_area: Rect,
+        target_addr: u64,
+        all_entries: &[DisasmEntry],
+        hw_pc: u64,
+    ) {
         let visible_height = content_area.height as usize;
+        let source_loc = self.map_addr_to_source(target_addr, Some(all_entries));
 
-        if self.ui.disasm_tab == DisasmTab::Source {
-            let source_loc = self.map_addr_to_source(target_addr, Some(&all_entries));
+        if let Some((path, target_line_from_loc)) = source_loc {
+            if Some(target_addr) != self.ui.disasm.last_target_addr {
+                self.ui.disasm.source_cursor = target_line_from_loc.saturating_sub(1) as usize;
+                self.ui.disasm.last_target_addr = Some(target_addr);
+            }
 
-            if let Some((path, target_line_from_loc)) = source_loc {
-                if Some(target_addr) != self.ui.last_target_addr {
-                    self.ui.source_cursor = target_line_from_loc.saturating_sub(1) as usize;
-                    self.ui.last_target_addr = Some(target_addr);
-                }
+            let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
+            if lines_len > 0 {
+                self.ui.disasm.source_cursor = self
+                    .ui
+                    .disasm
+                    .source_cursor
+                    .min(lines_len.saturating_sub(1));
+                let target_line = self.ui.disasm.source_cursor + 1;
 
-                let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
-                if lines_len > 0 {
-                    self.ui.source_cursor = self.ui.source_cursor.min(lines_len.saturating_sub(1));
-                    let target_line = self.ui.source_cursor + 1;
+                let half = visible_height / 2;
+                self.ui.disasm.source_scroll = self.ui.disasm.source_cursor.saturating_sub(half);
 
-                    let half = visible_height / 2;
-                    self.ui.source_scroll = self.ui.source_cursor.saturating_sub(half);
+                let max_scroll = lines_len.saturating_sub(visible_height);
+                self.ui.disasm.source_scroll = self.ui.disasm.source_scroll.min(max_scroll);
+                let scroll = self.ui.disasm.source_scroll;
 
-                    let max_scroll = lines_len.saturating_sub(visible_height);
-                    self.ui.source_scroll = self.ui.source_scroll.min(max_scroll);
-                    let scroll = self.ui.source_scroll;
+                let mut source_lines = Vec::new();
+                let theme_dim = self.theme.dim;
+                let theme_accent = self.theme.accent;
+                let theme_breakpoint = self.theme.breakpoint;
+                let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
+                let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
 
-                    let mut source_lines = Vec::new();
-                    let theme_dim = self.theme.dim;
-                    let theme_accent = self.theme.accent;
-                    let theme_breakpoint = self.theme.breakpoint;
-                    let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
-                    let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
-
-                    let mut bp_lines = std::collections::HashSet::new();
-                    for &bp in &self.breakpoints {
-                        if let Some((p, l)) = self.source_locations.get(&bp) {
-                            if p == &path {
-                                bp_lines.insert(*l as usize);
-                            }
+                let mut bp_lines = std::collections::HashSet::new();
+                for &bp in &self.breakpoints {
+                    if let Some((p, l)) = self.source_locations.get(&bp) {
+                        if p == &path {
+                            bp_lines.insert(*l as usize);
                         }
                     }
+                }
 
-                    let lines = self.get_source_file(&path).unwrap();
+                let lines = self.get_source_file(&path).unwrap();
 
-                    for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
-                        let is_target = i + 1 == target_line;
-                        let is_pc = Some(i + 1) == hw_pc_line;
-                        let has_bp = bp_lines.contains(&(i + 1));
-                        let line_num = format!("{:4} | ", i + 1);
+                for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
+                    let is_target = i + 1 == target_line;
+                    let is_pc = Some(i + 1) == hw_pc_line;
+                    let has_bp = bp_lines.contains(&(i + 1));
+                    let line_num = format!("{:4} | ", i + 1);
 
-                        let mut spans =
-                            vec![Span::styled(line_num, Style::default().fg(theme_dim))];
+                    let mut spans = vec![Span::styled(line_num, Style::default().fg(theme_dim))];
 
-                        let marker = if is_pc {
-                            Span::styled(
-                                "► ",
-                                Style::default()
-                                    .fg(theme_accent)
-                                    .add_modifier(Modifier::BOLD),
-                            )
-                        } else if has_bp {
-                            Span::styled(
-                                "● ",
-                                Style::default()
-                                    .fg(theme_breakpoint)
-                                    .add_modifier(Modifier::BOLD),
-                            )
-                        } else {
-                            Span::raw("  ")
-                        };
-                        spans.push(marker);
+                    let marker = if is_pc {
+                        Span::styled(
+                            "► ",
+                            Style::default()
+                                .fg(theme_accent)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else if has_bp {
+                        Span::styled(
+                            "● ",
+                            Style::default()
+                                .fg(theme_breakpoint)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        Span::raw(" ")
+                    };
+                    spans.push(marker);
 
-                        if is_target && let Some(addr) = mapped_addr {
-                            spans.push(Span::styled(
-                                format!("[{:#010x}] ", addr),
-                                Style::default().fg(theme_dim),
-                            ));
-                        }
-
-                        for (text, token_style) in line_tokens {
-                            let mut style = *token_style;
-                            if is_target && is_pc {
-                                style = style.add_modifier(Modifier::BOLD).add_modifier(Modifier::REVERSED);
-                            } else if is_target {
-                                style = style.add_modifier(Modifier::REVERSED);
-                            } else if is_pc {
-                                style = style.add_modifier(Modifier::BOLD);
-                            }
-                            spans.push(Span::styled(text.clone(), style));
-                        }
-
-                        source_lines.push(Line::from(spans));
+                    if is_target && let Some(addr) = mapped_addr {
+                        spans.push(Span::styled(
+                            format!("[{:#010x}] ", addr),
+                            Style::default().fg(theme_dim),
+                        ));
                     }
 
-                    let paragraph = Paragraph::new(source_lines);
-                    frame.render_widget(paragraph, content_area);
-                    return;
-                } else {
-                    let text = format!("Could not load source file: {}", path);
-                    frame.render_widget(
-                        Paragraph::new(text).style(Style::default().fg(self.theme.error)),
-                        content_area,
-                    );
-                    return;
+                    for (text, token_style) in line_tokens {
+                        let mut style = *token_style;
+                        if is_target && is_pc {
+                            style = style
+                                .add_modifier(Modifier::BOLD)
+                                .add_modifier(Modifier::REVERSED);
+                        } else if is_target {
+                            style = style.add_modifier(Modifier::REVERSED);
+                        } else if is_pc {
+                            style = style.add_modifier(Modifier::BOLD);
+                        }
+                        spans.push(Span::styled(text.clone(), style));
+                    }
+
+                    source_lines.push(Line::from(spans));
                 }
+
+                let paragraph = Paragraph::new(source_lines);
+                frame.render_widget(paragraph, content_area);
             } else {
-                let text = "No source information available for current address.";
+                let text = format!("Could not load source file: {}", path);
                 frame.render_widget(
-                    Paragraph::new(text).style(Style::default().fg(self.theme.dim)),
+                    Paragraph::new(text).style(Style::default().fg(self.theme.error)),
                     content_area,
                 );
-                return;
             }
+        } else {
+            let text = "No source information available for current address.";
+            frame.render_widget(
+                Paragraph::new(text).style(Style::default().fg(self.theme.dim)),
+                content_area,
+            );
         }
+    }
 
+    fn render_assembly_view(
+        &mut self,
+        frame: &mut Frame,
+        content_area: Rect,
+        all_entries: &[DisasmEntry],
+        focused: bool,
+        abs_cursor: usize,
+        target_abs_idx: Option<usize>,
+    ) {
         let x_regs = {
             if let Some(machine) = self.machine.as_ref() {
                 *machine.harts()[self.ui.selected_hart].registers().x()
@@ -725,7 +756,7 @@ impl Debugger {
 
             let text_color = if e.is_pc {
                 self.theme.accent
-            } else if is_target_line && self.ui.show_targets {
+            } else if is_target_line && self.ui.disasm.show_targets {
                 self.theme.target
             } else {
                 self.theme.instruction_color(&e.text)
@@ -756,7 +787,7 @@ impl Debugger {
             let compressed_marker = if e.is_compressed {
                 Span::styled(" [C] ", Style::default().fg(self.theme.dim).bg(bg))
             } else {
-                Span::styled("     ", Style::default().bg(bg))
+                Span::styled(" ", Style::default().bg(bg))
             };
 
             let mut spans = vec![
@@ -767,10 +798,14 @@ impl Debugger {
 
             spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));
 
-            if self.ui.show_targets {
+            if self.ui.disasm.show_targets {
                 match &e.jump_target {
                     Some(JumpTarget::Known(addr)) => {
-                        let sym_name = self.sorted_symbols.iter().find(|(a, _)| a == addr).map(|(_, n)| n.as_str());
+                        let sym_name = self
+                            .sorted_symbols
+                            .iter()
+                            .find(|(a, _)| a == addr)
+                            .map(|(_, n)| n.as_str());
                         let target_str = if let Some(sym) = sym_name {
                             format!(" → {:#x} <{}>", addr, sym)
                         } else {
@@ -792,7 +827,7 @@ impl Debugger {
             }
 
             if e.is_pc {
-                let extracted = extract_register_values_from_asm(&e.text, &x_regs);
+                let extracted = parse_registers(&e.text, &x_regs);
                 if !extracted.is_empty() {
                     let mut reg_str = String::from(" // ");
                     for (idx, (name, val)) in extracted.iter().enumerate() {
@@ -818,6 +853,7 @@ impl Debugger {
             all_lines.push(Line::from(spans));
         }
 
+        let visible_height = content_area.height as usize;
         let half = visible_height / 2;
         let view_start = if cursor_line_idx < half {
             0
@@ -934,16 +970,20 @@ impl Debugger {
         let titles = vec![
             Line::from(Span::styled(
                 " Trace ",
-                if self.ui.symbols_tab == SymbolsTab::Trace {
-                    Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)
+                if self.ui.symbols.tab == SymbolsTab::Trace {
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(self.theme.dim)
                 },
             )),
             Line::from(Span::styled(
                 " Symbols ",
-                if self.ui.symbols_tab == SymbolsTab::Symbols {
-                    Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)
+                if self.ui.symbols.tab == SymbolsTab::Symbols {
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(self.theme.dim)
                 },
@@ -951,7 +991,7 @@ impl Debugger {
         ];
 
         let tabs = Tabs::new(titles)
-            .select(match self.ui.symbols_tab {
+            .select(match self.ui.symbols.tab {
                 SymbolsTab::Trace => 0,
                 SymbolsTab::Symbols => 1,
             })
@@ -963,22 +1003,29 @@ impl Debugger {
         }
         let content_area = layout[1];
 
-        if self.ui.symbols_tab == SymbolsTab::Trace {
-            let trace_len = self.ui.trace_stack.len();
-            self.ui.trace_cursor = self.ui.trace_cursor.min(trace_len.saturating_sub(1));
-            
-            let visible_height = content_area.height as usize;
-            
-            if self.ui.trace_cursor < self.ui.trace_scroll {
-                self.ui.trace_scroll = self.ui.trace_cursor;
-            } else if self.ui.trace_cursor >= self.ui.trace_scroll + visible_height {
-                self.ui.trace_scroll = self.ui.trace_cursor.saturating_sub(visible_height.saturating_sub(1));
-            }
-            
-            let max_scroll = trace_len.saturating_sub(visible_height);
-            let scroll = self.ui.trace_scroll.min(max_scroll);
+        if self.ui.symbols.tab == SymbolsTab::Trace {
+            let trace_len = self.ui.trace.stack.len();
+            self.ui.trace.cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
 
-            let lines: Vec<Line> = self.ui.trace_stack
+            let visible_height = content_area.height as usize;
+
+            if self.ui.trace.cursor < self.ui.trace.scroll {
+                self.ui.trace.scroll = self.ui.trace.cursor;
+            } else if self.ui.trace.cursor >= self.ui.trace.scroll + visible_height {
+                self.ui.trace.scroll = self
+                    .ui
+                    .trace
+                    .cursor
+                    .saturating_sub(visible_height.saturating_sub(1));
+            }
+
+            let max_scroll = trace_len.saturating_sub(visible_height);
+            let scroll = self.ui.trace.scroll.min(max_scroll);
+
+            let lines: Vec<Line> = self
+                .ui
+                .trace
+                .stack
                 .iter()
                 .rev()
                 .enumerate()
@@ -986,29 +1033,48 @@ impl Debugger {
                 .take(visible_height)
                 .map(|(i, &addr)| {
                     let mut spans = vec![];
-                    let selected = focused && i == self.ui.trace_cursor;
+                    let selected = focused && i == self.ui.trace.cursor;
 
                     if selected {
-                        spans.push(Span::styled(" ► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)));
+                        spans.push(Span::styled(
+                            " ► ",
+                            Style::default()
+                                .fg(self.theme.accent)
+                                .add_modifier(Modifier::BOLD),
+                        ));
                     } else {
-                        spans.push(Span::raw("   "));
+                        spans.push(Span::raw(" "));
                     }
 
                     spans.push(Span::styled(
                         format!("{:#010x} ", addr),
-                        Style::default().fg(if selected { self.theme.accent } else { self.theme.highlight }),
+                        Style::default().fg(if selected {
+                            self.theme.accent
+                        } else {
+                            self.theme.highlight
+                        }),
                     ));
 
                     if let Some(inst) = self.disassemble_instruction_at(addr) {
-                        spans.push(Span::styled(format!("{{{}}} ", inst), Style::default().fg(self.theme.dim)));
+                        spans.push(Span::styled(
+                            format!("{{{}}} ", inst),
+                            Style::default().fg(self.theme.dim),
+                        ));
                     }
 
-                    let sym_name = self.sorted_symbols.iter().find(|(a, _)| a == &addr).map(|(_, n)| n.as_str());
+                    let sym_name = self
+                        .sorted_symbols
+                        .iter()
+                        .find(|(a, _)| a == &addr)
+                        .map(|(_, n)| n.as_str());
                     if let Some(sym) = sym_name {
                         spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
                     } else if let Some((path, line)) = self.source_locations.get(&addr) {
                         let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
-                        spans.push(Span::styled(format!("{}:{}", short, line), Style::default().fg(self.theme.dim)));
+                        spans.push(Span::styled(
+                            format!("{}:{}", short, line),
+                            Style::default().fg(self.theme.dim),
+                        ));
                     }
 
                     Line::from(spans)
@@ -1016,7 +1082,11 @@ impl Debugger {
                 .collect();
 
             if lines.is_empty() {
-                frame.render_widget(Paragraph::new(" No trace available").style(Style::default().fg(self.theme.dim)), content_area);
+                frame.render_widget(
+                    Paragraph::new(" No trace available")
+                        .style(Style::default().fg(self.theme.dim)),
+                    content_area,
+                );
             } else {
                 frame.render_widget(Paragraph::new(lines), content_area);
             }
@@ -1052,28 +1122,29 @@ impl Debugger {
             (area, false)
         };
 
-        let search = self.ui.symbols_search.to_lowercase();
+        let search = self.ui.symbols.search.to_lowercase();
         let filtered: Vec<_> = self
             .sorted_symbols
             .iter()
             .filter(|(_, name)| search.is_empty() || name.to_lowercase().contains(&search))
             .collect();
 
-        self.ui.symbols_cursor = self.ui.symbols_cursor.min(filtered.len().saturating_sub(1));
+        self.ui.symbols.cursor = self.ui.symbols.cursor.min(filtered.len().saturating_sub(1));
 
         let visible_height = inner.height.saturating_sub(2) as usize;
 
-        if self.ui.symbols_cursor < self.ui.symbols_scroll {
-            self.ui.symbols_scroll = self.ui.symbols_cursor;
-        } else if self.ui.symbols_cursor >= self.ui.symbols_scroll + visible_height {
-            self.ui.symbols_scroll = self
+        if self.ui.symbols.cursor < self.ui.symbols.scroll {
+            self.ui.symbols.scroll = self.ui.symbols.cursor;
+        } else if self.ui.symbols.cursor >= self.ui.symbols.scroll + visible_height {
+            self.ui.symbols.scroll = self
                 .ui
-                .symbols_cursor
+                .symbols
+                .cursor
                 .saturating_sub(visible_height.saturating_sub(1));
         }
 
         let max_scroll = filtered.len().saturating_sub(visible_height);
-        let scroll = self.ui.symbols_scroll.min(max_scroll);
+        let scroll = self.ui.symbols.scroll.min(max_scroll);
 
         let lines: Vec<Line> = filtered
             .into_iter()
@@ -1082,7 +1153,7 @@ impl Debugger {
             .take(visible_height)
             .map(|(i, (addr, name))| {
                 let mut spans = vec![];
-                let selected = focused && i == self.ui.symbols_cursor;
+                let selected = focused && i == self.ui.symbols.cursor;
 
                 if selected {
                     spans.push(Span::styled(
@@ -1135,7 +1206,7 @@ impl Debugger {
         let titles = vec![
             Line::from(Span::styled(
                 " Debugger ",
-                if self.ui.console_tab == ConsoleTab::Debugger {
+                if self.ui.console.tab == ConsoleTab::Debugger {
                     Style::default()
                         .fg(self.theme.accent)
                         .add_modifier(Modifier::BOLD)
@@ -1145,7 +1216,7 @@ impl Debugger {
             )),
             Line::from(Span::styled(
                 " Tracing ",
-                if self.ui.console_tab == ConsoleTab::Tracing {
+                if self.ui.console.tab == ConsoleTab::Tracing {
                     Style::default()
                         .fg(self.theme.accent)
                         .add_modifier(Modifier::BOLD)
@@ -1156,7 +1227,7 @@ impl Debugger {
         ];
 
         let tabs = Tabs::new(titles)
-            .select(match self.ui.console_tab {
+            .select(match self.ui.console.tab {
                 ConsoleTab::Debugger => 0,
                 ConsoleTab::Tracing => 1,
             })
@@ -1168,7 +1239,7 @@ impl Debugger {
         }
         let visible_height = layout[1].height as usize;
 
-        let lines = match self.ui.console_tab {
+        let lines = match self.ui.console.tab {
             ConsoleTab::Debugger => self.format_console_logs(
                 &self.console_log,
                 visible_height,
@@ -1296,7 +1367,7 @@ impl Debugger {
         }
 
         let max_scroll = wrapped_lines.len().saturating_sub(visible_height);
-        let scroll_offset = self.ui.console_scroll.min(max_scroll);
+        let scroll_offset = self.ui.console.scroll.min(max_scroll);
         let start_idx = max_scroll.saturating_sub(scroll_offset);
 
         wrapped_lines
@@ -1350,14 +1421,11 @@ impl Debugger {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("BP "),
-            Span::styled(
-                " t ",
-                Style::default().fg(self.theme.target),
-            ),
+            Span::styled(" t ", Style::default().fg(self.theme.target)),
             Span::raw("Trace "),
             Span::styled(
                 " T ",
-                Style::default().fg(if self.ui.show_targets {
+                Style::default().fg(if self.ui.disasm.show_targets {
                     self.theme.target
                 } else {
                     self.theme.dim
@@ -1400,7 +1468,9 @@ impl Debugger {
     fn panel_block(&self, title: &str, focused: bool) -> Block<'_> {
         let border_style = if focused {
             if self.ui.panel_focused {
-                Style::default().fg(self.theme.highlight).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(self.theme.highlight)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(self.theme.accent)
             }
@@ -1454,20 +1524,17 @@ fn format_binary_grouped(val: u64) -> String {
         .join("_")
 }
 
-fn extract_register_values_from_asm(asm: &str, x_regs: &[u64; 32]) -> Vec<(String, u64)> {
+// Parses register names directly from the disassembled string to avoid a massive AST match block.
+fn parse_registers(asm: &str, x_regs: &[u64; 32]) -> Vec<(String, u64)> {
     let mut regs = Vec::new();
-    let mut seen_indices = Vec::new();
+    let mut seen = Vec::new();
 
-    let tokens = asm.split([' ', ',', '(', ')']);
-    for token in tokens {
-        let token = token.trim();
-        if let Some(idx) = parse_register_name(token)
-            && idx != 0
-            && !seen_indices.contains(&idx)
-        {
-            seen_indices.push(idx);
-            let val = x_regs[idx];
-            regs.push((token.to_string(), val));
+    for t in asm.split([' ', ',', '(', ')']).map(str::trim) {
+        if let Some(idx) = parse_register_name(t) {
+            if idx != 0 && !seen.contains(&idx) {
+                seen.push(idx);
+                regs.push((t.to_string(), x_regs[idx]));
+            }
         }
     }
     regs
