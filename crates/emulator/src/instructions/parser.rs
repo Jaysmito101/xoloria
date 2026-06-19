@@ -180,8 +180,8 @@ impl Instruction {
                 imm: raw.imm,
             }),
             1 => {
-                // ammount is the lower 5 bits of the immediate
-                let shamt = (raw.imm & 0x1f) as u8;
+                // ammount is the lower 6 bits of the immediate
+                let shamt = (raw.imm & 0x3f) as u8;
                 match (raw.imm >> 10) & 0x3f {
                     0 => Ok(Self::Slli {
                         rd: raw.rd,
@@ -192,8 +192,8 @@ impl Instruction {
                 }
             }
             5 => {
-                // ammount is the lower 5 bits of the immediate
-                let shamt = (raw.imm & 0x1f) as u8;
+                // ammount is the lower 6 bits of the immediate
+                let shamt = (raw.imm & 0x3f) as u8;
                 // the right shift type is determined by bits bit 30 of the instruction (which is bit 10 of the immediate)
                 match (raw.imm >> 10) & 0x3f {
                     0 => Ok(Self::Srli {
