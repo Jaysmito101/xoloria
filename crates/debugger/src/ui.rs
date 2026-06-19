@@ -709,6 +709,35 @@ impl Debugger {
             }
         };
 
+        let mut active_jump = None;
+        let mut active_unknown = None;
+        let mut active_offscreen = None;
+        for (i, e) in all_entries.iter().enumerate() {
+            if focused && abs_cursor == i {
+                match &e.jump_target {
+                    Some(JumpTarget::Known(addr)) => {
+                        if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
+                            active_jump = Some((i, dst_idx));
+                        } else {
+                            active_offscreen = Some(i);
+                        }
+                    }
+                    Some(JumpTarget::Unknown) => {
+                        active_unknown = Some(i);
+                    }
+                    None => {}
+                }
+            } else if focused {
+                if let Some(JumpTarget::Known(addr)) = &e.jump_target {
+                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
+                        if abs_cursor == dst_idx {
+                            active_jump = Some((i, dst_idx));
+                        }
+                    }
+                }
+            }
+        }
+
         let mut all_lines: Vec<Line> = Vec::new();
         let mut cursor_line_idx = 0;
 
@@ -790,40 +819,83 @@ impl Debugger {
                 Span::styled(" ", Style::default().bg(bg))
             };
 
+            let arrow_prefix = if let Some((src, dst)) = active_jump {
+                let start = src.min(dst);
+                let end = src.max(dst);
+
+                if i == src && i == dst {
+                    "⟲ "
+                } else if i == src {
+                    if dst > src { "╭─" } else { "╰─" }
+                } else if i == dst {
+                    if src < dst { "╰>" } else { "╭>" }
+                } else if i > start && i < end {
+                    "│ "
+                } else {
+                    " "
+                }
+            } else if active_offscreen == Some(i) {
+                "─>"
+            } else if active_unknown == Some(i) {
+                "─?"
+            } else {
+                " "
+            };
+
+            let arrow_color = if active_jump.is_some()
+                || active_unknown.is_some()
+                || active_offscreen.is_some()
+            {
+                self.theme.target
+            } else {
+                Color::Reset
+            };
+            let arrow_span = Span::styled(arrow_prefix, Style::default().fg(arrow_color).bg(bg));
+
             let mut spans = vec![
                 marker,
+                Span::styled(" ", Style::default().bg(bg)),
+                arrow_span,
                 Span::styled(format!(" {:#010x} ", e.addr), addr_style.bg(bg)),
                 compressed_marker,
             ];
 
             spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));
 
-            if self.ui.disasm.show_targets {
-                match &e.jump_target {
-                    Some(JumpTarget::Known(addr)) => {
-                        let sym_name = self
-                            .sorted_symbols
-                            .iter()
-                            .find(|(a, _)| a == addr)
-                            .map(|(_, n)| n.as_str());
-                        let target_str = if let Some(sym) = sym_name {
-                            format!(" → {:#x} <{}>", addr, sym)
-                        } else {
-                            format!(" → {:#x}", addr)
-                        };
-                        spans.push(Span::styled(
-                            target_str,
-                            Style::default().fg(self.theme.target).bg(bg),
-                        ));
-                    }
-                    Some(JumpTarget::Unknown) => {
-                        spans.push(Span::styled(
-                            " → ???",
-                            Style::default().fg(self.theme.dim).bg(bg),
-                        ));
-                    }
-                    None => {}
+            match &e.jump_target {
+                Some(JumpTarget::Known(addr)) => {
+                    let sym_name = self
+                        .sorted_symbols
+                        .iter()
+                        .find(|(a, _)| a == addr)
+                        .map(|(_, n)| n.as_str());
+                    let target_str = if let Some(sym) = sym_name {
+                        format!(" → {:#x} <{}>", addr, sym)
+                    } else {
+                        format!(" → {:#x}", addr)
+                    };
+                    let target_color = if is_cursor {
+                        self.theme.target
+                    } else {
+                        self.theme.dim
+                    };
+                    spans.push(Span::styled(
+                        target_str,
+                        Style::default().fg(target_color).bg(bg),
+                    ));
                 }
+                Some(JumpTarget::Unknown) => {
+                    let target_color = if is_cursor {
+                        self.theme.target
+                    } else {
+                        self.theme.dim
+                    };
+                    spans.push(Span::styled(
+                        " → ???",
+                        Style::default().fg(target_color).bg(bg),
+                    ));
+                }
+                None => {}
             }
 
             if e.is_pc {
