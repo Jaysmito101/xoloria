@@ -16,6 +16,7 @@ pub enum InstructionError {
     InvalidInstruction,
     InvalidAtomicWidth(u8),
     IllegalInstruction,
+    UnsupportedInstruction(u32),
 }
 
 pub type InstructionResult<T> = std::result::Result<T, InstructionError>;
