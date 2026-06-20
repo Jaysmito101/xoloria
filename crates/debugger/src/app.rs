@@ -12,6 +12,7 @@ pub enum TickResult {
     Ok,
     Error(String),
     Breakpoint(u64),
+    Watchpoint(u64, String),
 }
 
 pub struct Debugger {
@@ -44,6 +45,7 @@ pub struct Debugger {
     pub(crate) theme_set: syntect::highlighting::ThemeSet,
 
     pub(crate) stack_analyzers: Vec<crate::stack::StackAnalyzer>,
+    pub(crate) watches: Vec<crate::state::WatchItem>,
 }
 
 fn syntect_style_to_ratatui(style: syntect::highlighting::Style) -> ratatui::style::Style {
@@ -110,6 +112,7 @@ impl Debugger {
             syntax_set: syntect::parsing::SyntaxSet::load_defaults_newlines(),
             theme_set: syntect::highlighting::ThemeSet::load_defaults(),
             stack_analyzers: vec![crate::stack::StackAnalyzer::new(); 1],
+            watches: Vec::new(),
         })
     }
 
@@ -414,12 +417,42 @@ impl Debugger {
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
         
+        let mut has_watch = false;
+        let mut pre_watch_values = Vec::new();
+        for watch in &self.watches {
+            if watch.break_on_change {
+                has_watch = true;
+                let mut data = vec![0u8; watch.data_type.size_bytes() as usize];
+                for (i, b) in data.iter_mut().enumerate() {
+                    *b = bus.read::<u8>(watch.address + i as u64).unwrap_or(0);
+                }
+                pre_watch_values.push(Some(data));
+            } else {
+                pre_watch_values.push(None);
+            }
+        }
+
         let result = hart.tick(&bus);
         if result.is_ok() {
             if let Some(i) = inst {
                 self.stack_analyzers[hart_idx].on_instruction_executed(&i);
             }
         }
+        
+        if has_watch {
+            for (i, watch) in self.watches.iter().enumerate() {
+                if let Some(old_val) = &pre_watch_values[i] {
+                    let mut new_val = vec![0u8; watch.data_type.size_bytes() as usize];
+                    for (j, b) in new_val.iter_mut().enumerate() {
+                        *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
+                    }
+                    if old_val != &new_val {
+                        return TickResult::Watchpoint(pc, watch.name.clone());
+                    }
+                }
+            }
+        }
+
         match result {
             Ok(()) => {
                 let pc = hart.registers().pc();
@@ -444,6 +477,11 @@ impl Debugger {
                 TickResult::Breakpoint(pc) => {
                     self.tick_count += 1;
                     self.set_info(format!("Breakpoint at {:#x}", pc));
+                    break;
+                }
+                TickResult::Watchpoint(pc, name) => {
+                    self.tick_count += 1;
+                    self.set_info(format!("Watchpoint '{}' triggered at {:#x}", name, pc));
                     break;
                 }
                 TickResult::Error(msg) => {
@@ -483,6 +521,7 @@ impl Debugger {
             let harts = self.machine.as_mut().unwrap().harts_mut();
             let mut stalls: Vec<(usize, String)> = Vec::new();
             let mut bp_hits: Vec<(usize, u64)> = Vec::new();
+            let mut watch_hits: Vec<(usize, u64, String)> = Vec::new();
 
             for (i, hart) in harts.iter_mut().enumerate() {
                 if !running[i] {
@@ -492,12 +531,42 @@ impl Debugger {
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
                 
+                let mut has_watch = false;
+                let mut pre_watch_values = Vec::new();
+                for watch in &self.watches {
+                    if watch.break_on_change {
+                        has_watch = true;
+                        let mut data = vec![0u8; watch.data_type.size_bytes() as usize];
+                        for (j, b) in data.iter_mut().enumerate() {
+                            *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
+                        }
+                        pre_watch_values.push(Some(data));
+                    } else {
+                        pre_watch_values.push(None);
+                    }
+                }
+
                 let result = hart.tick(&bus);
                 if result.is_ok() {
                     if let Some(inst) = inst {
                         self.stack_analyzers[i].on_instruction_executed(&inst);
                     }
                 }
+
+                if has_watch {
+                    for (w_idx, watch) in self.watches.iter().enumerate() {
+                        if let Some(old_val) = &pre_watch_values[w_idx] {
+                            let mut new_val = vec![0u8; watch.data_type.size_bytes() as usize];
+                            for (j, b) in new_val.iter_mut().enumerate() {
+                                *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
+                            }
+                            if old_val != &new_val {
+                                watch_hits.push((i, pc, watch.name.clone()));
+                            }
+                        }
+                    }
+                }
+
                 match result {
                     Ok(()) => {
                         let pc = hart.registers().pc();
@@ -512,6 +581,15 @@ impl Debugger {
             for (i, msg) in stalls {
                 self.hart_modes[i] = HartMode::Stalled;
                 self.set_error(msg);
+            }
+            if let Some((i, _pc, name)) = watch_hits.into_iter().next() {
+                self.hart_modes[i] = HartMode::Debug;
+                self.ui.selected_hart = i;
+                self.ui.disasm.cursor = 0;
+                self.tick_count += 1;
+                self.set_info(format!("Watchpoint '{}' triggered", name));
+                self.disasm_cache = None;
+                return;
             }
             if let Some((i, pc)) = bp_hits.into_iter().next() {
                 self.hart_modes[i] = HartMode::Debug;
@@ -528,7 +606,7 @@ impl Debugger {
     }
 
     #[inline(always)]
-    fn do_read_memory(&mut self, data_type: crate::state::DataType, addr: u64) {
+    pub(crate) fn do_read_memory(&mut self, data_type: crate::state::DataType, addr: u64) {
         use emulator::BusIO;
         let bus = match self.machine.as_ref() {
             Some(m) => m.bus(),
@@ -560,7 +638,7 @@ impl Debugger {
     }
 
     #[inline(always)]
-    fn do_write_memory(&mut self, data_type: crate::state::DataType, addr: u64, val: u64) {
+    pub(crate) fn do_write_memory(&mut self, data_type: crate::state::DataType, addr: u64, val: u64) {
         use emulator::BusIO;
         let bus = match self.machine.as_ref() {
             Some(m) => m.bus(),
@@ -726,14 +804,8 @@ impl Debugger {
                 }
                 DebugCommand::Help => {
                     self.set_info(
-                        "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | save bp | load bp | help"
+                        "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | save | load | help"
                     );
-                }
-                DebugCommand::SaveBreakpoints => {
-                    self.save_breakpoints();
-                }
-                DebugCommand::LoadBreakpoints => {
-                    self.load_breakpoints();
                 }
                 DebugCommand::ReadMemory { data_type, addr_expr } => {
                     match crate::state::parse_addr(&addr_expr) {
@@ -748,11 +820,36 @@ impl Debugger {
                         (_, Err(e)) => self.set_error(e),
                     }
                 }
+                DebugCommand::Watch(cmd) => match cmd {
+                    crate::state::WatchCommand::Add { name, address, data_type } => {
+                        if self.watches.iter().any(|w| w.name == name) {
+                            self.set_error(format!("Watchpoint with name '{}' already exists", name));
+                        } else {
+                            self.watches.push(crate::state::WatchItem {
+                                name: name.clone(),
+                                address,
+                                data_type,
+                                break_on_change: false,
+                            });
+                            self.set_info(format!("Added watchpoint '{}' for address {:#x}", name, address));
+                        }
+                    }
+                    crate::state::WatchCommand::Del { name } => {
+                        if let Some(pos) = self.watches.iter().position(|w| w.name == name) {
+                            self.watches.remove(pos);
+                            self.set_info(format!("Deleted watchpoint '{}'", name));
+                        } else {
+                            self.set_error(format!("Watchpoint '{}' not found", name));
+                        }
+                    }
+                },
+                DebugCommand::SaveWorkspace => self.save_workspace(),
+                DebugCommand::LoadWorkspace => self.load_workspace(),
             },
         }
     }
 
-    pub(crate) fn save_breakpoints(&mut self) {
+    pub(crate) fn save_workspace(&mut self) {
         use std::hash::{DefaultHasher, Hasher};
         let mut hasher = DefaultHasher::new();
         hasher.write(&self.binary);
@@ -763,18 +860,19 @@ impl Debugger {
             if !config_dir.exists() {
                 let _ = std::fs::create_dir_all(config_dir);
             }
-            let file_path = config_dir.join(format!("breakpoints_{:016x}.json", hash));
+            let file_path = config_dir.join(format!("workspace_{:016x}.json", hash));
             let bps: Vec<u64> = self.breakpoints.iter().copied().collect();
-            match std::fs::write(&file_path, serde_json::to_string_pretty(&bps).unwrap_or_default()) {
-                Ok(_) => self.set_info(format!("Saved {} breakpoints", bps.len())),
-                Err(e) => self.set_error(format!("Failed to save breakpoints: {}", e)),
+            let ws = crate::state::Workspace { breakpoints: bps, watches: self.watches.clone() };
+            match std::fs::write(&file_path, serde_json::to_string_pretty(&ws).unwrap_or_default()) {
+                Ok(_) => self.set_info(format!("Saved workspace ({} bps, {} watches)", self.breakpoints.len(), self.watches.len())),
+                Err(e) => self.set_error(format!("Failed to save workspace: {}", e)),
             }
         } else {
             self.set_error("Could not find configuration directory");
         }
     }
 
-    pub(crate) fn load_breakpoints(&mut self) {
+    pub(crate) fn load_workspace(&mut self) {
         use std::hash::{DefaultHasher, Hasher};
         let mut hasher = DefaultHasher::new();
         hasher.write(&self.binary);
@@ -782,29 +880,32 @@ impl Debugger {
 
         if let Some(proj_dirs) = directories::ProjectDirs::from("com", "Xoloria", "Debugger") {
             let config_dir = proj_dirs.config_dir();
-            let file_path = config_dir.join(format!("breakpoints_{:016x}.json", hash));
+            let file_path = config_dir.join(format!("workspace_{:016x}.json", hash));
             if file_path.exists() {
                 match std::fs::read_to_string(&file_path) {
                     Ok(json) => {
-                        if let Ok(bps) = serde_json::from_str::<Vec<u64>>(&json) {
-                            for addr in bps {
+                        if let Ok(ws) = serde_json::from_str::<crate::state::Workspace>(&json) {
+                            for addr in ws.breakpoints {
                                 self.breakpoints.insert(addr);
                             }
+                            self.watches = ws.watches;
                             self.disasm_cache = None;
-                            self.set_info(format!("Loaded {} breakpoints", self.breakpoints.len()));
+                            self.set_info(format!("Loaded workspace ({} bps, {} watches)", self.breakpoints.len(), self.watches.len()));
                         } else {
-                            self.set_error("Failed to parse breakpoints JSON");
+                            self.set_error("Failed to parse workspace JSON");
                         }
                     }
-                    Err(e) => self.set_error(format!("Failed to read breakpoints: {}", e)),
+                    Err(e) => self.set_error(format!("Failed to read workspace: {}", e)),
                 }
             } else {
-                self.set_info("No saved breakpoints found for this binary");
+                self.set_error("No workspace found for this binary");
             }
         } else {
             self.set_error("Could not find configuration directory");
         }
     }
+
+
 
     pub(crate) fn read_memory_block(&self, addr: u64, len: usize) -> Vec<u8> {
         let Some(machine) = self.machine.as_ref() else {

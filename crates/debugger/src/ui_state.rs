@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::state::*;
 
+
 #[derive(Default)]
 pub struct DisasmState {
     pub cursor: i32,
@@ -68,7 +69,10 @@ pub struct UiState {
     pub search: SearchState,
 
     pub reg_scroll: usize,
+    pub registers_tab: RegistersTab,
     pub csr_scroll: usize,
+    pub watch_scroll: usize,
+    pub watch_cursor: usize,
     pub memory_addr: u64,
     pub memory_tab: MemoryTab,
     pub stack_scroll: usize,
@@ -98,6 +102,13 @@ pub enum MemoryTab {
     Stack,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum RegistersTab {
+    #[default]
+    Csr,
+    Watch,
+}
+
 impl UiState {
     pub fn new() -> Self {
         Self {
@@ -115,7 +126,10 @@ impl UiState {
             search: SearchState::default(),
 
             reg_scroll: 0,
+            registers_tab: RegistersTab::default(),
             csr_scroll: 0,
+            watch_scroll: 0,
+            watch_cursor: 0,
             memory_addr: 0x8000_0000,
             memory_tab: MemoryTab::default(),
             stack_scroll: 0,

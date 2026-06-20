@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
 use ratatui::style::Color;
+use serde::{Serialize, Deserialize};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HartMode {
@@ -119,6 +121,7 @@ pub enum InputMode {
     GotoMemory,
     Command,
     Search,
+    EditWatch(usize),
 }
 
 pub struct Theme {
@@ -212,7 +215,8 @@ pub enum BreakpointTarget {
     Symbol(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
     U8, U16, U32, U64,
     I8, I16, I32, I64,
@@ -260,10 +264,19 @@ impl std::fmt::Display for DataType {
 }
 
 #[derive(Debug)]
+pub enum WatchCommand {
+    Add { name: String, address: u64, data_type: DataType },
+    Del { name: String },
+}
+
+#[derive(Debug)]
 pub enum DebugCommand {
     Breakpoint(Option<BreakpointTarget>),
     Delete(DeleteTarget),
     Info(InfoTarget),
+    Watch(WatchCommand),
+    SaveWorkspace,
+    LoadWorkspace,
     Memory(u64),
     Step(usize),
     Continue,
@@ -273,8 +286,6 @@ pub enum DebugCommand {
     Reset,
     Targets,
     Help,
-    SaveBreakpoints,
-    LoadBreakpoints,
     ReadMemory { data_type: DataType, addr_expr: String },
     WriteMemory { data_type: DataType, addr_expr: String, value_expr: String },
 }
@@ -308,19 +319,29 @@ impl DebugCommand {
                 });
                 Ok(Self::Breakpoint(target))
             }
-            "save" => {
-                if parts.get(1).copied() == Some("bp") || parts.get(1).copied() == Some("breakpoints") {
-                    Ok(Self::SaveBreakpoints)
+            "watch" => {
+                if parts.len() >= 3 && parts[1] == "del" {
+                    let name = parts[2..].join(" ");
+                    return Ok(Self::Watch(WatchCommand::Del { name }));
+                } else if parts.len() >= 3 {
+                    let name = parts[1].to_string();
+                    let dt_str = parts.last().unwrap();
+                    if let Ok(dt) = DataType::parse(dt_str) {
+                        let addr_expr = parts[2..parts.len()-1].join(" ");
+                        let addr = parse_addr(&addr_expr).map_err(|_| "Invalid address".to_string())?;
+                        return Ok(Self::Watch(WatchCommand::Add { name, address: addr, data_type: dt }));
+                    } else {
+                        return Err("Invalid data type".into());
+                    }
                 } else {
-                    Err("Usage: save bp".into())
+                    return Err("Usage: watch <name> <addr_expr> <type> | watch del <name>".into());
                 }
             }
+            "save" => {
+                Ok(Self::SaveWorkspace)
+            }
             "load" => {
-                if parts.get(1).copied() == Some("bp") || parts.get(1).copied() == Some("breakpoints") {
-                    Ok(Self::LoadBreakpoints)
-                } else {
-                    Err("Usage: load bp".into())
-                }
+                Ok(Self::LoadWorkspace)
             }
             "read" => {
                 if parts.len() < 3 {
@@ -415,4 +436,19 @@ pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
         }
         addr
     })
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchItem {
+    pub name: String,
+    pub address: u64,
+    pub data_type: DataType,
+    pub break_on_change: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Workspace {
+    pub breakpoints: Vec<u64>,
+    pub watches: Vec<WatchItem>,
 }

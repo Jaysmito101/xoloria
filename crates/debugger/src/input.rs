@@ -10,6 +10,7 @@ impl Debugger {
             InputMode::GotoMemory => self.handle_input_key(key),
             InputMode::Command => self.handle_command_key(key),
             InputMode::Search => self.handle_search_key(key),
+            InputMode::EditWatch(idx) => self.handle_edit_watch_key(key, idx),
             InputMode::Normal => match self.screen {
                 Screen::Setup => self.handle_setup_key(key),
                 Screen::Debug => self.handle_debug_key(key),
@@ -109,6 +110,35 @@ impl Debugger {
         }
     }
 
+    fn handle_edit_watch_key(&mut self, key: KeyEvent, idx: usize) {
+        match key.code {
+            KeyCode::Esc => {
+                self.ui.set_input_mode(InputMode::Normal);
+            }
+            KeyCode::Enter => {
+                let input = self.ui.input_buffer_take();
+                if let Ok(val) = crate::state::parse_expr(&input) {
+                    if idx < self.watches.len() {
+                        let watch = self.watches[idx].clone();
+                        self.do_write_memory(watch.data_type, watch.address, val);
+                    }
+                } else {
+                    self.set_error("Invalid value");
+                }
+                self.ui.set_input_mode(InputMode::Normal);
+            }
+            KeyCode::Backspace => {
+                self.ui.input_buffer_pop();
+            }
+            KeyCode::Left => self.ui.input_cursor_left(),
+            KeyCode::Right => self.ui.input_cursor_right(),
+            KeyCode::Char(c) => {
+                self.ui.input_buffer_push(c);
+            }
+            _ => {}
+        }
+    }
+
     fn handle_setup_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
@@ -200,7 +230,12 @@ impl Debugger {
             KeyCode::Char('q') => self.running = false,
 
             KeyCode::F(11) | KeyCode::Char(' ') => {
-                if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
+                if self.ui.panel == Panel::Csr && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch {
+                    if !self.watches.is_empty() {
+                        let cursor = self.ui.watch_cursor.min(self.watches.len().saturating_sub(1));
+                        self.watches[cursor].break_on_change = !self.watches[cursor].break_on_change;
+                    }
+                } else if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
                     self.step_hart(1);
                     self.ui.disasm.view_center_addr = None;
                     self.ui.disasm.cursor = 0;
@@ -217,15 +252,169 @@ impl Debugger {
 
             KeyCode::Char('c') => self.hart_modes[self.ui.selected_hart] = HartMode::Running,
             KeyCode::Char('p') => self.hart_modes[self.ui.selected_hart] = HartMode::Debug,
-            KeyCode::Char('x') => {
-                self.ui.memory_tab = match self.ui.memory_tab {
-                    crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
-                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
-                };
+
+            KeyCode::Char('e') => {
+                if self.ui.panel == Panel::Csr && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch {
+                    if !self.watches.is_empty() {
+                        let cursor = self.ui.watch_cursor.min(self.watches.len().saturating_sub(1));
+                        self.ui.set_input_mode(InputMode::EditWatch(cursor));
+                    }
+                }
+            }
+            KeyCode::Delete | KeyCode::Char('d') => {
+                if self.ui.panel == Panel::Csr && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch {
+                    if !self.watches.is_empty() {
+                        let cursor = self.ui.watch_cursor.min(self.watches.len().saturating_sub(1));
+                        self.watches.remove(cursor);
+                        if self.ui.watch_cursor >= self.watches.len() && !self.watches.is_empty() {
+                            self.ui.watch_cursor = self.watches.len() - 1;
+                        }
+                    }
+                }
             }
 
-            KeyCode::Tab => self.select_hart_relative(1),
-            KeyCode::BackTab => self.select_hart_relative(-1),
+
+            KeyCode::Tab => {
+                if self.ui.panel_focused {
+                    match self.ui.panel {
+                        Panel::Disassembly => {
+                            self.ui.disasm.tab = match self.ui.disasm.tab {
+                                DisasmTab::Assembly => {
+                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                                    if let Some((_, target_line)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                                        self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                                        DisasmTab::Source
+                                    } else {
+                                        if let Some((_, target_line)) = self.map_addr_to_source(hw_pc, Some(&entries)) {
+                                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                                            self.set_info("Selected instruction has no source, jumped to PC instead.");
+                                            DisasmTab::Source
+                                        } else {
+                                            self.set_info("No source mapped to this instruction or the PC.");
+                                            DisasmTab::Assembly
+                                        }
+                                    }
+                                }
+                                DisasmTab::Source => {
+                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                                        let target_line = (self.ui.disasm.source_cursor + 1) as u32;
+                                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                                            self.ui.disasm.view_center_addr = Some(addr);
+                                        } else {
+                                            self.ui.disasm.view_center_addr = Some(hw_pc);
+                                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                                        }
+                                    } else {
+                                        self.ui.disasm.view_center_addr = Some(hw_pc);
+                                        self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                                    }
+                                    self.ui.disasm.cursor = 0;
+                                    self.disasm_cache = None;
+                                    DisasmTab::Assembly
+                                }
+                            };
+                        }
+                        Panel::Csr => {
+                            self.ui.registers_tab = match self.ui.registers_tab {
+                                crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
+                                crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
+                            };
+                        }
+                        Panel::Memory => {
+                            self.ui.memory_tab = match self.ui.memory_tab {
+                                crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
+                                crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                            };
+                        }
+                        Panel::Symbols => {
+                            self.ui.symbols.tab = match self.ui.symbols.tab {
+                                SymbolsTab::Symbols => SymbolsTab::Trace,
+                                SymbolsTab::Trace => SymbolsTab::Symbols,
+                            };
+                        }
+                        Panel::Console => {
+                            self.ui.console.tab = self.ui.console.tab.next();
+                        }
+                        Panel::Registers => {}
+                    }
+                } else {
+                    self.select_hart_relative(1);
+                }
+            }
+            KeyCode::BackTab => {
+                if self.ui.panel_focused {
+                    // BackTab does the same as Tab since there are only 2 tabs everywhere
+                    match self.ui.panel {
+                        Panel::Disassembly => {
+                            self.ui.disasm.tab = match self.ui.disasm.tab {
+                                DisasmTab::Assembly => {
+                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                                    if let Some((_, target_line)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                                        self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                                        DisasmTab::Source
+                                    } else {
+                                        if let Some((_, target_line)) = self.map_addr_to_source(hw_pc, Some(&entries)) {
+                                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                                            self.set_info("Selected instruction has no source, jumped to PC instead.");
+                                            DisasmTab::Source
+                                        } else {
+                                            self.set_info("No source mapped to this instruction or the PC.");
+                                            DisasmTab::Assembly
+                                        }
+                                    }
+                                }
+                                DisasmTab::Source => {
+                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                                        let target_line = (self.ui.disasm.source_cursor + 1) as u32;
+                                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                                            self.ui.disasm.view_center_addr = Some(addr);
+                                        } else {
+                                            self.ui.disasm.view_center_addr = Some(hw_pc);
+                                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                                        }
+                                    } else {
+                                        self.ui.disasm.view_center_addr = Some(hw_pc);
+                                        self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                                    }
+                                    self.ui.disasm.cursor = 0;
+                                    self.disasm_cache = None;
+                                    DisasmTab::Assembly
+                                }
+                            };
+                        }
+                        Panel::Csr => {
+                            self.ui.registers_tab = match self.ui.registers_tab {
+                                crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
+                                crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
+                            };
+                        }
+                        Panel::Memory => {
+                            self.ui.memory_tab = match self.ui.memory_tab {
+                                crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
+                                crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                            };
+                        }
+                        Panel::Symbols => {
+                            self.ui.symbols.tab = match self.ui.symbols.tab {
+                                SymbolsTab::Symbols => SymbolsTab::Trace,
+                                SymbolsTab::Trace => SymbolsTab::Symbols,
+                            };
+                        }
+                        Panel::Console => {
+                            self.ui.console.tab = self.ui.console.tab.next();
+                        }
+                        Panel::Registers => {}
+                    }
+                } else {
+                    self.select_hart_relative(-1);
+                }
+            }
             KeyCode::Char(ch) if ch.is_ascii_digit() && ch != '0' => {
                 let idx = (ch as usize) - ('1' as usize);
                 if idx < self.hart_modes.len() {
@@ -401,81 +590,7 @@ impl Debugger {
                 self.set_info(format!("Cleared {} breakpoints", count));
                 self.disasm_cache = None;
             }
-            KeyCode::Char('l') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                self.load_breakpoints();
-            }
-            KeyCode::Char('J') => {
-                self.ui.disasm.show_targets = !self.ui.disasm.show_targets;
-                self.set_info(if self.ui.disasm.show_targets {
-                    "Jump targets: ON"
-                } else {
-                    "Jump targets: OFF"
-                });
-            }
-            KeyCode::Char('s') => {
-                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
-                    self.save_breakpoints();
-                } else if self.ui.panel == Panel::Disassembly {
-                    if self.ui.disasm.tab == DisasmTab::Assembly {
-                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
 
-                        let target_addr = target_addr;
-                        if let Some((_, target_line)) =
-                            self.map_addr_to_source(target_addr, Some(&entries))
-                        {
-                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                            self.ui.disasm.tab = DisasmTab::Source;
-                        } else {
-                            if let Some((_, target_line)) =
-                                self.map_addr_to_source(hw_pc, Some(&entries))
-                            {
-                                self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                                self.ui.disasm.tab = DisasmTab::Source;
-                                self.set_info("Selected instruction has no source, jumped to PC instead.");
-                            } else {
-                                self.set_info("No source mapped to this instruction or the PC.");
-                            }
-                        }
-                    } else {
-                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
-
-                        let target_addr = target_addr;
-                        if let Some((path, _)) =
-                            self.map_addr_to_source(target_addr, Some(&entries))
-                        {
-                            let target_line = (self.ui.disasm.source_cursor + 1) as u32;
-                            if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
-                                self.ui.disasm.view_center_addr = Some(addr);
-                                self.ui.disasm.cursor = 0;
-                                self.disasm_cache = None;
-                                self.ui.disasm.tab = DisasmTab::Assembly;
-                            } else {
-                                self.ui.disasm.view_center_addr = Some(hw_pc);
-                                self.ui.disasm.cursor = 0;
-                                self.disasm_cache = None;
-                                self.ui.disasm.tab = DisasmTab::Assembly;
-                                self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                            }
-                        } else {
-                            self.ui.disasm.view_center_addr = Some(hw_pc);
-                            self.ui.disasm.cursor = 0;
-                            self.disasm_cache = None;
-                            self.ui.disasm.tab = DisasmTab::Assembly;
-                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                        }
-                    }
-                } else if self.ui.panel == Panel::Symbols {
-                    self.ui.symbols.tab = match self.ui.symbols.tab {
-                        SymbolsTab::Symbols => SymbolsTab::Trace,
-                        SymbolsTab::Trace => SymbolsTab::Symbols,
-                    };
-                }
-            }
-            KeyCode::Char('v') => {
-                self.ui.console.tab = self.ui.console.tab.next();
-            }
             KeyCode::Char(':') => {
                 self.ui.set_input_mode(InputMode::Command);
             }
@@ -559,7 +674,13 @@ impl Debugger {
                 self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;
             }
             Panel::Csr => {
-                self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize;
+                if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch {
+                    let new_cursor = (self.ui.watch_cursor as i32 + delta).max(0) as usize;
+                    let max_cursor = self.watches.len().saturating_sub(1);
+                    self.ui.watch_cursor = new_cursor.min(max_cursor);
+                } else {
+                    self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize;
+                }
             }
             Panel::Console => {
                 self.ui.console.scroll = (self.ui.console.scroll as i32 + delta).max(0) as usize;

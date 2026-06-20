@@ -158,9 +158,9 @@ impl Debugger {
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(layout[1]);
 
-        let left = Layout::default()
+        let left_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(mid[0]);
 
         let lower_mid = Layout::default()
@@ -168,8 +168,8 @@ impl Debugger {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(layout[2]);
 
-        self.render_registers(frame, left[0]);
-        self.render_csr(frame, left[1]);
+        self.render_registers(frame, left_chunks[0]);
+        self.render_registers_tab(frame, left_chunks[1]);
         self.render_disassembly(frame, mid[1]);
         self.render_memory(frame, lower_mid[0]);
         self.render_symbols(frame, lower_mid[1]);
@@ -217,8 +217,6 @@ impl Debugger {
             "=== Disassembly ===",
             " b : Toggle breakpoint at cursor",
             " Shift+D : Clear all breakpoints",
-            " Ctrl+S : Save breakpoints",
-            " Ctrl+L : Load breakpoints",
             " g / Enter : Follow jump / Jump to selected symbol",
             " u / Backspace : Go back in history",
             " j : Toggle jump target labels",
@@ -379,9 +377,41 @@ impl Debugger {
         frame.render_widget(table, area);
     }
 
-    fn render_csr(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_registers_tab(&mut self, frame: &mut Frame, area: Rect) {
         self.ui.panel_rects.insert(Panel::Csr, area);
         let focused = self.ui.panel == Panel::Csr;
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(area);
+
+        let titles = vec![
+            Line::from(vec![Span::styled(
+                " CSR ",
+                Style::default().fg(if self.ui.registers_tab == crate::ui_state::RegistersTab::Csr { self.theme.accent } else { self.theme.dim }).add_modifier(if self.ui.registers_tab == crate::ui_state::RegistersTab::Csr { Modifier::BOLD } else { Modifier::empty() }),
+            )]),
+            Line::from(vec![Span::styled(
+                " Watch List ",
+                Style::default().fg(if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch { self.theme.accent } else { self.theme.dim }).add_modifier(if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch { Modifier::BOLD } else { Modifier::empty() }),
+            )]),
+        ];
+
+        let tabs = Tabs::new(titles)
+            .divider(Span::styled("|", Style::default().fg(self.theme.dim)))
+            .select(match self.ui.registers_tab {
+                crate::ui_state::RegistersTab::Csr => 0,
+                crate::ui_state::RegistersTab::Watch => 1,
+            });
+        frame.render_widget(tabs, layout[0]);
+
+        match self.ui.registers_tab {
+            crate::ui_state::RegistersTab::Csr => self.render_csr(frame, layout[1], focused),
+            crate::ui_state::RegistersTab::Watch => self.render_watch_list(frame, layout[1], focused),
+        }
+    }
+
+    fn render_csr(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
         let Some(machine) = self.machine.as_ref() else {
             let block = self.panel_block("CSR", focused);
             frame.render_widget(block, area);
@@ -465,6 +495,111 @@ impl Debugger {
         frame.render_widget(table, area);
     }
 
+    fn render_watch_list(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
+        let (inner, is_editing) = if let InputMode::EditWatch(idx) = self.ui.input_mode {
+            let splits = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(3), Constraint::Length(1)])
+                .split(area);
+            
+            let name = self.watches.get(idx).map(|w| w.name.as_str()).unwrap_or("?");
+            let mut spans = vec![Span::styled(
+                format!(" Edit {} ({:?}): ", name, self.watches.get(idx).map(|w| &w.data_type).unwrap_or(&crate::state::DataType::U32)),
+                Style::default().fg(self.theme.accent),
+            )];
+            spans.extend(
+                self.render_input_spans(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                    self.theme.accent,
+                ),
+            );
+            spans.push(Span::styled(
+                " (Enter=save, Esc=cancel)",
+                Style::default().fg(self.theme.dim),
+            ));
+            let input_line = Line::from(spans);
+            frame.render_widget(
+                Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
+                splits[1],
+            );
+            (splits[0], true)
+        } else {
+            (area, false)
+        };
+
+        let visible_height = inner.height.saturating_sub(3) as usize;
+        let max_scroll = self.watches.len().saturating_sub(visible_height);
+        let scroll = self.ui.watch_scroll.min(max_scroll);
+
+        let mut rows = Vec::new();
+        for (i, watch) in self.watches.iter().enumerate().skip(scroll).take(visible_height) {
+            let is_selected = focused && i == self.ui.watch_cursor && !is_editing;
+            
+            let mut val_bytes = vec![0u8; watch.data_type.size_bytes() as usize];
+            if let Some(machine) = self.machine.as_ref() {
+                use emulator::BusIO;
+                let bus = machine.bus();
+                for (j, b) in val_bytes.iter_mut().enumerate() {
+                    *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
+                }
+            }
+
+            let val_str = match watch.data_type {
+                crate::state::DataType::U8 => format!("{:#04x}", val_bytes[0]),
+                crate::state::DataType::U16 => format!("{:#06x}", u16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))),
+                crate::state::DataType::U32 => format!("{:#010x}", u32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))),
+                crate::state::DataType::U64 => format!("{:#018x}", u64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))),
+                crate::state::DataType::I8 => format!("{}", val_bytes[0] as i8),
+                crate::state::DataType::I16 => format!("{}", i16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))),
+                crate::state::DataType::I32 => format!("{}", i32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))),
+                crate::state::DataType::I64 => format!("{}", i64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))),
+            };
+
+            let break_str = if watch.break_on_change { "[x]" } else { "[ ]" };
+            let style = if is_selected {
+                Style::default().bg(Color::Rgb(60, 60, 80)).fg(Color::White)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            rows.push(Row::new(vec![
+                Cell::from(Span::styled(format!("{:#010x}", watch.address), style.fg(self.theme.highlight))),
+                Cell::from(Span::styled(watch.name.clone(), style.fg(self.theme.accent))),
+                Cell::from(Span::styled(format!("{}", watch.data_type), style.fg(Color::Yellow))),
+                Cell::from(Span::styled(val_str, style)),
+                Cell::from(Span::styled(break_str, style.fg(if watch.break_on_change { Color::Red } else { self.theme.dim }))),
+            ]).style(style));
+        }
+
+        let title = if scroll > 0 {
+            format!("Watches [{}/{}]", scroll, max_scroll)
+        } else {
+            "Watches".into()
+        };
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(10),
+                Constraint::Length(15),
+                Constraint::Length(5),
+                Constraint::Min(10),
+                Constraint::Length(5),
+            ],
+        )
+        .block(self.panel_block(&title, focused))
+        .header(
+            Row::new(vec!["Address", "Name", "Type", "Value", "Brk"]).style(
+                Style::default()
+                    .fg(self.theme.dim)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
+        frame.render_widget(table, inner);
+    }
+
     fn render_disassembly(&mut self, frame: &mut Frame, area: Rect) {
         self.ui.panel_rects.insert(Panel::Disassembly, area);
         let focused = self.ui.panel == Panel::Disassembly;
@@ -498,32 +633,28 @@ impl Debugger {
         let target_abs_idx =
             cursor_target_addr.and_then(|addr| all_entries.iter().position(|e| e.addr == addr));
 
-        let titles = vec![Line::from(vec![
-            Span::styled(
-                if self.ui.disasm.tab == DisasmTab::Assembly {
-                    " [Assembly] "
-                } else {
-                    " Assembly "
-                },
-                Style::default().fg(if self.ui.disasm.tab == DisasmTab::Assembly {
-                    self.theme.accent
-                } else {
-                    self.theme.dim
-                }),
-            ),
-            Span::styled(
-                if self.ui.disasm.tab == DisasmTab::Source {
-                    " [Source] "
-                } else {
-                    " Source "
-                },
-                Style::default().fg(if self.ui.disasm.tab == DisasmTab::Source {
-                    self.theme.accent
-                } else {
-                    self.theme.dim
-                }),
-            ),
-        ])];
+        let titles = vec![
+            Line::from(vec![
+                Span::styled(
+                    " Assembly ",
+                    Style::default().fg(if self.ui.disasm.tab == DisasmTab::Assembly {
+                        self.theme.accent
+                    } else {
+                        self.theme.dim
+                    }).add_modifier(if self.ui.disasm.tab == DisasmTab::Assembly { Modifier::BOLD } else { Modifier::empty() }),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled(
+                    " Source ",
+                    Style::default().fg(if self.ui.disasm.tab == DisasmTab::Source {
+                        self.theme.accent
+                    } else {
+                        self.theme.dim
+                    }).add_modifier(if self.ui.disasm.tab == DisasmTab::Source { Modifier::BOLD } else { Modifier::empty() }),
+                ),
+            ]),
+        ];
 
         let target_addr = all_entries
             .get(abs_cursor)
@@ -555,7 +686,12 @@ impl Debugger {
             .constraints([Constraint::Length(1), Constraint::Min(1)])
             .split(inner_area);
 
-        let tabs = Tabs::new(titles);
+        let tabs = Tabs::new(titles)
+            .divider(Span::styled("│", Style::default().fg(self.theme.dim)))
+            .select(match self.ui.disasm.tab {
+                DisasmTab::Assembly => 0,
+                DisasmTab::Source => 1,
+            });
         frame.render_widget(tabs, layout[0]);
         let content_area = layout[1];
 
