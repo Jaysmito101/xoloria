@@ -165,7 +165,7 @@ impl Debugger {
 
         let lower_mid = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(layout[2]);
 
         self.render_registers(frame, left_chunks[0]);
@@ -1474,11 +1474,28 @@ impl Debugger {
 
     fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
         let filtered_trace: Vec<(usize, u64)> = if self.ui.trace.hide_non_symbols {
-            self.ui.trace.stack.iter().rev().enumerate().filter(|&(_, &addr)| {
-                self.sorted_symbols.binary_search_by_key(&addr, |(a, _)| *a).is_ok()
-            }).map(|(i, &addr)| (i, addr)).collect()
+            self.ui
+                .trace
+                .stack
+                .iter()
+                .rev()
+                .enumerate()
+                .filter(|&(_, &addr)| {
+                    self.sorted_symbols
+                        .binary_search_by_key(&addr, |(a, _)| *a)
+                        .is_ok()
+                })
+                .map(|(i, &addr)| (i, addr))
+                .collect()
         } else {
-            self.ui.trace.stack.iter().rev().enumerate().map(|(i, &addr)| (i, addr)).collect()
+            self.ui
+                .trace
+                .stack
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(i, &addr)| (i, addr))
+                .collect()
         };
 
         let trace_len = filtered_trace.len();
@@ -1520,6 +1537,12 @@ impl Debugger {
                     spans.push(Span::raw(" "));
                 }
 
+                let sym_name = self
+                    .sorted_symbols
+                    .iter()
+                    .find(|(a, _)| a == &addr)
+                    .map(|(_, n)| n.as_str());
+
                 spans.push(Span::styled(
                     format!("{:#010x} ", addr),
                     Style::default().fg(if selected {
@@ -1529,18 +1552,15 @@ impl Debugger {
                     }),
                 ));
 
-                if let Some(inst) = self.disassemble_instruction_at(addr) {
+                if sym_name.is_none()
+                    && let Some(inst) = self.disassemble_instruction_at(addr)
+                {
                     spans.push(Span::styled(
                         format!("{{{}}} ", inst),
                         Style::default().fg(self.theme.dim),
                     ));
                 }
 
-                let sym_name = self
-                    .sorted_symbols
-                    .iter()
-                    .find(|(a, _)| a == &addr)
-                    .map(|(_, n)| n.as_str());
                 if let Some(sym) = sym_name {
                     spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
                 } else if let Some((path, line)) = self.source_locations.get(&addr) {
