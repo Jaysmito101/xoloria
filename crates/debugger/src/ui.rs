@@ -662,6 +662,26 @@ impl Debugger {
                         ));
                     }
 
+                    let full_line: String = line_tokens.iter().map(|(t, _)| t.as_str()).collect();
+                    let mut match_ranges = Vec::new();
+                    if !query.is_empty() {
+                        if let Some(re) = &compiled_regex {
+                            for mat in re.find_iter(&full_line) {
+                                match_ranges.push((mat.start(), mat.end()));
+                            }
+                        } else {
+                            let mut start = 0;
+                            let lower_line = full_line.to_lowercase();
+                            let lower_query = query.to_lowercase();
+                            while let Some(idx) = lower_line[start..].find(&lower_query) {
+                                let actual_idx = start + idx;
+                                match_ranges.push((actual_idx, actual_idx + lower_query.len()));
+                                start = actual_idx + lower_query.len();
+                            }
+                        }
+                    }
+
+                    let mut byte_offset = 0;
                     for (text, token_style) in line_tokens {
                         let mut style = *token_style;
                         if is_target && is_pc {
@@ -674,28 +694,34 @@ impl Debugger {
                             style = style.add_modifier(Modifier::BOLD);
                         }
 
-                        if !query.is_empty() {
-                            if let Some(re) = &compiled_regex {
-                                let mut last = 0;
-                                for mat in re.find_iter(text) {
-                                    if mat.start() > last {
-                                        spans.push(Span::styled(text[last..mat.start()].to_string(), style));
-                                    }
-                                    spans.push(Span::styled(text[mat.start()..mat.end()].to_string(), style.fg(Color::Black).bg(highlight_color)));
-                                    last = mat.end();
-                                }
-                                if last < text.len() {
-                                    spans.push(Span::styled(text[last..].to_string(), style));
-                                }
-                            } else if let Some(idx) = text.to_lowercase().find(&query.to_lowercase()) {
-                                spans.push(Span::styled(text[..idx].to_string(), style));
-                                spans.push(Span::styled(text[idx..idx+query.len()].to_string(), style.fg(Color::Black).bg(highlight_color)));
-                                spans.push(Span::styled(text[idx+query.len()..].to_string(), style));
-                            } else {
-                                spans.push(Span::styled(text.clone(), style));
-                            }
-                        } else {
+                        let token_start = byte_offset;
+                        let token_end = byte_offset + text.len();
+                        byte_offset = token_end;
+
+                        if match_ranges.is_empty() {
                             spans.push(Span::styled(text.clone(), style));
+                            continue;
+                        }
+
+                        let mut last = 0;
+                        for &(m_start, m_end) in &match_ranges {
+                            if m_end <= token_start || m_start >= token_end {
+                                continue;
+                            }
+                            let overlap_start = m_start.max(token_start) - token_start;
+                            let overlap_end = m_end.min(token_end) - token_start;
+
+                            if overlap_start > last {
+                                spans.push(Span::styled(text[last..overlap_start].to_string(), style));
+                            }
+                            spans.push(Span::styled(
+                                text[overlap_start..overlap_end].to_string(),
+                                style.fg(Color::Black).bg(highlight_color),
+                            ));
+                            last = overlap_end;
+                        }
+                        if last < text.len() {
+                            spans.push(Span::styled(text[last..].to_string(), style));
                         }
                     }
 
@@ -979,20 +1005,18 @@ impl Debugger {
                 .constraints([Constraint::Min(3), Constraint::Length(1)])
                 .split(area);
 
-            let input_line = Line::from(vec![
+            let mut spans = vec![
                 Span::styled(" Goto: 0x", Style::default().fg(self.theme.accent)),
-                Span::styled(
-                    self.ui.input_buffer(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("_", Style::default().fg(self.theme.accent)),
-                Span::styled(
-                    " (Enter=go, Esc=cancel)",
-                    Style::default().fg(self.theme.dim),
-                ),
-            ]);
+            ];
+            spans.extend(self.render_input_spans(
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                self.theme.accent,
+            ));
+            spans.push(Span::styled(
+                " (Enter=go, Esc=cancel)",
+                Style::default().fg(self.theme.dim),
+            ));
+            let input_line = Line::from(spans);
             frame.render_widget(
                 Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
                 splits[1],
@@ -1478,23 +1502,46 @@ impl Debugger {
             .collect()
     }
 
+    fn render_input_spans(&self, base_style: Style, cursor_color: Color) -> Vec<Span<'static>> {
+        let buffer = self.ui.input_buffer();
+        let cursor = self.ui.input_cursor;
+        let chars: Vec<char> = buffer.chars().collect();
+        let mut spans = vec![];
+        if cursor < chars.len() {
+            let before: String = chars[..cursor].iter().collect();
+            let at: String = chars[cursor..cursor + 1].iter().collect();
+            let after: String = chars[cursor + 1..].iter().collect();
+
+            if !before.is_empty() {
+                spans.push(Span::styled(before, base_style));
+            }
+            spans.push(Span::styled(
+                at,
+                Style::default().bg(cursor_color).fg(Color::Black),
+            ));
+            if !after.is_empty() {
+                spans.push(Span::styled(after, base_style));
+            }
+        } else {
+            spans.push(Span::styled(buffer.to_string(), base_style));
+            spans.push(Span::styled("_", Style::default().fg(cursor_color)));
+        }
+        spans
+    }
+
     fn render_bottom_bar(&self, frame: &mut Frame, area: Rect) {
         if self.ui.input_mode == InputMode::Command {
-            let line = Line::from(vec![
-                Span::styled(
-                    ":",
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    self.ui.input_buffer(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("_", Style::default().fg(self.theme.accent)),
-            ]);
+            let mut spans = vec![Span::styled(
+                ":",
+                Style::default()
+                    .fg(self.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            )];
+            spans.extend(self.render_input_spans(
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                self.theme.accent,
+            ));
+            let line = Line::from(spans);
             let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
             frame.render_widget(bar, area);
             return;
@@ -1508,14 +1555,13 @@ impl Debugger {
                 prefix = "Search (Regex): ".to_string();
             }
 
-            let line = Line::from(vec![
-                Span::styled(prefix, style.add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    self.ui.input_buffer(),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("_", style),
-            ]);
+            let mut spans = vec![Span::styled(prefix, style.add_modifier(Modifier::BOLD))];
+            let cursor_color = style.fg.unwrap_or(self.theme.accent);
+            spans.extend(self.render_input_spans(
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                cursor_color,
+            ));
+            let line = Line::from(spans);
             let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
             frame.render_widget(bar, area);
             return;

@@ -56,6 +56,7 @@ pub struct HelpState {
 pub struct UiState {
     pub input_mode: InputMode,
     input_buffer: String,
+    pub input_cursor: usize,
     pub setup_cursor: usize,
     pub panel: Panel,
 
@@ -93,6 +94,7 @@ impl UiState {
         Self {
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
+            input_cursor: 0,
             setup_cursor: 0,
             panel: Panel::Disassembly,
             
@@ -115,6 +117,7 @@ impl UiState {
     pub fn set_input_mode(&mut self, mode: InputMode) {
         self.input_mode = mode;
         self.input_buffer.clear();
+        self.input_cursor = 0;
         self.console.history_index = None;
     }
 
@@ -134,6 +137,7 @@ impl UiState {
         };
         self.console.history_index = Some(new_idx);
         self.input_buffer = self.console.command_history[new_idx].clone();
+        self.input_cursor = self.input_buffer.chars().count();
     }
 
     pub fn history_down(&mut self) {
@@ -142,9 +146,11 @@ impl UiState {
             if new_idx >= self.console.command_history.len() {
                 self.console.history_index = None;
                 self.input_buffer.clear();
+                self.input_cursor = 0;
             } else {
                 self.console.history_index = Some(new_idx);
                 self.input_buffer = self.console.command_history[new_idx].clone();
+                self.input_cursor = self.input_buffer.chars().count();
             }
         }
     }
@@ -157,6 +163,7 @@ impl UiState {
         };
         self.search.history_index = Some(new_idx);
         self.input_buffer = self.search.history[new_idx].clone();
+        self.input_cursor = self.input_buffer.chars().count();
     }
 
     pub fn search_history_down(&mut self) {
@@ -165,9 +172,11 @@ impl UiState {
             if new_idx >= self.search.history.len() {
                 self.search.history_index = None;
                 self.input_buffer.clear();
+                self.input_cursor = 0;
             } else {
                 self.search.history_index = Some(new_idx);
                 self.input_buffer = self.search.history[new_idx].clone();
+                self.input_cursor = self.input_buffer.chars().count();
             }
         }
     }
@@ -177,11 +186,34 @@ impl UiState {
     }
 
     pub fn input_buffer_push(&mut self, c: char) {
-        self.input_buffer.push(c);
+        if self.input_cursor >= self.input_buffer.chars().count() {
+            self.input_buffer.push(c);
+            self.input_cursor = self.input_buffer.chars().count();
+        } else {
+            let mut chars: Vec<char> = self.input_buffer.chars().collect();
+            chars.insert(self.input_cursor, c);
+            self.input_buffer = chars.into_iter().collect();
+            self.input_cursor += 1;
+        }
     }
 
     pub fn input_buffer_pop(&mut self) -> Option<char> {
-        self.input_buffer.pop()
+        if self.input_cursor == 0 { return None; }
+        let mut chars: Vec<char> = self.input_buffer.chars().collect();
+        let c = chars.remove(self.input_cursor - 1);
+        self.input_buffer = chars.into_iter().collect();
+        self.input_cursor -= 1;
+        Some(c)
+    }
+
+    pub fn input_cursor_left(&mut self) {
+        self.input_cursor = self.input_cursor.saturating_sub(1);
+    }
+
+    pub fn input_cursor_right(&mut self) {
+        if self.input_cursor < self.input_buffer.chars().count() {
+            self.input_cursor += 1;
+        }
     }
 
     pub fn input_buffer_is_empty(&self) -> bool {
@@ -189,6 +221,7 @@ impl UiState {
     }
 
     pub fn input_buffer_take(&mut self) -> String {
+        self.input_cursor = 0;
         std::mem::take(&mut self.input_buffer)
     }
 }

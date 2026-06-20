@@ -29,6 +29,8 @@ impl Debugger {
             KeyCode::Backspace => {
                 self.ui.input_buffer_pop();
             }
+            KeyCode::Left => self.ui.input_cursor_left(),
+            KeyCode::Right => self.ui.input_cursor_right(),
             KeyCode::Char(c) if c.is_ascii_hexdigit() || c == 'x' || c == 'X' => {
                 self.ui.input_buffer_push(c);
             }
@@ -51,6 +53,8 @@ impl Debugger {
                     self.ui.input_buffer_pop();
                 }
             }
+            KeyCode::Left => self.ui.input_cursor_left(),
+            KeyCode::Right => self.ui.input_cursor_right(),
             KeyCode::Char(c) => self.ui.input_buffer_push(c),
             _ => {}
         }
@@ -98,6 +102,8 @@ impl Debugger {
             KeyCode::Backspace => {
                 self.ui.input_buffer_pop();
             }
+            KeyCode::Left => self.ui.input_cursor_left(),
+            KeyCode::Right => self.ui.input_cursor_right(),
             KeyCode::Char(c) => self.ui.input_buffer_push(c),
             _ => {}
         }
