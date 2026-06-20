@@ -41,10 +41,23 @@ pub struct SymbolsState {
     pub tab: SymbolsTab,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct TraceEntry {
+    pub pc: u64,
+    pub sp: u64,
+}
+
+impl TraceEntry {
+    pub fn new(pc: u64, sp: u64) -> Self {
+        Self { pc, sp }
+    }
+
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct TraceState {
-    pub stack: Vec<u64>,
-    pub forward_stack: Vec<u64>,
+    pub stack: Vec<TraceEntry>,
+    pub forward_stack: Vec<TraceEntry>,
     pub scroll: usize,
     pub cursor: usize,
     pub hide_non_symbols: bool,

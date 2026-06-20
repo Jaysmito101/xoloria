@@ -561,8 +561,10 @@ impl Debugger {
 
             let result = self.tick_hart(hart_idx);
 
-            if self.ui.trace.stack.last() != Some(&old_pc) {
-                self.ui.trace.stack.push(old_pc);
+            let sp = self.machine.as_ref().unwrap().harts()[hart_idx].registers().x()[2];
+
+            if self.ui.trace.stack.last().map(|e| e.pc) != Some(old_pc) {
+                self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(old_pc, sp));
                 self.ui.trace.forward_stack.clear();
             }
 
@@ -603,7 +605,7 @@ impl Debugger {
 
             let harts = self.machine.as_mut().unwrap().harts_mut();
             let mut tick_results: Vec<(usize, TickResult)> = Vec::new();
-            let mut trace_pc: Option<u64> = None;
+            let mut trace_pc: Option<(u64, u64)> = None;
 
             for (i, hart) in harts.iter_mut().enumerate() {
                 if !running[i] {
@@ -611,7 +613,7 @@ impl Debugger {
                 }
                 let pc = hart.registers().pc();
                 if i == self.ui.selected_hart {
-                    trace_pc = Some(pc);
+                    trace_pc = Some((pc, hart.registers().x()[2]));
                 }
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
@@ -657,10 +659,10 @@ impl Debugger {
                 }
             }
 
-            if let Some(pc) = trace_pc
-                && self.ui.trace.stack.last() != Some(&pc)
+            if let Some((pc, sp)) = trace_pc
+                && self.ui.trace.stack.last().map(|e| e.pc) != Some(pc)
             {
-                self.ui.trace.stack.push(pc);
+                self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(pc, sp));
                 self.ui.trace.forward_stack.clear();
             }
 

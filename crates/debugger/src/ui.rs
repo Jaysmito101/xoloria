@@ -1473,19 +1473,19 @@ impl Debugger {
     }
 
     fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
-        let filtered_trace: Vec<(usize, u64)> = if self.ui.trace.hide_non_symbols {
+        let filtered_trace: Vec<(usize, crate::ui_state::TraceEntry)> = if self.ui.trace.hide_non_symbols {
             self.ui
                 .trace
                 .stack
                 .iter()
                 .rev()
                 .enumerate()
-                .filter(|&(_, &addr)| {
+                .filter(|&(_, e)| {
                     self.sorted_symbols
-                        .binary_search_by_key(&addr, |(a, _)| *a)
+                        .binary_search_by_key(&e.pc, |(a, _)| *a)
                         .is_ok()
                 })
-                .map(|(i, &addr)| (i, addr))
+                .map(|(i, &e)| (i, e))
                 .collect()
         } else {
             self.ui
@@ -1494,7 +1494,7 @@ impl Debugger {
                 .iter()
                 .rev()
                 .enumerate()
-                .map(|(i, &addr)| (i, addr))
+                .map(|(i, &e)| (i, e))
                 .collect()
         };
 
@@ -1517,12 +1517,16 @@ impl Debugger {
         let max_scroll = trace_len.saturating_sub(visible_height);
         let scroll = self.ui.trace.scroll.min(max_scroll);
 
+        let mut unique_sps: Vec<u64> = self.ui.trace.stack.iter().map(|e| e.sp).collect();
+        unique_sps.sort_unstable_by(|a, b| b.cmp(a));
+        unique_sps.dedup();
+
         let lines: Vec<Line> = filtered_trace
             .into_iter()
             .skip(scroll)
             .take(visible_height)
             .enumerate()
-            .map(|(ui_idx, (_real_idx, addr))| {
+            .map(|(ui_idx, (_real_idx, entry))| {
                 let mut spans = vec![];
                 let selected = focused && scroll + ui_idx == self.ui.trace.cursor;
 
@@ -1534,17 +1538,23 @@ impl Debugger {
                             .add_modifier(Modifier::BOLD),
                     ));
                 } else {
-                    spans.push(Span::raw(" "));
+                    spans.push(Span::raw("   "));
                 }
+
+                let depth = unique_sps
+                    .binary_search_by(|x| x.cmp(&entry.sp).reverse())
+                    .unwrap_or(0);
+                let padding = " ".repeat(depth.min(40));
+                spans.push(Span::raw(padding));
 
                 let sym_name = self
                     .sorted_symbols
                     .iter()
-                    .find(|(a, _)| a == &addr)
+                    .find(|(a, _)| a == &entry.pc)
                     .map(|(_, n)| n.as_str());
 
                 spans.push(Span::styled(
-                    format!("{:#010x} ", addr),
+                    format!("{:#010x} ", entry.pc),
                     Style::default().fg(if selected {
                         self.theme.accent
                     } else {
@@ -1553,7 +1563,7 @@ impl Debugger {
                 ));
 
                 if sym_name.is_none()
-                    && let Some(inst) = self.disassemble_instruction_at(addr)
+                    && let Some(inst) = self.disassemble_instruction_at(entry.pc)
                 {
                     spans.push(Span::styled(
                         format!("{{{}}} ", inst),
@@ -1563,7 +1573,7 @@ impl Debugger {
 
                 if let Some(sym) = sym_name {
                     spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
-                } else if let Some((path, line)) = self.source_locations.get(&addr) {
+                } else if let Some((path, line)) = self.source_locations.get(&entry.pc) {
                     let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
                     spans.push(Span::styled(
                         format!("{}:{}", short, line),

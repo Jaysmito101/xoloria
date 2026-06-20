@@ -403,7 +403,7 @@ impl Debugger {
                             let trace_len = self.ui.trace.stack.len();
                             let cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
                             let idx = trace_len.saturating_sub(1).saturating_sub(cursor);
-                            self.ui.trace.stack.get(idx).copied()
+                            self.ui.trace.stack.get(idx).map(|e| e.pc)
                         };
 
                         if let Some(t_addr) = target_addr {
@@ -439,14 +439,20 @@ impl Debugger {
                 }
             }
             KeyCode::Char('t') => {
-                if let Some(addr) = self.ui.trace.stack.pop() {
+                if let Some(entry) = self.ui.trace.stack.pop() {
+                    let addr = entry.pc;
                     let hw_pc = self
                         .machine
                         .as_ref()
                         .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
+                    let current_sp = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().x()[2])
+                        .unwrap_or(0);
                     let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
-                    self.ui.trace.forward_stack.push(center_addr);
+                    self.ui.trace.forward_stack.push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
 
                     let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
                     if let Some(entry) = target_entry.as_ref() {
@@ -461,14 +467,20 @@ impl Debugger {
                 }
             }
             KeyCode::Char('T') => {
-                if let Some(addr) = self.ui.trace.forward_stack.pop() {
+                if let Some(entry) = self.ui.trace.forward_stack.pop() {
+                    let addr = entry.pc;
                     let hw_pc = self
                         .machine
                         .as_ref()
                         .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
+                    let current_sp = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts()[self.ui.selected_hart].registers().x()[2])
+                        .unwrap_or(0);
                     let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
-                    self.ui.trace.stack.push(center_addr);
+                    self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
 
                     let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
                     if let Some(entry) = target_entry.as_ref() {
