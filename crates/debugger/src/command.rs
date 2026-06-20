@@ -29,6 +29,7 @@ pub enum DebugCommand {
     LoadWorkspace,
     Memory(u64),
     Step(usize),
+    ClearTrace,
     Continue,
     Pause,
     Stall,
@@ -99,6 +100,7 @@ impl DebugCommand {
                     return Err("Usage: watch <name> <addr_expr> <type> | watch del <name>".into());
                 }
             }
+            "clear" => Ok(Self::ClearTrace),
             "save" => Ok(Self::SaveWorkspace),
             "load" => Ok(Self::LoadWorkspace),
             "read" => {
@@ -316,6 +318,11 @@ impl Debugger {
                     self.ui.trace.stack.clear();
                     self.ui.trace.forward_stack.clear();
                     self.set_info("Machine reset");
+                }
+                DebugCommand::ClearTrace => {
+                    self.ui.trace.stack.clear();
+                    self.ui.trace.forward_stack.clear();
+                    self.set_info("Trace cleared");
                 }
                 DebugCommand::Targets => {
                     self.ui.disasm.show_targets = !self.ui.disasm.show_targets;
