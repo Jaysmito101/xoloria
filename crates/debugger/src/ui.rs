@@ -377,44 +377,91 @@ impl Debugger {
         frame.render_widget(table, area);
     }
 
-    fn render_registers_tab(&mut self, frame: &mut Frame, area: Rect) {
-        self.ui.panel_rects.insert(Panel::Csr, area);
-        let focused = self.ui.panel == Panel::Csr;
+    fn render_tabbed_panel(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        panel: Panel,
+        panel_title: &str,
+        tabs: &[&str],
+        active_tab: usize,
+        focused: bool,
+    ) -> Option<Rect> {
+        self.ui.panel_rects.insert(panel, area);
+        
+        let block = self.panel_block(panel_title, focused);
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner_area.height == 0 {
+            return None;
+        }
 
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(area);
+            .split(inner_area);
 
-        let titles = vec![
-            Line::from(vec![Span::styled(
-                " CSR ",
-                Style::default().fg(if self.ui.registers_tab == crate::ui_state::RegistersTab::Csr { self.theme.accent } else { self.theme.dim }).add_modifier(if self.ui.registers_tab == crate::ui_state::RegistersTab::Csr { Modifier::BOLD } else { Modifier::empty() }),
-            )]),
-            Line::from(vec![Span::styled(
-                " Watch List ",
-                Style::default().fg(if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch { self.theme.accent } else { self.theme.dim }).add_modifier(if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch { Modifier::BOLD } else { Modifier::empty() }),
-            )]),
-        ];
+        let lines: Vec<Line> = tabs
+            .iter()
+            .enumerate()
+            .map(|(i, &t)| {
+                if i == active_tab {
+                    Line::from(Span::styled(
+                        format!(" {} ", t),
+                        Style::default()
+                            .bg(self.theme.accent)
+                            .fg(Color::Black)
+                            .add_modifier(Modifier::BOLD),
+                    ))
+                } else {
+                    Line::from(Span::styled(
+                        format!(" {} ", t),
+                        Style::default().fg(self.theme.dim),
+                    ))
+                }
+            })
+            .collect();
 
-        let tabs = Tabs::new(titles)
-            .divider(Span::styled("|", Style::default().fg(self.theme.dim)))
-            .select(match self.ui.registers_tab {
-                crate::ui_state::RegistersTab::Csr => 0,
-                crate::ui_state::RegistersTab::Watch => 1,
-            });
-        frame.render_widget(tabs, layout[0]);
+        let tabs_widget = Tabs::new(lines)
+            .divider(Span::styled("│", Style::default().fg(self.theme.dim)))
+            .select(active_tab)
+            .highlight_style(Style::default());
 
-        match self.ui.registers_tab {
-            crate::ui_state::RegistersTab::Csr => self.render_csr(frame, layout[1], focused),
-            crate::ui_state::RegistersTab::Watch => self.render_watch_list(frame, layout[1], focused),
+        frame.render_widget(tabs_widget, layout[0]);
+
+        if layout[1].height > 0 {
+            Some(layout[1])
+        } else {
+            None
         }
     }
 
-    fn render_csr(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
+    fn render_registers_tab(&mut self, frame: &mut Frame, area: Rect) {
+        let focused = self.ui.panel == Panel::Csr;
+        let active_tab = match self.ui.registers_tab {
+            crate::ui_state::RegistersTab::Csr => 0,
+            crate::ui_state::RegistersTab::Watch => 1,
+        };
+
+        if let Some(content_area) = self.render_tabbed_panel(
+            frame,
+            area,
+            Panel::Csr,
+            "Registers",
+            &["CSR", "Watch List"],
+            active_tab,
+            focused,
+        ) {
+            match self.ui.registers_tab {
+                crate::ui_state::RegistersTab::Csr => self.render_csr(frame, content_area, focused),
+                crate::ui_state::RegistersTab::Watch => self.render_watch_list(frame, content_area, focused),
+            }
+        }
+    }
+
+    fn render_csr(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
         let Some(machine) = self.machine.as_ref() else {
-            let block = self.panel_block("CSR", focused);
-            frame.render_widget(block, area);
             return;
         };
         let regs = machine.harts()[self.ui.selected_hart].registers();
@@ -470,12 +517,6 @@ impl Debugger {
             .take(visible_height)
             .collect();
 
-        let title = if scroll > 0 {
-            format!("CSR [{}/{}]", scroll, max_scroll)
-        } else {
-            "CSR".into()
-        };
-
         let table = Table::new(
             visible_rows,
             [
@@ -484,7 +525,6 @@ impl Debugger {
                 Constraint::Min(12),
             ],
         )
-        .block(self.panel_block(&title, focused))
         .header(
             Row::new(vec!["Register", "Hex", "Binary"]).style(
                 Style::default()
@@ -495,7 +535,15 @@ impl Debugger {
         frame.render_widget(table, area);
     }
 
-    fn render_watch_list(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
+    fn render_watch_list(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
+        if self.watches.is_empty() {
+            let empty = Paragraph::new("No watchpoints set.\nUse `watch <name> <addr> <type>` to add one.")
+                .style(Style::default().fg(self.theme.dim))
+                .alignment(Alignment::Center);
+            frame.render_widget(empty, area);
+            return;
+        }
+
         let (inner, is_editing) = if let InputMode::EditWatch(idx) = self.ui.input_mode {
             let splits = Layout::default()
                 .direction(Direction::Vertical)
@@ -535,7 +583,7 @@ impl Debugger {
 
         let mut rows = Vec::new();
         for (i, watch) in self.watches.iter().enumerate().skip(scroll).take(visible_height) {
-            let is_selected = focused && i == self.ui.watch_cursor && !is_editing;
+            let is_selected = _focused && i == self.ui.watch_cursor && !is_editing;
             
             let mut val_bytes = vec![0u8; watch.data_type.size_bytes() as usize];
             if let Some(machine) = self.machine.as_ref() {
@@ -573,12 +621,6 @@ impl Debugger {
             ]).style(style));
         }
 
-        let title = if scroll > 0 {
-            format!("Watches [{}/{}]", scroll, max_scroll)
-        } else {
-            "Watches".into()
-        };
-
         let table = Table::new(
             rows,
             [
@@ -589,7 +631,6 @@ impl Debugger {
                 Constraint::Length(5),
             ],
         )
-        .block(self.panel_block(&title, focused))
         .header(
             Row::new(vec!["Address", "Name", "Type", "Value", "Brk"]).style(
                 Style::default()
@@ -633,39 +674,16 @@ impl Debugger {
         let target_abs_idx =
             cursor_target_addr.and_then(|addr| all_entries.iter().position(|e| e.addr == addr));
 
-        let titles = vec![
-            Line::from(vec![
-                Span::styled(
-                    " Assembly ",
-                    Style::default().fg(if self.ui.disasm.tab == DisasmTab::Assembly {
-                        self.theme.accent
-                    } else {
-                        self.theme.dim
-                    }).add_modifier(if self.ui.disasm.tab == DisasmTab::Assembly { Modifier::BOLD } else { Modifier::empty() }),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled(
-                    " Source ",
-                    Style::default().fg(if self.ui.disasm.tab == DisasmTab::Source {
-                        self.theme.accent
-                    } else {
-                        self.theme.dim
-                    }).add_modifier(if self.ui.disasm.tab == DisasmTab::Source { Modifier::BOLD } else { Modifier::empty() }),
-                ),
-            ]),
-        ];
-
         let target_addr = all_entries
             .get(abs_cursor)
             .map(|e| e.addr)
             .unwrap_or(center_addr);
 
         let mut title = if self.breakpoints.is_empty() {
-            "Disassembly (s: toggle tab)".to_string()
+            "Disassembly".to_string()
         } else {
             format!(
-                "Disassembly ({} bp) (s: toggle tab)",
+                "Disassembly ({} bp)",
                 self.breakpoints.len()
             )
         };
@@ -677,35 +695,30 @@ impl Debugger {
             title = format!("{} [{}]", title, short_path);
         }
 
-        let block = self.panel_block(&title, focused);
-        let inner_area = block.inner(area);
-        frame.render_widget(block, area);
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(1)])
-            .split(inner_area);
-
-        let tabs = Tabs::new(titles)
-            .divider(Span::styled("│", Style::default().fg(self.theme.dim)))
-            .select(match self.ui.disasm.tab {
+        if let Some(content_area) = self.render_tabbed_panel(
+            frame,
+            area,
+            Panel::Disassembly,
+            &title,
+            &["Assembly", "Source"],
+            match self.ui.disasm.tab {
                 DisasmTab::Assembly => 0,
                 DisasmTab::Source => 1,
-            });
-        frame.render_widget(tabs, layout[0]);
-        let content_area = layout[1];
-
-        if self.ui.disasm.tab == DisasmTab::Source {
-            self.render_source_view(frame, content_area, target_addr, &all_entries, hw_pc);
-        } else {
-            self.render_assembly_view(
-                frame,
-                content_area,
-                &all_entries,
-                focused,
-                abs_cursor,
-                target_abs_idx,
-            );
+            },
+            focused,
+        ) {
+            if self.ui.disasm.tab == DisasmTab::Source {
+                self.render_source_view(frame, content_area, target_addr, &all_entries, hw_pc);
+            } else {
+                self.render_assembly_view(
+                    frame,
+                    content_area,
+                    &all_entries,
+                    focused,
+                    abs_cursor,
+                    target_abs_idx,
+                );
+            }
         }
     }
 
@@ -1133,57 +1146,25 @@ impl Debugger {
     }
 
     fn render_memory(&mut self, frame: &mut Frame, area: Rect) {
-        self.ui.panel_rects.insert(Panel::Memory, area);
         let focused = self.ui.panel == Panel::Memory;
+        let active_tab = match self.ui.memory_tab {
+            crate::ui_state::MemoryTab::Hex => 0,
+            crate::ui_state::MemoryTab::Stack => 1,
+        };
 
-        let title = "Memory (x: toggle tab)";
-        let block = self.panel_block(title, focused);
-        let inner_area = block.inner(area);
-        frame.render_widget(block, area);
-
-        if inner_area.height == 0 {
-            return;
-        }
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(inner_area);
-
-        let titles = vec![
-            Line::from(Span::styled(
-                " Hex ",
-                if self.ui.memory_tab == crate::ui_state::MemoryTab::Hex {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-            Line::from(Span::styled(
-                " Stack ",
-                if self.ui.memory_tab == crate::ui_state::MemoryTab::Stack {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-        ];
-
-        let tabs = Tabs::new(titles)
-            .divider(Span::styled("|", Style::default().fg(self.theme.dim)))
-            .select(match self.ui.memory_tab {
-                crate::ui_state::MemoryTab::Hex => 0,
-                crate::ui_state::MemoryTab::Stack => 1,
-            });
-        frame.render_widget(tabs, layout[0]);
-
-        match self.ui.memory_tab {
-            crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, layout[1]),
-            crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, layout[1]),
+        if let Some(content_area) = self.render_tabbed_panel(
+            frame,
+            area,
+            Panel::Memory,
+            "Memory",
+            &["Hex", "Stack"],
+            active_tab,
+            focused,
+        ) {
+            match self.ui.memory_tab {
+                crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, content_area),
+                crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, content_area),
+            }
         }
     }
 
@@ -1386,151 +1367,120 @@ impl Debugger {
     }
 
     fn render_symbols(&mut self, frame: &mut Frame, area: Rect) {
-        self.ui.panel_rects.insert(Panel::Symbols, area);
+        let focused = self.ui.panel == Panel::Symbols;
+        let active_tab = match self.ui.symbols.tab {
+            SymbolsTab::Trace => 0,
+            SymbolsTab::Symbols => 1,
+        };
+
+        if let Some(content_area) = self.render_tabbed_panel(
+            frame,
+            area,
+            Panel::Symbols,
+            "Symbols / Trace",
+            &["Trace", "Symbols"],
+            active_tab,
+            focused,
+        ) {
+            match self.ui.symbols.tab {
+                SymbolsTab::Trace => self.render_trace(frame, content_area),
+                SymbolsTab::Symbols => self.render_symbols_list(frame, content_area),
+            }
+        }
+    }
+
+    fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
+        let trace_len = self.ui.trace.stack.len();
+        self.ui.trace.cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
         let focused = self.ui.panel == Panel::Symbols;
 
-        let title = "Symbols / Trace (s: toggle tab)";
-        let block = self.panel_block(title, focused);
-        let inner_area = block.inner(area);
-        frame.render_widget(block, area);
+        let visible_height = content_area.height as usize;
 
-        if inner_area.height == 0 {
-            return;
-        }
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(inner_area);
-
-        let titles = vec![
-            Line::from(Span::styled(
-                " Trace ",
-                if self.ui.symbols.tab == SymbolsTab::Trace {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-            Line::from(Span::styled(
-                " Symbols ",
-                if self.ui.symbols.tab == SymbolsTab::Symbols {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-        ];
-
-        let tabs = Tabs::new(titles)
-            .select(match self.ui.symbols.tab {
-                SymbolsTab::Trace => 0,
-                SymbolsTab::Symbols => 1,
-            })
-            .divider("│");
-        frame.render_widget(tabs, layout[0]);
-
-        if layout[1].height == 0 {
-            return;
-        }
-        let content_area = layout[1];
-
-        if self.ui.symbols.tab == SymbolsTab::Trace {
-            let trace_len = self.ui.trace.stack.len();
-            self.ui.trace.cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
-
-            let visible_height = content_area.height as usize;
-
-            if self.ui.trace.cursor < self.ui.trace.scroll {
-                self.ui.trace.scroll = self.ui.trace.cursor;
-            } else if self.ui.trace.cursor >= self.ui.trace.scroll + visible_height {
-                self.ui.trace.scroll = self
-                    .ui
-                    .trace
-                    .cursor
-                    .saturating_sub(visible_height.saturating_sub(1));
-            }
-
-            let max_scroll = trace_len.saturating_sub(visible_height);
-            let scroll = self.ui.trace.scroll.min(max_scroll);
-
-            let lines: Vec<Line> = self
+        if self.ui.trace.cursor < self.ui.trace.scroll {
+            self.ui.trace.scroll = self.ui.trace.cursor;
+        } else if self.ui.trace.cursor >= self.ui.trace.scroll + visible_height {
+            self.ui.trace.scroll = self
                 .ui
                 .trace
-                .stack
-                .iter()
-                .rev()
-                .enumerate()
-                .skip(scroll)
-                .take(visible_height)
-                .map(|(i, &addr)| {
-                    let mut spans = vec![];
-                    let selected = focused && i == self.ui.trace.cursor;
-
-                    if selected {
-                        spans.push(Span::styled(
-                            " ► ",
-                            Style::default()
-                                .fg(self.theme.accent)
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    } else {
-                        spans.push(Span::raw(" "));
-                    }
-
-                    spans.push(Span::styled(
-                        format!("{:#010x} ", addr),
-                        Style::default().fg(if selected {
-                            self.theme.accent
-                        } else {
-                            self.theme.highlight
-                        }),
-                    ));
-
-                    if let Some(inst) = self.disassemble_instruction_at(addr) {
-                        spans.push(Span::styled(
-                            format!("{{{}}} ", inst),
-                            Style::default().fg(self.theme.dim),
-                        ));
-                    }
-
-                    let sym_name = self
-                        .sorted_symbols
-                        .iter()
-                        .find(|(a, _)| a == &addr)
-                        .map(|(_, n)| n.as_str());
-                    if let Some(sym) = sym_name {
-                        spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
-                    } else if let Some((path, line)) = self.source_locations.get(&addr) {
-                        let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
-                        spans.push(Span::styled(
-                            format!("{}:{}", short, line),
-                            Style::default().fg(self.theme.dim),
-                        ));
-                    }
-
-                    Line::from(spans)
-                })
-                .collect();
-
-            if lines.is_empty() {
-                frame.render_widget(
-                    Paragraph::new(" No trace available")
-                        .style(Style::default().fg(self.theme.dim)),
-                    content_area,
-                );
-            } else {
-                frame.render_widget(Paragraph::new(lines), content_area);
-            }
-            return;
+                .cursor
+                .saturating_sub(visible_height.saturating_sub(1));
         }
 
-        let inner = content_area;
+        let max_scroll = trace_len.saturating_sub(visible_height);
+        let scroll = self.ui.trace.scroll.min(max_scroll);
 
+        let lines: Vec<Line> = self
+            .ui
+            .trace
+            .stack
+            .iter()
+            .rev()
+            .enumerate()
+            .skip(scroll)
+            .take(visible_height)
+            .map(|(i, &addr)| {
+                let mut spans = vec![];
+                let selected = focused && i == self.ui.trace.cursor;
+
+                if selected {
+                    spans.push(Span::styled(
+                        " ► ",
+                        Style::default()
+                            .fg(self.theme.accent)
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                } else {
+                    spans.push(Span::raw(" "));
+                }
+
+                spans.push(Span::styled(
+                    format!("{:#010x} ", addr),
+                    Style::default().fg(if selected {
+                        self.theme.accent
+                    } else {
+                        self.theme.highlight
+                    }),
+                ));
+
+                if let Some(inst) = self.disassemble_instruction_at(addr) {
+                    spans.push(Span::styled(
+                        format!("{{{}}} ", inst),
+                        Style::default().fg(self.theme.dim),
+                    ));
+                }
+
+                let sym_name = self
+                    .sorted_symbols
+                    .iter()
+                    .find(|(a, _)| a == &addr)
+                    .map(|(_, n)| n.as_str());
+                if let Some(sym) = sym_name {
+                    spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
+                } else if let Some((path, line)) = self.source_locations.get(&addr) {
+                    let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
+                    spans.push(Span::styled(
+                        format!("{}:{}", short, line),
+                        Style::default().fg(self.theme.dim),
+                    ));
+                }
+
+                Line::from(spans)
+            })
+            .collect();
+
+        if lines.is_empty() {
+            frame.render_widget(
+                Paragraph::new(" No trace available")
+                    .style(Style::default().fg(self.theme.dim)),
+                content_area,
+            );
+        } else {
+            frame.render_widget(Paragraph::new(lines), content_area);
+        }
+    }
+
+    fn render_symbols_list(&mut self, frame: &mut Frame, inner: Rect) {
+        let focused = self.ui.panel == Panel::Symbols;
         let query = &self.ui.search.query;
         let is_match = |text: &str| -> bool {
             if query.is_empty() {
@@ -1641,82 +1591,47 @@ impl Debugger {
     }
 
     fn render_console(&mut self, frame: &mut Frame, area: Rect) {
-        self.ui.panel_rects.insert(Panel::Console, area);
         let focused = self.ui.panel == Panel::Console;
-
-        let block = self.panel_block("Console (v: tab)", focused);
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        if inner.height == 0 {
-            return;
-        }
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(0)])
-            .split(inner);
-
-        let titles = vec![
-            Line::from(Span::styled(
-                " Debugger ",
-                if self.ui.console.tab == ConsoleTab::Debugger {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-            Line::from(Span::styled(
-                " Tracing ",
-                if self.ui.console.tab == ConsoleTab::Tracing {
-                    Style::default()
-                        .fg(self.theme.accent)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.dim)
-                },
-            )),
-        ];
-
-        let tabs = Tabs::new(titles)
-            .select(match self.ui.console.tab {
-                ConsoleTab::Debugger => 0,
-                ConsoleTab::Tracing => 1,
-            })
-            .divider("│");
-        frame.render_widget(tabs, layout[0]);
-
-        if layout[1].height == 0 {
-            return;
-        }
-        let visible_height = layout[1].height as usize;
-
-        let lines = match self.ui.console.tab {
-            ConsoleTab::Debugger => self.format_console_logs(
-                &self.console_log,
-                visible_height,
-                layout[1].width as usize,
-            ),
-            ConsoleTab::Tracing => {
-                if let Ok(logs) = self.tracing_log.lock() {
-                    self.format_console_logs(&logs, visible_height, layout[1].width as usize)
-                } else {
-                    Vec::new()
-                }
-            }
+        let active_tab = match self.ui.console.tab {
+            ConsoleTab::Debugger => 0,
+            ConsoleTab::Tracing => 1,
         };
 
-        if lines.is_empty() {
-            let empty = Paragraph::new(Span::styled(
-                " No messages",
-                Style::default().fg(self.theme.dim),
-            ));
-            frame.render_widget(empty, layout[1]);
-        } else {
-            let paragraph = Paragraph::new(lines);
-            frame.render_widget(paragraph, layout[1]);
+        if let Some(content_area) = self.render_tabbed_panel(
+            frame,
+            area,
+            Panel::Console,
+            "Console",
+            &["Debugger", "Tracing"],
+            active_tab,
+            focused,
+        ) {
+            let visible_height = content_area.height as usize;
+            let lines = match self.ui.console.tab {
+                ConsoleTab::Debugger => self.format_console_logs(
+                    &self.console_log,
+                    visible_height,
+                    content_area.width as usize,
+                ),
+                ConsoleTab::Tracing => {
+                    if let Ok(logs) = self.tracing_log.lock() {
+                        self.format_console_logs(&logs, visible_height, content_area.width as usize)
+                    } else {
+                        Vec::new()
+                    }
+                }
+            };
+
+            if lines.is_empty() {
+                let empty = Paragraph::new(Span::styled(
+                    " No messages",
+                    Style::default().fg(self.theme.dim),
+                ));
+                frame.render_widget(empty, content_area);
+            } else {
+                let paragraph = Paragraph::new(lines);
+                frame.render_widget(paragraph, content_area);
+            }
         }
     }
 
