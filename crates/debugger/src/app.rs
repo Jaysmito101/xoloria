@@ -483,6 +483,35 @@ impl Debugger {
         self.ui.set_input_mode(InputMode::Normal);
     }
 
+    fn handle_tick_result(&mut self, hart_idx: usize, result: TickResult) -> bool {
+        match result {
+            TickResult::Ok => false,
+            TickResult::Breakpoint(pc) => {
+                self.hart_modes[hart_idx] = HartMode::Debug;
+                self.ui.selected_hart = hart_idx;
+                self.ui.disasm.cursor = 0;
+                self.tick_count += 1;
+                self.set_info(format!("Breakpoint at {:#x}", pc));
+                self.disasm_cache = None;
+                true
+            }
+            TickResult::Watchpoint(pc, name) => {
+                self.hart_modes[hart_idx] = HartMode::Debug;
+                self.ui.selected_hart = hart_idx;
+                self.ui.disasm.cursor = 0;
+                self.tick_count += 1;
+                self.set_info(format!("Watchpoint '{}' triggered at {:#x}", name, pc));
+                self.disasm_cache = None;
+                true
+            }
+            TickResult::Error(msg) => {
+                self.hart_modes[hart_idx] = HartMode::Stalled;
+                self.set_error(msg);
+                false
+            }
+        }
+    }
+
     fn tick_hart(&mut self, hart_idx: usize) -> TickResult {
         let Some(machine) = self.machine.as_mut() else {
             return TickResult::Error("No machine".into());
@@ -521,29 +550,23 @@ impl Debugger {
 
     pub fn step_hart(&mut self, n: usize) {
         for _ in 0..n {
-            let old_pc = self.machine.as_ref().unwrap().harts()[self.ui.selected_hart]
+            let hart_idx = self.ui.selected_hart;
+            let old_pc = self.machine.as_ref().unwrap().harts()[hart_idx]
                 .registers()
                 .pc();
-            match self.tick_hart(self.ui.selected_hart) {
+            
+            let result = self.tick_hart(hart_idx);
+            match result {
                 TickResult::Ok => {
                     self.tick_count += 1;
                     self.last_message = None;
                 }
-                TickResult::Breakpoint(pc) => {
-                    self.tick_count += 1;
-                    self.set_info(format!("Breakpoint at {:#x}", pc));
-                    break;
-                }
-                TickResult::Watchpoint(pc, name) => {
-                    self.tick_count += 1;
-                    self.set_info(format!("Watchpoint '{}' triggered at {:#x}", name, pc));
-                    break;
-                }
-                TickResult::Error(msg) => {
-                    self.set_error(msg);
+                other => {
+                    self.handle_tick_result(hart_idx, other);
                     break;
                 }
             }
+            
             if self.ui.trace.stack.last() != Some(&old_pc) {
                 self.ui.trace.stack.push(old_pc);
                 self.ui.trace.forward_stack.clear();
@@ -574,9 +597,7 @@ impl Debugger {
                 .collect();
 
             let harts = self.machine.as_mut().unwrap().harts_mut();
-            let mut stalls: Vec<(usize, String)> = Vec::new();
-            let mut bp_hits: Vec<(usize, u64)> = Vec::new();
-            let mut watch_hits: Vec<(usize, u64, String)> = Vec::new();
+            let mut tick_results: Vec<(usize, TickResult)> = Vec::new();
 
             for (i, hart) in harts.iter_mut().enumerate() {
                 if !running[i] {
@@ -596,40 +617,38 @@ impl Debugger {
                 }
 
                 if let Some(name) = snapshot.check(&self.watches, &bus) {
-                    watch_hits.push((i, pc, name));
+                    tick_results.push((i, TickResult::Watchpoint(pc, name)));
+                    continue;
                 }
 
                 match result {
                     Ok(()) => {
                         let pc = hart.registers().pc();
                         if self.breakpoints.contains(&pc) {
-                            bp_hits.push((i, pc));
+                            tick_results.push((i, TickResult::Breakpoint(pc)));
                         }
                     }
-                    Err(e) => stalls.push((i, format!("Hart {}: {}", i, e))),
+                    Err(e) => tick_results.push((i, TickResult::Error(format!("Hart {}: {}", i, e)))),
                 }
             }
 
-            for (i, msg) in stalls {
-                self.hart_modes[i] = HartMode::Stalled;
-                self.set_error(msg);
+            let mut should_return = false;
+            for (i, res) in tick_results {
+                match res {
+                    TickResult::Error(_) => {
+                        self.handle_tick_result(i, res);
+                    }
+                    _ => {
+                        if !should_return {
+                            if self.handle_tick_result(i, res) {
+                                should_return = true;
+                            }
+                        }
+                    }
+                }
             }
-            if let Some((i, _pc, name)) = watch_hits.into_iter().next() {
-                self.hart_modes[i] = HartMode::Debug;
-                self.ui.selected_hart = i;
-                self.ui.disasm.cursor = 0;
-                self.tick_count += 1;
-                self.set_info(format!("Watchpoint '{}' triggered", name));
-                self.disasm_cache = None;
-                return;
-            }
-            if let Some((i, pc)) = bp_hits.into_iter().next() {
-                self.hart_modes[i] = HartMode::Debug;
-                self.ui.selected_hart = i;
-                self.ui.disasm.cursor = 0;
-                self.tick_count += 1;
-                self.set_info(format!("Breakpoint at {:#x}", pc));
-                self.disasm_cache = None;
+
+            if should_return {
                 return;
             }
             self.tick_count += 1;
