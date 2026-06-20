@@ -34,13 +34,11 @@ impl StackAnalyzer {
                 if *rd == GeneralRegisterName::Sp && *rs1 == GeneralRegisterName::Sp =>
             {
                 if *imm < 0 {
-                    // Start new allocation
                     self.current_frame = Some(StackFrame {
                         size: -imm,
                         pushes: Vec::new(),
                     });
                 } else if *imm > 0 {
-                    // Deallocate or shrink
                     if let Some(frame) = &mut self.current_frame {
                         frame.size -= *imm;
                         if frame.size <= 0 {
