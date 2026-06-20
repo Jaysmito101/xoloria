@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::*;
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct DisasmState {
     pub cursor: i32,
     pub tab: DisasmTab,
@@ -16,7 +16,7 @@ pub struct DisasmState {
     pub last_target_addr: Option<u64>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct ConsoleState {
     pub scroll: usize,
     pub tab: ConsoleTab,
@@ -24,23 +24,24 @@ pub struct ConsoleState {
     pub history_index: Option<usize>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct SearchState {
     pub query: String,
     pub history: Vec<String>,
     pub history_index: Option<usize>,
+    #[serde(skip)]
     pub compiled_regex: Option<regex::Regex>,
     pub is_regex_error: bool,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct SymbolsState {
     pub scroll: usize,
     pub cursor: usize,
     pub tab: SymbolsTab,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct TraceState {
     pub stack: Vec<u64>,
     pub forward_stack: Vec<u64>,
@@ -49,12 +50,13 @@ pub struct TraceState {
     pub hide_non_symbols: bool,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HelpState {
     pub show: bool,
     pub scroll: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UiState {
     pub input_mode: InputMode,
     input_buffer: String,
@@ -78,6 +80,7 @@ pub struct UiState {
     pub memory_tab: MemoryTab,
     pub stack_scroll: usize,
     pub selected_hart: usize,
+    #[serde(skip)]
     pub panel_rects: HashMap<Panel, Rect>,
     pub panel_focused: bool,
 }

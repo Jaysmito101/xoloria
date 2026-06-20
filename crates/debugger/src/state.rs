@@ -114,7 +114,7 @@ pub enum Screen {
     Debug,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputMode {
     Normal,
     GotoMemory,
@@ -312,15 +312,5 @@ pub struct Workspace {
     pub breakpoints: Vec<u64>,
     pub watches: Vec<WatchItem>,
     #[serde(default)]
-    pub panel: Option<Panel>,
-    #[serde(default)]
-    pub disasm_tab: Option<crate::ui_state::DisasmTab>,
-    #[serde(default)]
-    pub registers_tab: Option<crate::ui_state::RegistersTab>,
-    #[serde(default)]
-    pub memory_tab: Option<crate::ui_state::MemoryTab>,
-    #[serde(default)]
-    pub symbols_tab: Option<crate::ui_state::SymbolsTab>,
-    #[serde(default)]
-    pub console_tab: Option<ConsoleTab>,
+    pub ui: Option<crate::ui_state::UiState>,
 }
