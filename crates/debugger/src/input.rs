@@ -414,13 +414,16 @@ impl Debugger {
                                 .as_ref()
                                 .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
                                 .unwrap_or(0);
-                            if let Some(entry) = target_entry.as_ref() {
-                                self.ui.disasm.view_history.push(entry.addr);
+                            if self.ui.disasm.view_center_addr == Some(t_addr) {
+                                self.ui.panel = Panel::Disassembly;
+                            } else {
+                                if let Some(entry) = target_entry.as_ref() {
+                                    self.ui.disasm.view_history.push(entry.addr);
+                                }
+                                self.ui.disasm.view_center_addr = Some(t_addr);
+                                self.ui.disasm.cursor = 0;
+                                self.disasm_cache = None;
                             }
-                            self.ui.disasm.view_center_addr = Some(t_addr);
-                            self.ui.disasm.cursor = 0;
-                            self.disasm_cache = None;
-                            self.ui.panel = Panel::Disassembly;
                         }
                     }
                 }

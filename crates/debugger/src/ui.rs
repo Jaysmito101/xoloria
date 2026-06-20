@@ -1541,11 +1541,13 @@ impl Debugger {
                     spans.push(Span::raw("   "));
                 }
 
-                let depth = unique_sps
-                    .binary_search_by(|x| x.cmp(&entry.sp).reverse())
-                    .unwrap_or(0);
-                let padding = " ".repeat(depth.min(40));
-                spans.push(Span::raw(padding));
+                if self.ui.trace.hide_non_symbols {
+                    let depth = unique_sps
+                        .binary_search_by(|x| x.cmp(&entry.sp).reverse())
+                        .unwrap_or(0);
+                    let padding = " ".repeat(depth.min(40));
+                    spans.push(Span::raw(padding));
+                }
 
                 let sym_name = self
                     .sorted_symbols
