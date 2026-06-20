@@ -784,14 +784,12 @@ impl Debugger {
                     }
                     None => {}
                 }
-            } else if focused {
-                if let Some(JumpTarget::Known(addr)) = &e.jump_target {
-                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
-                        if abs_cursor == dst_idx {
-                            active_jump = Some((i, dst_idx));
-                        }
-                    }
-                }
+            } else if focused
+                && let Some(JumpTarget::Known(addr)) = &e.jump_target
+                && let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr)
+                && abs_cursor == dst_idx
+            {
+                active_jump = Some((i, dst_idx));
             }
         }
 
@@ -1003,7 +1001,7 @@ impl Debugger {
         let focused = self.ui.panel == Panel::Memory;
 
         let title = "Memory (x: toggle tab)";
-        let block = self.panel_block(&title, focused);
+        let block = self.panel_block(title, focused);
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
@@ -1178,7 +1176,7 @@ impl Debugger {
                 let val_bytes = self.read_memory_block(addr, push.data_type.size_bytes() as usize);
                 let val = match push.data_type {
                     crate::state::DataType::U8 | crate::state::DataType::I8 => {
-                        if val_bytes.len() >= 1 {
+                        if !val_bytes.is_empty() {
                             format!("{:#04x}", val_bytes[0])
                         } else {
                             "?".into()
@@ -1259,7 +1257,7 @@ impl Debugger {
         let focused = self.ui.panel == Panel::Symbols;
 
         let title = "Symbols / Trace (s: toggle tab)";
-        let block = self.panel_block(&title, focused);
+        let block = self.panel_block(title, focused);
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
@@ -1903,11 +1901,12 @@ fn parse_registers(asm: &str, x_regs: &[u64; 32]) -> Vec<(String, u64)> {
     let mut seen = Vec::new();
 
     for t in asm.split([' ', ',', '(', ')']).map(str::trim) {
-        if let Some(idx) = parse_register_name(t) {
-            if idx != 0 && !seen.contains(&idx) {
-                seen.push(idx);
-                regs.push((t.to_string(), x_regs[idx]));
-            }
+        if let Some(idx) = parse_register_name(t)
+            && idx != 0
+            && !seen.contains(&idx)
+        {
+            seen.push(idx);
+            regs.push((t.to_string(), x_regs[idx]));
         }
     }
     regs
