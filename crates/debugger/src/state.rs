@@ -38,7 +38,7 @@ impl HartMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Panel {
     Registers,
     Disassembly,
@@ -48,7 +48,7 @@ pub enum Panel {
     Console,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ConsoleTab {
     #[default]
     Debugger,
@@ -301,4 +301,16 @@ pub struct WatchItem {
 pub struct Workspace {
     pub breakpoints: Vec<u64>,
     pub watches: Vec<WatchItem>,
+    #[serde(default)]
+    pub panel: Option<Panel>,
+    #[serde(default)]
+    pub disasm_tab: Option<crate::ui_state::DisasmTab>,
+    #[serde(default)]
+    pub registers_tab: Option<crate::ui_state::RegistersTab>,
+    #[serde(default)]
+    pub memory_tab: Option<crate::ui_state::MemoryTab>,
+    #[serde(default)]
+    pub symbols_tab: Option<crate::ui_state::SymbolsTab>,
+    #[serde(default)]
+    pub console_tab: Option<ConsoleTab>,
 }

@@ -1,5 +1,6 @@
 use ratatui::layout::Rect;
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::state::*;
 
@@ -80,28 +81,28 @@ pub struct UiState {
     pub panel_focused: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum DisasmTab {
     #[default]
     Assembly,
     Source,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum SymbolsTab {
     #[default]
     Trace,
     Symbols,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum MemoryTab {
     #[default]
     Hex,
     Stack,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RegistersTab {
     #[default]
     Csr,

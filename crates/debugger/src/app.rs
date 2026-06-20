@@ -725,6 +725,12 @@ impl Debugger {
             let ws = crate::state::Workspace {
                 breakpoints: bps,
                 watches: self.watches.clone(),
+                panel: Some(self.ui.panel),
+                disasm_tab: Some(self.ui.disasm.tab),
+                registers_tab: Some(self.ui.registers_tab),
+                memory_tab: Some(self.ui.memory_tab),
+                symbols_tab: Some(self.ui.symbols.tab),
+                console_tab: Some(self.ui.console.tab),
             };
             match std::fs::write(
                 &file_path,
@@ -759,6 +765,12 @@ impl Debugger {
                                 self.breakpoints.insert(addr);
                             }
                             self.watches = ws.watches;
+                            if let Some(panel) = ws.panel { self.ui.panel = panel; }
+                            if let Some(tab) = ws.disasm_tab { self.ui.disasm.tab = tab; }
+                            if let Some(tab) = ws.registers_tab { self.ui.registers_tab = tab; }
+                            if let Some(tab) = ws.memory_tab { self.ui.memory_tab = tab; }
+                            if let Some(tab) = ws.symbols_tab { self.ui.symbols.tab = tab; }
+                            if let Some(tab) = ws.console_tab { self.ui.console.tab = tab; }
                             self.disasm_cache = None;
                             self.set_info(format!(
                                 "Loaded workspace ({} bps, {} watches)",
