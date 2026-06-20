@@ -607,7 +607,6 @@ impl Debugger {
 
             let mut val_bytes = vec![0u8; watch.data_type.size_bytes() as usize];
             if let Some(machine) = self.machine.as_ref() {
-                use emulator::BusIO;
                 let bus = machine.bus();
                 val_bytes = watch.read_value(bus.as_ref());
             }
