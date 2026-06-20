@@ -391,7 +391,8 @@ impl Hart {
             },
             Err(err) => match err {
                 VmError::BusError(bus_err) => {
-                    panic!("Bus error at address {:?}", bus_err);
+                    tracing::error!("Bus error at address {:?}", bus_err);
+                    return crate::err!(bus_err);
                 }
             },
         }
