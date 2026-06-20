@@ -70,6 +70,8 @@ pub struct UiState {
     pub reg_scroll: usize,
     pub csr_scroll: usize,
     pub memory_addr: u64,
+    pub memory_tab: MemoryTab,
+    pub stack_scroll: usize,
     pub selected_hart: usize,
     pub panel_rects: HashMap<Panel, Rect>,
     pub panel_focused: bool,
@@ -87,6 +89,13 @@ pub enum SymbolsTab {
     #[default]
     Trace,
     Symbols,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum MemoryTab {
+    #[default]
+    Hex,
+    Stack,
 }
 
 impl UiState {
@@ -108,6 +117,8 @@ impl UiState {
             reg_scroll: 0,
             csr_scroll: 0,
             memory_addr: 0x8000_0000,
+            memory_tab: MemoryTab::default(),
+            stack_scroll: 0,
             selected_hart: 0,
             panel_rects: HashMap::new(),
             panel_focused: true,

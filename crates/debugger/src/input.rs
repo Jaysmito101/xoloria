@@ -217,7 +217,12 @@ impl Debugger {
 
             KeyCode::Char('c') => self.hart_modes[self.ui.selected_hart] = HartMode::Running,
             KeyCode::Char('p') => self.hart_modes[self.ui.selected_hart] = HartMode::Debug,
-            KeyCode::Char('x') => self.hart_modes[self.ui.selected_hart] = HartMode::Stalled,
+            KeyCode::Char('x') => {
+                self.ui.memory_tab = match self.ui.memory_tab {
+                    crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
+                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                };
+            }
 
             KeyCode::Tab => self.select_hart_relative(1),
             KeyCode::BackTab => self.select_hart_relative(-1),
@@ -543,8 +548,12 @@ impl Debugger {
                 }
             }
             Panel::Memory => {
-                let byte_delta = delta as i64 * 16;
-                self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
+                if self.ui.memory_tab == crate::ui_state::MemoryTab::Stack {
+                    self.ui.stack_scroll = (self.ui.stack_scroll as i32 + delta).max(0) as usize;
+                } else {
+                    let byte_delta = delta as i64 * 16;
+                    self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
+                }
             }
             Panel::Registers => {
                 self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;

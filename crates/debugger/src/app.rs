@@ -42,6 +42,8 @@ pub struct Debugger {
 
     pub(crate) syntax_set: syntect::parsing::SyntaxSet,
     pub(crate) theme_set: syntect::highlighting::ThemeSet,
+
+    pub(crate) stack_analyzers: Vec<crate::stack::StackAnalyzer>,
 }
 
 fn syntect_style_to_ratatui(style: syntect::highlighting::Style) -> ratatui::style::Style {
@@ -107,6 +109,7 @@ impl Debugger {
             },
             syntax_set: syntect::parsing::SyntaxSet::load_defaults_newlines(),
             theme_set: syntect::highlighting::ThemeSet::load_defaults(),
+            stack_analyzers: vec![crate::stack::StackAnalyzer::new(); 1],
         })
     }
 
@@ -346,6 +349,7 @@ impl Debugger {
             Ok(m) => {
                 self.machine = Some(m);
                 self.hart_modes.resize(config.harts, HartMode::Debug);
+                self.stack_analyzers.resize(config.harts, crate::stack::StackAnalyzer::new());
                 self.last_message = None;
                 self.disasm_cache = None;
             }
@@ -362,6 +366,7 @@ impl Debugger {
         if new != self.config_harts {
             self.config_harts = new;
             self.hart_modes.resize(new, HartMode::Debug);
+            self.stack_analyzers.resize(new, crate::stack::StackAnalyzer::new());
             let max = self.total_setup_fields().saturating_sub(1);
             self.ui.setup_cursor = self.ui.setup_cursor.min(max);
         }
@@ -405,8 +410,16 @@ impl Debugger {
         };
         let bus = machine.bus().clone();
         let hart = &mut machine.harts_mut()[hart_idx];
+        let pc = hart.registers().pc();
+        let inst_val = bus.read::<u32>(pc).unwrap_or(0);
+        let inst = Instruction::try_from(inst_val).ok();
         
         let result = hart.tick(&bus);
+        if result.is_ok() {
+            if let Some(i) = inst {
+                self.stack_analyzers[hart_idx].on_instruction_executed(&i);
+            }
+        }
         match result {
             Ok(()) => {
                 let pc = hart.registers().pc();
@@ -475,7 +488,16 @@ impl Debugger {
                 if !running[i] {
                     continue;
                 }
+                let pc = hart.registers().pc();
+                let inst_val = bus.read::<u32>(pc).unwrap_or(0);
+                let inst = Instruction::try_from(inst_val).ok();
+                
                 let result = hart.tick(&bus);
+                if result.is_ok() {
+                    if let Some(inst) = inst {
+                        self.stack_analyzers[i].on_instruction_executed(&inst);
+                    }
+                }
                 match result {
                     Ok(()) => {
                         let pc = hart.registers().pc();

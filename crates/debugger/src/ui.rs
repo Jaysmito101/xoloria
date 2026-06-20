@@ -539,11 +539,11 @@ impl Debugger {
             )
         };
 
-        if self.ui.disasm.tab == DisasmTab::Source {
-            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&all_entries)) {
-                let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
-                title = format!("{} [{}]", title, short_path);
-            }
+        if self.ui.disasm.tab == DisasmTab::Source
+            && let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&all_entries))
+        {
+            let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
+            title = format!("{} [{}]", title, short_path);
         }
 
         let block = self.panel_block(&title, focused);
@@ -625,7 +625,7 @@ impl Debugger {
                 let highlight_color = self.theme.highlight;
                 let query = self.ui.search.query.clone();
                 let compiled_regex = self.ui.search.compiled_regex.clone();
-                
+
                 let lines = self.get_source_file(&path).unwrap();
 
                 for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
@@ -712,7 +712,10 @@ impl Debugger {
                             let overlap_end = m_end.min(token_end) - token_start;
 
                             if overlap_start > last {
-                                spans.push(Span::styled(text[last..overlap_start].to_string(), style));
+                                spans.push(Span::styled(
+                                    text[last..overlap_start].to_string(),
+                                    style,
+                                ));
                             }
                             spans.push(Span::styled(
                                 text[overlap_start..overlap_end].to_string(),
@@ -999,19 +1002,76 @@ impl Debugger {
         self.ui.panel_rects.insert(Panel::Memory, area);
         let focused = self.ui.panel == Panel::Memory;
 
+        let title = "Memory (x: toggle tab)";
+        let block = self.panel_block(&title, focused);
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner_area.height == 0 {
+            return;
+        }
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(inner_area);
+
+        let titles = vec![
+            Line::from(Span::styled(
+                " Hex ",
+                if self.ui.memory_tab == crate::ui_state::MemoryTab::Hex {
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(self.theme.dim)
+                },
+            )),
+            Line::from(Span::styled(
+                " Stack ",
+                if self.ui.memory_tab == crate::ui_state::MemoryTab::Stack {
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(self.theme.dim)
+                },
+            )),
+        ];
+
+        let tabs = Tabs::new(titles)
+            .divider(Span::styled("|", Style::default().fg(self.theme.dim)))
+            .select(match self.ui.memory_tab {
+                crate::ui_state::MemoryTab::Hex => 0,
+                crate::ui_state::MemoryTab::Stack => 1,
+            });
+        frame.render_widget(tabs, layout[0]);
+
+        match self.ui.memory_tab {
+            crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, layout[1]),
+            crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, layout[1]),
+        }
+    }
+
+    fn render_memory_hex(&mut self, frame: &mut Frame, area: Rect) {
         let (inner, _) = if self.ui.input_mode == InputMode::GotoMemory {
             let splits = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Length(1)])
                 .split(area);
 
-            let mut spans = vec![
-                Span::styled(" Goto: 0x", Style::default().fg(self.theme.accent)),
-            ];
-            spans.extend(self.render_input_spans(
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                self.theme.accent,
-            ));
+            let mut spans = vec![Span::styled(
+                " Goto: 0x",
+                Style::default().fg(self.theme.accent),
+            )];
+            spans.extend(
+                self.render_input_spans(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                    self.theme.accent,
+                ),
+            );
             spans.push(Span::styled(
                 " (Enter=go, Esc=cancel)",
                 Style::default().fg(self.theme.dim),
@@ -1069,8 +1129,129 @@ impl Debugger {
             })
             .collect();
 
-        let paragraph = Paragraph::new(lines).block(self.panel_block("Memory", focused));
+        let paragraph = Paragraph::new(lines);
         frame.render_widget(paragraph, inner);
+    }
+
+    fn render_memory_stack(&mut self, frame: &mut Frame, area: Rect) {
+        let hart_idx = self.ui.selected_hart;
+        if hart_idx >= self.stack_analyzers.len() {
+            return;
+        }
+
+        let analyzer = &self.stack_analyzers[hart_idx];
+        let mut lines = Vec::new();
+
+        if let Some(frame_info) = &analyzer.current_frame {
+            lines.push(Line::from(vec![
+                Span::styled("Stack Allocation: ", Style::default().fg(self.theme.dim)),
+                Span::styled(
+                    format!("{} bytes", frame_info.size),
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            let sp = self
+                .machine
+                .as_ref()
+                .map(|m| {
+                    m.harts()[hart_idx].registers().x()
+                        [emulator::registers::GeneralRegisterName::Sp as usize]
+                })
+                .unwrap_or(0);
+
+            for push in &frame_info.pushes {
+                let is_ra = push.reg == emulator::registers::GeneralRegisterName::Ra;
+                let color = if is_ra {
+                    Color::LightRed
+                } else {
+                    self.theme.accent
+                };
+                let reg_name = if is_ra {
+                    "ra (ret)".to_string()
+                } else {
+                    format!("{:?}", push.reg).to_lowercase()
+                };
+
+                let addr = sp.wrapping_add(push.offset as u64);
+                let val_bytes = self.read_memory_block(addr, push.data_type.size_bytes() as usize);
+                let val = match push.data_type {
+                    crate::state::DataType::U8 | crate::state::DataType::I8 => {
+                        if val_bytes.len() >= 1 {
+                            format!("{:#04x}", val_bytes[0])
+                        } else {
+                            "?".into()
+                        }
+                    }
+                    crate::state::DataType::U16 | crate::state::DataType::I16 => {
+                        if val_bytes.len() >= 2 {
+                            format!("{:#06x}", u16::from_le_bytes([val_bytes[0], val_bytes[1]]))
+                        } else {
+                            "?".into()
+                        }
+                    }
+                    crate::state::DataType::U32 | crate::state::DataType::I32 => {
+                        if val_bytes.len() >= 4 {
+                            format!(
+                                "{:#010x}",
+                                u32::from_le_bytes([
+                                    val_bytes[0],
+                                    val_bytes[1],
+                                    val_bytes[2],
+                                    val_bytes[3]
+                                ])
+                            )
+                        } else {
+                            "?".into()
+                        }
+                    }
+                    crate::state::DataType::U64 | crate::state::DataType::I64 => {
+                        if val_bytes.len() >= 8 {
+                            format!(
+                                "{:#018x}",
+                                u64::from_le_bytes([
+                                    val_bytes[0],
+                                    val_bytes[1],
+                                    val_bytes[2],
+                                    val_bytes[3],
+                                    val_bytes[4],
+                                    val_bytes[5],
+                                    val_bytes[6],
+                                    val_bytes[7]
+                                ])
+                            )
+                        } else {
+                            "?".into()
+                        }
+                    }
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("[sp + {:>3}] ", push.offset),
+                        Style::default().fg(self.theme.dim),
+                    ),
+                    Span::styled(
+                        format!("{:>4} ", push.data_type),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                    Span::styled(
+                        format!("{:<10} ", reg_name),
+                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(format!("= {}", val), Style::default().fg(Color::White)),
+                ]));
+            }
+        } else {
+            lines.push(Line::from(Span::styled(
+                "No stack frame detected.",
+                Style::default().fg(self.theme.dim),
+            )));
+        }
+
+        let paragraph = Paragraph::new(lines).scroll((self.ui.stack_scroll as u16, 0));
+        frame.render_widget(paragraph, area);
     }
 
     fn render_symbols(&mut self, frame: &mut Frame, area: Rect) {
@@ -1221,7 +1402,9 @@ impl Debugger {
 
         let query = &self.ui.search.query;
         let is_match = |text: &str| -> bool {
-            if query.is_empty() { return true; }
+            if query.is_empty() {
+                return true;
+            }
             if let Some(re) = &self.ui.search.compiled_regex {
                 re.is_match(text)
             } else {
@@ -1284,16 +1467,31 @@ impl Debugger {
                     let base_fg = if selected { Color::White } else { Color::Cyan };
                     if let Some(re) = &self.ui.search.compiled_regex {
                         if let Some(mat) = re.find(name) {
-                            spans.push(Span::styled(&name[..mat.start()], Style::default().fg(base_fg)));
-                            spans.push(Span::styled(&name[mat.start()..mat.end()], Style::default().fg(Color::Black).bg(self.theme.highlight)));
-                            spans.push(Span::styled(&name[mat.end()..], Style::default().fg(base_fg)));
+                            spans.push(Span::styled(
+                                &name[..mat.start()],
+                                Style::default().fg(base_fg),
+                            ));
+                            spans.push(Span::styled(
+                                &name[mat.start()..mat.end()],
+                                Style::default().fg(Color::Black).bg(self.theme.highlight),
+                            ));
+                            spans.push(Span::styled(
+                                &name[mat.end()..],
+                                Style::default().fg(base_fg),
+                            ));
                         } else {
                             spans.push(Span::styled(name.clone(), Style::default().fg(base_fg)));
                         }
                     } else if let Some(idx) = name.to_lowercase().find(&query.to_lowercase()) {
                         spans.push(Span::styled(&name[..idx], Style::default().fg(base_fg)));
-                        spans.push(Span::styled(&name[idx..idx+query.len()], Style::default().fg(Color::Black).bg(self.theme.highlight)));
-                        spans.push(Span::styled(&name[idx+query.len()..], Style::default().fg(base_fg)));
+                        spans.push(Span::styled(
+                            &name[idx..idx + query.len()],
+                            Style::default().fg(Color::Black).bg(self.theme.highlight),
+                        ));
+                        spans.push(Span::styled(
+                            &name[idx + query.len()..],
+                            Style::default().fg(base_fg),
+                        ));
                     } else {
                         spans.push(Span::styled(name.clone(), Style::default().fg(base_fg)));
                     }
@@ -1536,10 +1734,14 @@ impl Debugger {
                     .fg(self.theme.accent)
                     .add_modifier(Modifier::BOLD),
             )];
-            spans.extend(self.render_input_spans(
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                self.theme.accent,
-            ));
+            spans.extend(
+                self.render_input_spans(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                    self.theme.accent,
+                ),
+            );
             let line = Line::from(spans);
             let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
             frame.render_widget(bar, area);
@@ -1556,10 +1758,14 @@ impl Debugger {
 
             let mut spans = vec![Span::styled(prefix, style.add_modifier(Modifier::BOLD))];
             let cursor_color = style.fg.unwrap_or(self.theme.accent);
-            spans.extend(self.render_input_spans(
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                cursor_color,
-            ));
+            spans.extend(
+                self.render_input_spans(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                    cursor_color,
+                ),
+            );
             let line = Line::from(spans);
             let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
             frame.render_widget(bar, area);
