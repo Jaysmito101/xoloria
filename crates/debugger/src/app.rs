@@ -6,8 +6,6 @@ use emulator::{BusIO, Machine, MachineBuilder};
 use crate::state::*;
 use crate::ui_state::UiState;
 
-const TICKS_PER_FRAME: usize = 10000;
-
 pub enum TickResult {
     Ok,
     Error(String),
@@ -37,7 +35,8 @@ pub struct Debugger {
 
     pub(crate) source_lines: HashMap<u64, String>,
     pub(crate) source_locations: HashMap<u64, (String, u32)>,
-    pub(crate) source_files_cache: HashMap<String, Option<Vec<Vec<(String, ratatui::style::Style)>>>>,
+    pub(crate) source_files_cache:
+        HashMap<String, Option<Vec<Vec<(String, ratatui::style::Style)>>>>,
     pub(crate) symbols: HashMap<u64, String>,
     pub(crate) sorted_symbols: Vec<(u64, String)>,
 
@@ -145,13 +144,13 @@ impl Debugger {
         use object::{Object, ObjectSection, ObjectSymbol};
 
         for sym in obj.symbols() {
-            if sym.is_definition() {
-                if let Ok(name) = sym.name() {
-                    if !name.is_empty() && !name.starts_with(".L") {
-                        let demangled = rustc_demangle::demangle(name).to_string();
-                        symbol_map.insert(sym.address(), demangled);
-                    }
-                }
+            if sym.is_definition()
+                && let Ok(name) = sym.name()
+                && !name.is_empty()
+                && !name.starts_with(".L")
+            {
+                let demangled = rustc_demangle::demangle(name).to_string();
+                symbol_map.insert(sym.address(), demangled);
             }
         }
         let endian = if obj.is_little_endian() {
@@ -214,22 +213,34 @@ impl Debugger {
         (source_map, source_locs, symbol_map)
     }
 
-    pub(crate) fn get_source_file(&mut self, path: &str) -> Option<&Vec<Vec<(String, ratatui::style::Style)>>> {
+    pub(crate) fn get_source_file(
+        &mut self,
+        path: &str,
+    ) -> Option<&Vec<Vec<(String, ratatui::style::Style)>>> {
         if !self.source_files_cache.contains_key(path) {
             let content = std::fs::read_to_string(path).ok();
             let parsed = content.map(|s| {
-                let syntax = self.syntax_set.find_syntax_for_file(path).unwrap_or(None)
+                let syntax = self
+                    .syntax_set
+                    .find_syntax_for_file(path)
+                    .unwrap_or(None)
                     .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
-                
+
                 let theme = &self.theme_set.themes["base16-ocean.dark"];
                 let mut h = syntect::easy::HighlightLines::new(syntax, theme);
-                
-                s.lines().map(|line| {
-                    let ranges: Vec<(syntect::highlighting::Style, &str)> = h.highlight_line(line, &self.syntax_set).unwrap_or_default();
-                    ranges.into_iter().map(|(style, text)| {
-                        (text.to_string(), syntect_style_to_ratatui(style))
-                    }).collect()
-                }).collect()
+
+                s.lines()
+                    .map(|line| {
+                        let ranges: Vec<(syntect::highlighting::Style, &str)> =
+                            h.highlight_line(line, &self.syntax_set).unwrap_or_default();
+                        ranges
+                            .into_iter()
+                            .map(|(style, text)| {
+                                (text.to_string(), syntect_style_to_ratatui(style))
+                            })
+                            .collect()
+                    })
+                    .collect()
             });
             self.source_files_cache.insert(path.to_string(), parsed);
         }
@@ -241,31 +252,29 @@ impl Debugger {
         target_addr: u64,
         local_entries: Option<&[DisasmEntry]>,
     ) -> Option<(String, u32)> {
-        if let Some(entries) = local_entries {
-            if let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr) {
-                for i in (0..=abs_cursor).rev() {
-                    if let Some(entry) = entries.get(i) {
-                        if let Some(loc) = self.source_locations.get(&entry.addr) {
-                            return Some(loc.clone());
-                        }
-                    }
+        if let Some(entries) = local_entries
+            && let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr)
+        {
+            for i in (0..=abs_cursor).rev() {
+                if let Some(entry) = entries.get(i)
+                    && let Some(loc) = self.source_locations.get(&entry.addr)
+                {
+                    return Some(loc.clone());
                 }
-                for i in (abs_cursor + 1)..entries.len() {
-                    if let Some(entry) = entries.get(i) {
-                        if let Some(loc) = self.source_locations.get(&entry.addr) {
-                            return Some(loc.clone());
-                        }
-                    }
+            }
+            for i in (abs_cursor + 1)..entries.len() {
+                if let Some(entry) = entries.get(i)
+                    && let Some(loc) = self.source_locations.get(&entry.addr)
+                {
+                    return Some(loc.clone());
                 }
             }
         }
 
         let mut best_addr = None;
         for &addr in self.source_locations.keys() {
-            if addr <= target_addr {
-                if best_addr.is_none() || addr > best_addr.unwrap() {
-                    best_addr = Some(addr);
-                }
+            if addr <= target_addr && (best_addr.is_none() || addr > best_addr.unwrap()) {
+                best_addr = Some(addr);
             }
         }
         best_addr.and_then(|addr| self.source_locations.get(&addr).cloned())
@@ -289,20 +298,18 @@ impl Debugger {
     pub(crate) fn get_hw_pc_line(&self, path: &str, hw_pc: u64) -> Option<u32> {
         let mut best_addr = None;
         for &addr in self.source_locations.keys() {
-            if addr <= hw_pc {
-                if best_addr.is_none() || addr > best_addr.unwrap() {
-                    best_addr = Some(addr);
-                }
+            if addr <= hw_pc && (best_addr.is_none() || addr > best_addr.unwrap()) {
+                best_addr = Some(addr);
             }
         }
-        if let Some(addr) = best_addr {
-            if let Some((p, l)) = self.source_locations.get(&addr) {
-                if *p == path {
-                    return Some(*l);
-                }
-            }
+        if let Some(addr) = best_addr
+            && let Some((p, l)) = self.source_locations.get(&addr)
+            && *p == path
+        {
+            Some(*l)
+        } else {
+            None
         }
-        None
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {
@@ -324,7 +331,6 @@ impl Debugger {
         });
         self.last_message = Some((message, false));
     }
-    
 
     pub(crate) fn memory_size(&self) -> usize {
         1 << (self.config_memory_exp + 10)
@@ -352,7 +358,8 @@ impl Debugger {
             Ok(m) => {
                 self.machine = Some(m);
                 self.hart_modes.resize(config.harts, HartMode::Debug);
-                self.stack_analyzers.resize(config.harts, crate::stack::StackAnalyzer::new());
+                self.stack_analyzers
+                    .resize(config.harts, crate::stack::StackAnalyzer::new());
                 self.last_message = None;
                 self.disasm_cache = None;
             }
@@ -369,7 +376,8 @@ impl Debugger {
         if new != self.config_harts {
             self.config_harts = new;
             self.hart_modes.resize(new, HartMode::Debug);
-            self.stack_analyzers.resize(new, crate::stack::StackAnalyzer::new());
+            self.stack_analyzers
+                .resize(new, crate::stack::StackAnalyzer::new());
             let max = self.total_setup_fields().saturating_sub(1);
             self.ui.setup_cursor = self.ui.setup_cursor.min(max);
         }
@@ -393,7 +401,10 @@ impl Debugger {
     }
 
     pub(crate) fn submit_goto_memory(&mut self, input: &str) {
-        let input = input.trim().trim_start_matches("0x").trim_start_matches("0X");
+        let input = input
+            .trim()
+            .trim_start_matches("0x")
+            .trim_start_matches("0X");
         match u64::from_str_radix(input, 16) {
             Ok(mut addr) => {
                 if addr < 0x80000000 {
@@ -416,7 +427,7 @@ impl Debugger {
         let pc = hart.registers().pc();
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
-        
+
         let mut has_watch = false;
         let mut pre_watch_values = Vec::new();
         for watch in &self.watches {
@@ -433,12 +444,12 @@ impl Debugger {
         }
 
         let result = hart.tick(&bus);
-        if result.is_ok() {
-            if let Some(i) = inst {
-                self.stack_analyzers[hart_idx].on_instruction_executed(&i);
-            }
+        if result.is_ok()
+            && let Some(i) = inst
+        {
+            self.stack_analyzers[hart_idx].on_instruction_executed(&i);
         }
-        
+
         if has_watch {
             for (i, watch) in self.watches.iter().enumerate() {
                 if let Some(old_val) = &pre_watch_values[i] {
@@ -468,7 +479,9 @@ impl Debugger {
 
     pub fn step_hart(&mut self, n: usize) {
         for _ in 0..n {
-            let old_pc = self.machine.as_ref().unwrap().harts()[self.ui.selected_hart].registers().pc();
+            let old_pc = self.machine.as_ref().unwrap().harts()[self.ui.selected_hart]
+                .registers()
+                .pc();
             match self.tick_hart(self.ui.selected_hart) {
                 TickResult::Ok => {
                     self.tick_count += 1;
@@ -506,7 +519,7 @@ impl Debugger {
             return;
         }
 
-        for _ in 0..TICKS_PER_FRAME {
+        for _ in 0..10000 {
             let Some(machine) = self.machine.as_ref() else {
                 return;
             };
@@ -530,7 +543,7 @@ impl Debugger {
                 let pc = hart.registers().pc();
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
-                
+
                 let mut has_watch = false;
                 let mut pre_watch_values = Vec::new();
                 for watch in &self.watches {
@@ -547,10 +560,10 @@ impl Debugger {
                 }
 
                 let result = hart.tick(&bus);
-                if result.is_ok() {
-                    if let Some(inst) = inst {
-                        self.stack_analyzers[i].on_instruction_executed(&inst);
-                    }
+                if result.is_ok()
+                    && let Some(inst) = inst
+                {
+                    self.stack_analyzers[i].on_instruction_executed(&inst);
                 }
 
                 if has_watch {
@@ -638,7 +651,12 @@ impl Debugger {
     }
 
     #[inline(always)]
-    pub(crate) fn do_write_memory(&mut self, data_type: crate::state::DataType, addr: u64, val: u64) {
+    pub(crate) fn do_write_memory(
+        &mut self,
+        data_type: crate::state::DataType,
+        addr: u64,
+        val: u64,
+    ) {
         use emulator::BusIO;
         let bus = match self.machine.as_ref() {
             Some(m) => m.bus(),
@@ -807,23 +825,38 @@ impl Debugger {
                         "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | save | load | help"
                     );
                 }
-                DebugCommand::ReadMemory { data_type, addr_expr } => {
-                    match crate::state::parse_addr(&addr_expr) {
-                        Ok(addr) => self.do_read_memory(data_type, addr),
-                        Err(e) => self.set_error(e),
-                    }
-                }
-                DebugCommand::WriteMemory { data_type, addr_expr, value_expr } => {
-                    match (crate::state::parse_addr(&addr_expr), crate::state::parse_expr(&value_expr)) {
+                DebugCommand::ReadMemory {
+                    data_type,
+                    addr_expr,
+                } => match crate::state::parse_addr(&addr_expr) {
+                    Ok(addr) => self.do_read_memory(data_type, addr),
+                    Err(e) => self.set_error(e),
+                },
+                DebugCommand::WriteMemory {
+                    data_type,
+                    addr_expr,
+                    value_expr,
+                } => {
+                    match (
+                        crate::state::parse_addr(&addr_expr),
+                        crate::state::parse_expr(&value_expr),
+                    ) {
                         (Ok(addr), Ok(val)) => self.do_write_memory(data_type, addr, val),
                         (Err(e), _) => self.set_error(e),
                         (_, Err(e)) => self.set_error(e),
                     }
                 }
                 DebugCommand::Watch(cmd) => match cmd {
-                    crate::state::WatchCommand::Add { name, address, data_type } => {
+                    crate::state::WatchCommand::Add {
+                        name,
+                        address,
+                        data_type,
+                    } => {
                         if self.watches.iter().any(|w| w.name == name) {
-                            self.set_error(format!("Watchpoint with name '{}' already exists", name));
+                            self.set_error(format!(
+                                "Watchpoint with name '{}' already exists",
+                                name
+                            ));
                         } else {
                             self.watches.push(crate::state::WatchItem {
                                 name: name.clone(),
@@ -831,7 +864,10 @@ impl Debugger {
                                 data_type,
                                 break_on_change: false,
                             });
-                            self.set_info(format!("Added watchpoint '{}' for address {:#x}", name, address));
+                            self.set_info(format!(
+                                "Added watchpoint '{}' for address {:#x}",
+                                name, address
+                            ));
                         }
                     }
                     crate::state::WatchCommand::Del { name } => {
@@ -862,9 +898,19 @@ impl Debugger {
             }
             let file_path = config_dir.join(format!("workspace_{:016x}.json", hash));
             let bps: Vec<u64> = self.breakpoints.iter().copied().collect();
-            let ws = crate::state::Workspace { breakpoints: bps, watches: self.watches.clone() };
-            match std::fs::write(&file_path, serde_json::to_string_pretty(&ws).unwrap_or_default()) {
-                Ok(_) => self.set_info(format!("Saved workspace ({} bps, {} watches)", self.breakpoints.len(), self.watches.len())),
+            let ws = crate::state::Workspace {
+                breakpoints: bps,
+                watches: self.watches.clone(),
+            };
+            match std::fs::write(
+                &file_path,
+                serde_json::to_string_pretty(&ws).unwrap_or_default(),
+            ) {
+                Ok(_) => self.set_info(format!(
+                    "Saved workspace ({} bps, {} watches)",
+                    self.breakpoints.len(),
+                    self.watches.len()
+                )),
                 Err(e) => self.set_error(format!("Failed to save workspace: {}", e)),
             }
         } else {
@@ -890,7 +936,11 @@ impl Debugger {
                             }
                             self.watches = ws.watches;
                             self.disasm_cache = None;
-                            self.set_info(format!("Loaded workspace ({} bps, {} watches)", self.breakpoints.len(), self.watches.len()));
+                            self.set_info(format!(
+                                "Loaded workspace ({} bps, {} watches)",
+                                self.breakpoints.len(),
+                                self.watches.len()
+                            ));
                         } else {
                             self.set_error("Failed to parse workspace JSON");
                         }
@@ -904,8 +954,6 @@ impl Debugger {
             self.set_error("Could not find configuration directory");
         }
     }
-
-
 
     pub(crate) fn read_memory_block(&self, addr: u64, len: usize) -> Vec<u8> {
         let Some(machine) = self.machine.as_ref() else {
@@ -931,7 +979,7 @@ impl Debugger {
             .unwrap_or(0) as i32;
         let abs = (center_idx + self.ui.disasm.cursor).max(0) as usize;
         let abs = abs.min(entries.len().saturating_sub(1));
-        
+
         let target_entry = entries.get(abs).cloned();
         let target_addr = target_entry.as_ref().map(|e| e.addr).unwrap_or(center_addr);
         (target_addr, target_entry, entries)
@@ -1065,9 +1113,9 @@ impl Debugger {
         let bus = machine.bus();
         let raw: u32 = bus.read(addr).ok()?;
         let is_compressed = raw & 0b11 != 0b11;
-        
+
         let decode_result = Instruction::try_from(raw);
-        
+
         match decode_result {
             Ok(instr) => Some(format!("{}", instr)),
             Err(_) if is_compressed => Some(format!(".half {:#06x}", raw & 0xFFFF)),
