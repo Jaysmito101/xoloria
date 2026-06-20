@@ -1,5 +1,5 @@
 use crate::app::Debugger;
-use crate::state::{parse_addr, parse_expr, DataType, HartMode, InputMode, Panel};
+use crate::state::{DataType, HartMode, InputMode, Panel, parse_addr, parse_expr};
 
 #[derive(Debug)]
 pub enum BreakpointTarget {
@@ -311,6 +311,10 @@ impl Debugger {
                     self.rebuild_machine(config);
                     self.tick_count = 0;
                     self.ui.disasm.cursor = 0;
+                    self.tracing_log.lock().unwrap().clear();
+                    self.console_log.clear();
+                    self.ui.trace.stack.clear();
+                    self.ui.trace.forward_stack.clear();
                     self.set_info("Machine reset");
                 }
                 DebugCommand::Targets => {
@@ -337,16 +341,11 @@ impl Debugger {
                     data_type,
                     addr_expr,
                     value_expr,
-                } => {
-                    match (
-                        parse_addr(&addr_expr),
-                        parse_expr(&value_expr),
-                    ) {
-                        (Ok(addr), Ok(val)) => self.do_write_memory(data_type, addr, val),
-                        (Err(e), _) => self.set_error(e),
-                        (_, Err(e)) => self.set_error(e),
-                    }
-                }
+                } => match (parse_addr(&addr_expr), parse_expr(&value_expr)) {
+                    (Ok(addr), Ok(val)) => self.do_write_memory(data_type, addr, val),
+                    (Err(e), _) => self.set_error(e),
+                    (_, Err(e)) => self.set_error(e),
+                },
                 DebugCommand::Watch(cmd) => match cmd {
                     WatchCommand::Add {
                         name,

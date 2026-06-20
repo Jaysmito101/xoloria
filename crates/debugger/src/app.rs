@@ -86,7 +86,11 @@ impl WatchPointSnapshot {
         }
     }
 
-    pub(crate) fn check(self, watches: &[crate::state::WatchItem], bus: &impl BusIO) -> Option<String> {
+    pub(crate) fn check(
+        self,
+        watches: &[crate::state::WatchItem],
+        bus: &impl BusIO,
+    ) -> Option<String> {
         if self.has_watch {
             for (i, watch) in watches.iter().enumerate() {
                 if let Some(old_val) = &self.pre_watch_values[i] {
@@ -554,7 +558,7 @@ impl Debugger {
             let old_pc = self.machine.as_ref().unwrap().harts()[hart_idx]
                 .registers()
                 .pc();
-            
+
             let result = self.tick_hart(hart_idx);
 
             if self.ui.trace.stack.last() != Some(&old_pc) {
@@ -633,7 +637,9 @@ impl Debugger {
                             tick_results.push((i, TickResult::Breakpoint(pc)));
                         }
                     }
-                    Err(e) => tick_results.push((i, TickResult::Error(format!("Hart {}: {}", i, e)))),
+                    Err(e) => {
+                        tick_results.push((i, TickResult::Error(format!("Hart {}: {}", i, e))))
+                    }
                 }
             }
 
@@ -644,20 +650,18 @@ impl Debugger {
                         self.handle_tick_result(i, res);
                     }
                     _ => {
-                        if !should_return {
-                            if self.handle_tick_result(i, res) {
-                                should_return = true;
-                            }
+                        if !should_return && self.handle_tick_result(i, res) {
+                            should_return = true;
                         }
                     }
                 }
             }
 
-            if let Some(pc) = trace_pc {
-                if self.ui.trace.stack.last() != Some(&pc) {
-                    self.ui.trace.stack.push(pc);
-                    self.ui.trace.forward_stack.clear();
-                }
+            if let Some(pc) = trace_pc
+                && self.ui.trace.stack.last() != Some(&pc)
+            {
+                self.ui.trace.stack.push(pc);
+                self.ui.trace.forward_stack.clear();
             }
 
             if should_return {
@@ -729,8 +733,6 @@ impl Debugger {
             crate::state::DataType::U64 | crate::state::DataType::I64 => write_mem!(u64),
         }
     }
-
-
 
     pub(crate) fn save_workspace(&mut self) {
         use std::hash::{DefaultHasher, Hasher};
