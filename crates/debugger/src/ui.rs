@@ -1177,48 +1177,45 @@ impl Debugger {
                 let val = match push.data_type {
                     crate::state::DataType::U8 | crate::state::DataType::I8 => {
                         if !val_bytes.is_empty() {
-                            format!("{:#04x}", val_bytes[0])
+                            format!("{:#04x} ({})", val_bytes[0], val_bytes[0] as i8)
                         } else {
                             "?".into()
                         }
                     }
                     crate::state::DataType::U16 | crate::state::DataType::I16 => {
                         if val_bytes.len() >= 2 {
-                            format!("{:#06x}", u16::from_le_bytes([val_bytes[0], val_bytes[1]]))
+                            let num = u16::from_le_bytes([val_bytes[0], val_bytes[1]]);
+                            format!("{:#06x} ({})", num, num as i16)
                         } else {
                             "?".into()
                         }
                     }
                     crate::state::DataType::U32 | crate::state::DataType::I32 => {
                         if val_bytes.len() >= 4 {
-                            format!(
-                                "{:#010x}",
-                                u32::from_le_bytes([
-                                    val_bytes[0],
-                                    val_bytes[1],
-                                    val_bytes[2],
-                                    val_bytes[3]
-                                ])
-                            )
+                            let num = u32::from_le_bytes([
+                                val_bytes[0],
+                                val_bytes[1],
+                                val_bytes[2],
+                                val_bytes[3],
+                            ]);
+                            format!("{:#010x} ({})", num, num as i32)
                         } else {
                             "?".into()
                         }
                     }
                     crate::state::DataType::U64 | crate::state::DataType::I64 => {
                         if val_bytes.len() >= 8 {
-                            format!(
-                                "{:#018x}",
-                                u64::from_le_bytes([
-                                    val_bytes[0],
-                                    val_bytes[1],
-                                    val_bytes[2],
-                                    val_bytes[3],
-                                    val_bytes[4],
-                                    val_bytes[5],
-                                    val_bytes[6],
-                                    val_bytes[7]
-                                ])
-                            )
+                            let num = u64::from_le_bytes([
+                                val_bytes[0],
+                                val_bytes[1],
+                                val_bytes[2],
+                                val_bytes[3],
+                                val_bytes[4],
+                                val_bytes[5],
+                                val_bytes[6],
+                                val_bytes[7],
+                            ]);
+                            format!("{:#018x} ({})", num, num as i64)
                         } else {
                             "?".into()
                         }
