@@ -400,10 +400,22 @@ impl Debugger {
                                 .collect();
                             filtered.get(self.ui.symbols.cursor).map(|t| t.0)
                         } else {
-                            let trace_len = self.ui.trace.stack.len();
-                            let cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
-                            let idx = trace_len.saturating_sub(1).saturating_sub(cursor);
-                            self.ui.trace.stack.get(idx).map(|e| e.pc)
+                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                                self.ui
+                                    .trace
+                                    .stack
+                                    .iter()
+                                    .rev()
+                                    .filter(|e| {
+                                        self.sorted_symbols
+                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                            .is_ok()
+                                    })
+                                    .collect()
+                            } else {
+                                self.ui.trace.stack.iter().rev().collect()
+                            };
+                            filtered_trace.get(self.ui.trace.cursor).map(|e| e.pc)
                         };
 
                         if let Some(t_addr) = target_addr {
@@ -689,20 +701,49 @@ impl Debugger {
                 } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
                     if *panel == Panel::Symbols && mouse.row > rect.y {
                         let row_idx = (mouse.row - rect.y - 1) as usize;
-                        let search = self.ui.search.query.to_lowercase();
-                        let filtered: Vec<_> = self
-                            .sorted_symbols
-                            .iter()
-                            .filter(|(_, name)| {
-                                search.is_empty() || name.to_lowercase().contains(&search)
-                            })
-                            .collect();
+                        let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
+                            let search = self.ui.search.query.to_lowercase();
+                            let filtered: Vec<_> = self
+                                .sorted_symbols
+                                .iter()
+                                .filter(|(_, name)| {
+                                    search.is_empty() || name.to_lowercase().contains(&search)
+                                })
+                                .collect();
 
-                        let symbol_idx = self.ui.symbols.scroll + row_idx;
-                        let target_addr = filtered.get(symbol_idx).map(|t| t.0);
+                            let symbol_idx = self.ui.symbols.scroll + row_idx;
+                            if symbol_idx < filtered.len() {
+                                self.ui.symbols.cursor = symbol_idx;
+                                filtered.get(symbol_idx).map(|t| t.0)
+                            } else {
+                                None
+                            }
+                        } else {
+                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                                self.ui
+                                    .trace
+                                    .stack
+                                    .iter()
+                                    .rev()
+                                    .filter(|e| {
+                                        self.sorted_symbols
+                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                            .is_ok()
+                                    })
+                                    .collect()
+                            } else {
+                                self.ui.trace.stack.iter().rev().collect()
+                            };
+                            let trace_idx = self.ui.trace.scroll + row_idx;
+                            if trace_idx < filtered_trace.len() {
+                                self.ui.trace.cursor = trace_idx;
+                                filtered_trace.get(trace_idx).map(|e| e.pc)
+                            } else {
+                                None
+                            }
+                        };
 
                         if let Some(t_addr) = target_addr {
-                            self.ui.symbols.cursor = symbol_idx;
                             let (_target_addr, target_entry, _entries) =
                                 self.resolve_cursor_target();
                             let _hw_pc = self
