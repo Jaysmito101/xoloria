@@ -276,141 +276,14 @@ impl Debugger {
 
             KeyCode::Tab => {
                 if self.ui.panel_focused {
-                    match self.ui.panel {
-                        Panel::Disassembly => {
-                            self.ui.disasm.tab = match self.ui.disasm.tab {
-                                DisasmTab::Assembly => {
-                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
-                                    if let Some((_, target_line)) = self.map_addr_to_source(target_addr, Some(&entries)) {
-                                        self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                                        DisasmTab::Source
-                                    } else {
-                                        if let Some((_, target_line)) = self.map_addr_to_source(hw_pc, Some(&entries)) {
-                                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                                            self.set_info("Selected instruction has no source, jumped to PC instead.");
-                                            DisasmTab::Source
-                                        } else {
-                                            self.set_info("No source mapped to this instruction or the PC.");
-                                            DisasmTab::Assembly
-                                        }
-                                    }
-                                }
-                                DisasmTab::Source => {
-                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
-                                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
-                                        let target_line = (self.ui.disasm.source_cursor + 1) as u32;
-                                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
-                                            self.ui.disasm.view_center_addr = Some(addr);
-                                        } else {
-                                            self.ui.disasm.view_center_addr = Some(hw_pc);
-                                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                                        }
-                                    } else {
-                                        self.ui.disasm.view_center_addr = Some(hw_pc);
-                                        self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                                    }
-                                    self.ui.disasm.cursor = 0;
-                                    self.disasm_cache = None;
-                                    DisasmTab::Assembly
-                                }
-                            };
-                        }
-                        Panel::Csr => {
-                            self.ui.registers_tab = match self.ui.registers_tab {
-                                crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
-                                crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
-                            };
-                        }
-                        Panel::Memory => {
-                            self.ui.memory_tab = match self.ui.memory_tab {
-                                crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
-                                crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
-                            };
-                        }
-                        Panel::Symbols => {
-                            self.ui.symbols.tab = match self.ui.symbols.tab {
-                                SymbolsTab::Symbols => SymbolsTab::Trace,
-                                SymbolsTab::Trace => SymbolsTab::Symbols,
-                            };
-                        }
-                        Panel::Console => {
-                            self.ui.console.tab = self.ui.console.tab.next();
-                        }
-                        Panel::Registers => {}
-                    }
+                    self.toggle_active_panel_tab();
                 } else {
                     self.select_hart_relative(1);
                 }
             }
             KeyCode::BackTab => {
                 if self.ui.panel_focused {
-                    // BackTab does the same as Tab since there are only 2 tabs everywhere
-                    match self.ui.panel {
-                        Panel::Disassembly => {
-                            self.ui.disasm.tab = match self.ui.disasm.tab {
-                                DisasmTab::Assembly => {
-                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
-                                    if let Some((_, target_line)) = self.map_addr_to_source(target_addr, Some(&entries)) {
-                                        self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                                        DisasmTab::Source
-                                    } else {
-                                        if let Some((_, target_line)) = self.map_addr_to_source(hw_pc, Some(&entries)) {
-                                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
-                                            self.set_info("Selected instruction has no source, jumped to PC instead.");
-                                            DisasmTab::Source
-                                        } else {
-                                            self.set_info("No source mapped to this instruction or the PC.");
-                                            DisasmTab::Assembly
-                                        }
-                                    }
-                                }
-                                DisasmTab::Source => {
-                                    let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-                                    let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
-                                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
-                                        let target_line = (self.ui.disasm.source_cursor + 1) as u32;
-                                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
-                                            self.ui.disasm.view_center_addr = Some(addr);
-                                        } else {
-                                            self.ui.disasm.view_center_addr = Some(hw_pc);
-                                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                                        }
-                                    } else {
-                                        self.ui.disasm.view_center_addr = Some(hw_pc);
-                                        self.set_info("Selected source line has no assembly, jumped to PC instead.");
-                                    }
-                                    self.ui.disasm.cursor = 0;
-                                    self.disasm_cache = None;
-                                    DisasmTab::Assembly
-                                }
-                            };
-                        }
-                        Panel::Csr => {
-                            self.ui.registers_tab = match self.ui.registers_tab {
-                                crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
-                                crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
-                            };
-                        }
-                        Panel::Memory => {
-                            self.ui.memory_tab = match self.ui.memory_tab {
-                                crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
-                                crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
-                            };
-                        }
-                        Panel::Symbols => {
-                            self.ui.symbols.tab = match self.ui.symbols.tab {
-                                SymbolsTab::Symbols => SymbolsTab::Trace,
-                                SymbolsTab::Trace => SymbolsTab::Symbols,
-                            };
-                        }
-                        Panel::Console => {
-                            self.ui.console.tab = self.ui.console.tab.next();
-                        }
-                        Panel::Registers => {}
-                    }
+                    self.toggle_active_panel_tab();
                 } else {
                     self.select_hart_relative(-1);
                 }
@@ -808,6 +681,73 @@ impl Debugger {
                     self.ui.disasm.source_cursor = c;
                 }
             }
+        }
+    }
+
+    fn toggle_active_panel_tab(&mut self) {
+        match self.ui.panel {
+            Panel::Disassembly => {
+                self.ui.disasm.tab = match self.ui.disasm.tab {
+                    DisasmTab::Assembly => {
+                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                        if let Some((_, target_line)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                            DisasmTab::Source
+                        } else {
+                            if let Some((_, target_line)) = self.map_addr_to_source(hw_pc, Some(&entries)) {
+                                self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                                self.set_info("Selected instruction has no source, jumped to PC instead.");
+                                DisasmTab::Source
+                            } else {
+                                self.set_info("No source mapped to this instruction or the PC.");
+                                DisasmTab::Assembly
+                            }
+                        }
+                    }
+                    DisasmTab::Source => {
+                        let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+                        let hw_pc = self.machine.as_ref().map(|m| m.harts()[self.ui.selected_hart].registers().pc()).unwrap_or(0);
+                        if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                            let target_line = (self.ui.disasm.source_cursor + 1) as u32;
+                            if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                                self.ui.disasm.view_center_addr = Some(addr);
+                            } else {
+                                self.ui.disasm.view_center_addr = Some(hw_pc);
+                                self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                            }
+                        } else {
+                            self.ui.disasm.view_center_addr = Some(hw_pc);
+                            self.set_info("Selected source line has no assembly, jumped to PC instead.");
+                        }
+                        self.ui.disasm.cursor = 0;
+                        self.disasm_cache = None;
+                        DisasmTab::Assembly
+                    }
+                };
+            }
+            Panel::Csr => {
+                self.ui.registers_tab = match self.ui.registers_tab {
+                    crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
+                    crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
+                };
+            }
+            Panel::Memory => {
+                self.ui.memory_tab = match self.ui.memory_tab {
+                    crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
+                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                };
+            }
+            Panel::Symbols => {
+                self.ui.symbols.tab = match self.ui.symbols.tab {
+                    SymbolsTab::Symbols => SymbolsTab::Trace,
+                    SymbolsTab::Trace => SymbolsTab::Symbols,
+                };
+            }
+            Panel::Console => {
+                self.ui.console.tab = self.ui.console.tab.next();
+            }
+            Panel::Registers => {}
         }
     }
 }
