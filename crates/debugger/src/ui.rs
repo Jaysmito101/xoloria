@@ -615,10 +615,10 @@ impl Debugger {
 
                 let mut bp_lines = std::collections::HashSet::new();
                 for &bp in &self.breakpoints {
-                    if let Some((p, l)) = self.source_locations.get(&bp) {
-                        if p == &path {
-                            bp_lines.insert(*l as usize);
-                        }
+                    if let Some((p, l)) = self.source_locations.get(&bp)
+                        && p == &path
+                    {
+                        bp_lines.insert(*l as usize);
                     }
                 }
 
