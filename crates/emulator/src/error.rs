@@ -77,10 +77,10 @@ impl std::fmt::Display for ErrorReport {
             match self.trace.status() {
                 std::backtrace::BacktraceStatus::Captured => format!("{}", self.trace),
                 std::backtrace::BacktraceStatus::Unsupported =>
-                "Backtrace unsupported on this platform".into(),
+                    "Backtrace unsupported on this platform".into(),
                 std::backtrace::BacktraceStatus::Disabled =>
-                "Backtrace capture is disabled, enable RUST_BACKTRACE=1 to capture backtraces"
-                .into(),
+                    "Backtrace capture is disabled, enable RUST_BACKTRACE=1 to capture backtraces"
+                        .into(),
                 _ => "Unknown backtrace status".into(),
             }
         )

@@ -23,12 +23,16 @@ pub struct StackAnalyzer {
 
 impl StackAnalyzer {
     pub fn new() -> Self {
-        Self { current_frame: None }
+        Self {
+            current_frame: None,
+        }
     }
 
     pub fn on_instruction_executed(&mut self, inst: &Instruction) {
         match inst {
-            Instruction::Addi { rd, rs1, imm } if *rd == GeneralRegisterName::Sp && *rs1 == GeneralRegisterName::Sp => {
+            Instruction::Addi { rd, rs1, imm }
+                if *rd == GeneralRegisterName::Sp && *rs1 == GeneralRegisterName::Sp =>
+            {
                 if *imm < 0 {
                     // Start new allocation
                     self.current_frame = Some(StackFrame {
@@ -67,7 +71,11 @@ impl StackAnalyzer {
                 existing.data_type = data_type;
                 existing.reg = reg;
             } else {
-                frame.pushes.push(StackPush { offset, data_type, reg });
+                frame.pushes.push(StackPush {
+                    offset,
+                    data_type,
+                    reg,
+                });
             }
         }
     }

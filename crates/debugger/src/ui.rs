@@ -388,7 +388,7 @@ impl Debugger {
         focused: bool,
     ) -> Option<Rect> {
         self.ui.panel_rects.insert(panel, area);
-        
+
         let block = self.panel_block(panel_title, focused);
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
@@ -455,7 +455,9 @@ impl Debugger {
         ) {
             match self.ui.registers_tab {
                 crate::ui_state::RegistersTab::Csr => self.render_csr(frame, content_area, focused),
-                crate::ui_state::RegistersTab::Watch => self.render_watch_list(frame, content_area, focused),
+                crate::ui_state::RegistersTab::Watch => {
+                    self.render_watch_list(frame, content_area, focused)
+                }
             }
         }
     }
@@ -537,9 +539,10 @@ impl Debugger {
 
     fn render_watch_list(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
         if self.watches.is_empty() {
-            let empty = Paragraph::new("No watchpoints set.\nUse `watch <name> <addr> <type>` to add one.")
-                .style(Style::default().fg(self.theme.dim))
-                .alignment(Alignment::Center);
+            let empty =
+                Paragraph::new("No watchpoints set.\nUse `watch <name> <addr> <type>` to add one.")
+                    .style(Style::default().fg(self.theme.dim))
+                    .alignment(Alignment::Center);
             frame.render_widget(empty, area);
             return;
         }
@@ -549,10 +552,21 @@ impl Debugger {
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Length(1)])
                 .split(area);
-            
-            let name = self.watches.get(idx).map(|w| w.name.as_str()).unwrap_or("?");
+
+            let name = self
+                .watches
+                .get(idx)
+                .map(|w| w.name.as_str())
+                .unwrap_or("?");
             let mut spans = vec![Span::styled(
-                format!(" Edit {} ({:?}): ", name, self.watches.get(idx).map(|w| &w.data_type).unwrap_or(&crate::state::DataType::U32)),
+                format!(
+                    " Edit {} ({:?}): ",
+                    name,
+                    self.watches
+                        .get(idx)
+                        .map(|w| &w.data_type)
+                        .unwrap_or(&crate::state::DataType::U32)
+                ),
                 Style::default().fg(self.theme.accent),
             )];
             spans.extend(
@@ -582,9 +596,15 @@ impl Debugger {
         let scroll = self.ui.watch_scroll.min(max_scroll);
 
         let mut rows = Vec::new();
-        for (i, watch) in self.watches.iter().enumerate().skip(scroll).take(visible_height) {
+        for (i, watch) in self
+            .watches
+            .iter()
+            .enumerate()
+            .skip(scroll)
+            .take(visible_height)
+        {
             let is_selected = _focused && i == self.ui.watch_cursor && !is_editing;
-            
+
             let mut val_bytes = vec![0u8; watch.data_type.size_bytes() as usize];
             if let Some(machine) = self.machine.as_ref() {
                 use emulator::BusIO;
@@ -596,13 +616,31 @@ impl Debugger {
 
             let val_str = match watch.data_type {
                 crate::state::DataType::U8 => format!("{:#04x}", val_bytes[0]),
-                crate::state::DataType::U16 => format!("{:#06x}", u16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))),
-                crate::state::DataType::U32 => format!("{:#010x}", u32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))),
-                crate::state::DataType::U64 => format!("{:#018x}", u64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))),
+                crate::state::DataType::U16 => format!(
+                    "{:#06x}",
+                    u16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))
+                ),
+                crate::state::DataType::U32 => format!(
+                    "{:#010x}",
+                    u32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))
+                ),
+                crate::state::DataType::U64 => format!(
+                    "{:#018x}",
+                    u64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))
+                ),
                 crate::state::DataType::I8 => format!("{}", val_bytes[0] as i8),
-                crate::state::DataType::I16 => format!("{}", i16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))),
-                crate::state::DataType::I32 => format!("{}", i32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))),
-                crate::state::DataType::I64 => format!("{}", i64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))),
+                crate::state::DataType::I16 => format!(
+                    "{}",
+                    i16::from_le_bytes(val_bytes.try_into().unwrap_or([0; 2]))
+                ),
+                crate::state::DataType::I32 => format!(
+                    "{}",
+                    i32::from_le_bytes(val_bytes.try_into().unwrap_or([0; 4]))
+                ),
+                crate::state::DataType::I64 => format!(
+                    "{}",
+                    i64::from_le_bytes(val_bytes.try_into().unwrap_or([0; 8]))
+                ),
             };
 
             let break_str = if watch.break_on_change { "[x]" } else { "[ ]" };
@@ -612,13 +650,32 @@ impl Debugger {
                 Style::default().fg(Color::White)
             };
 
-            rows.push(Row::new(vec![
-                Cell::from(Span::styled(format!("{:#010x}", watch.address), style.fg(self.theme.highlight))),
-                Cell::from(Span::styled(watch.name.clone(), style.fg(self.theme.accent))),
-                Cell::from(Span::styled(format!("{}", watch.data_type), style.fg(Color::Yellow))),
-                Cell::from(Span::styled(val_str, style)),
-                Cell::from(Span::styled(break_str, style.fg(if watch.break_on_change { Color::Red } else { self.theme.dim }))),
-            ]).style(style));
+            rows.push(
+                Row::new(vec![
+                    Cell::from(Span::styled(
+                        format!("{:#010x}", watch.address),
+                        style.fg(self.theme.highlight),
+                    )),
+                    Cell::from(Span::styled(
+                        watch.name.clone(),
+                        style.fg(self.theme.accent),
+                    )),
+                    Cell::from(Span::styled(
+                        format!("{}", watch.data_type),
+                        style.fg(Color::Yellow),
+                    )),
+                    Cell::from(Span::styled(val_str, style)),
+                    Cell::from(Span::styled(
+                        break_str,
+                        style.fg(if watch.break_on_change {
+                            Color::Red
+                        } else {
+                            self.theme.dim
+                        }),
+                    )),
+                ])
+                .style(style),
+            );
         }
 
         let table = Table::new(
@@ -682,10 +739,7 @@ impl Debugger {
         let mut title = if self.breakpoints.is_empty() {
             "Disassembly".to_string()
         } else {
-            format!(
-                "Disassembly ({} bp)",
-                self.breakpoints.len()
-            )
+            format!("Disassembly ({} bp)", self.breakpoints.len())
         };
 
         if self.ui.disasm.tab == DisasmTab::Source
@@ -1470,8 +1524,7 @@ impl Debugger {
 
         if lines.is_empty() {
             frame.render_widget(
-                Paragraph::new(" No trace available")
-                    .style(Style::default().fg(self.theme.dim)),
+                Paragraph::new(" No trace available").style(Style::default().fg(self.theme.dim)),
                 content_area,
             );
         } else {

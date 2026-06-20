@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use crate::state::*;
 
-
 #[derive(Default)]
 pub struct DisasmState {
     pub cursor: i32,
@@ -117,7 +116,7 @@ impl UiState {
             input_cursor: 0,
             setup_cursor: 0,
             panel: Panel::Disassembly,
-            
+
             disasm: DisasmState::default(),
             console: ConsoleState::default(),
             symbols: SymbolsState::default(),
@@ -147,7 +146,9 @@ impl UiState {
     }
 
     pub fn push_command_history(&mut self, cmd: String) {
-        if cmd.is_empty() { return; }
+        if cmd.is_empty() {
+            return;
+        }
         if self.console.command_history.last() != Some(&cmd) {
             self.console.command_history.push(cmd);
         }
@@ -155,7 +156,9 @@ impl UiState {
     }
 
     pub fn history_up(&mut self) {
-        if self.console.command_history.is_empty() { return; }
+        if self.console.command_history.is_empty() {
+            return;
+        }
         let new_idx = match self.console.history_index {
             None => self.console.command_history.len().saturating_sub(1),
             Some(idx) => idx.saturating_sub(1),
@@ -181,7 +184,9 @@ impl UiState {
     }
 
     pub fn search_history_up(&mut self) {
-        if self.search.history.is_empty() { return; }
+        if self.search.history.is_empty() {
+            return;
+        }
         let new_idx = match self.search.history_index {
             None => self.search.history.len().saturating_sub(1),
             Some(idx) => idx.saturating_sub(1),
@@ -223,7 +228,9 @@ impl UiState {
     }
 
     pub fn input_buffer_pop(&mut self) -> Option<char> {
-        if self.input_cursor == 0 { return None; }
+        if self.input_cursor == 0 {
+            return None;
+        }
         let mut chars: Vec<char> = self.input_buffer.chars().collect();
         let c = chars.remove(self.input_cursor - 1);
         self.input_buffer = chars.into_iter().collect();

@@ -11,8 +11,8 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
 mod input;
-mod state;
 mod stack;
+mod state;
 pub use stack::*;
 
 mod ui;

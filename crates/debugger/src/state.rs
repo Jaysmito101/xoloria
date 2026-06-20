@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
 use ratatui::style::Color;
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HartMode {
@@ -215,11 +214,16 @@ pub enum BreakpointTarget {
     Symbol(String),
 }
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
-    U8, U16, U32, U64,
-    I8, I16, I32, I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
 }
 
 impl DataType {
@@ -265,8 +269,14 @@ impl std::fmt::Display for DataType {
 
 #[derive(Debug)]
 pub enum WatchCommand {
-    Add { name: String, address: u64, data_type: DataType },
-    Del { name: String },
+    Add {
+        name: String,
+        address: u64,
+        data_type: DataType,
+    },
+    Del {
+        name: String,
+    },
 }
 
 #[derive(Debug)]
@@ -286,8 +296,15 @@ pub enum DebugCommand {
     Reset,
     Targets,
     Help,
-    ReadMemory { data_type: DataType, addr_expr: String },
-    WriteMemory { data_type: DataType, addr_expr: String, value_expr: String },
+    ReadMemory {
+        data_type: DataType,
+        addr_expr: String,
+    },
+    WriteMemory {
+        data_type: DataType,
+        addr_expr: String,
+        value_expr: String,
+    },
 }
 
 #[derive(Debug)]
@@ -327,9 +344,14 @@ impl DebugCommand {
                     let name = parts[1].to_string();
                     let dt_str = parts.last().unwrap();
                     if let Ok(dt) = DataType::parse(dt_str) {
-                        let addr_expr = parts[2..parts.len()-1].join(" ");
-                        let addr = parse_addr(&addr_expr).map_err(|_| "Invalid address".to_string())?;
-                        return Ok(Self::Watch(WatchCommand::Add { name, address: addr, data_type: dt }));
+                        let addr_expr = parts[2..parts.len() - 1].join(" ");
+                        let addr =
+                            parse_addr(&addr_expr).map_err(|_| "Invalid address".to_string())?;
+                        return Ok(Self::Watch(WatchCommand::Add {
+                            name,
+                            address: addr,
+                            data_type: dt,
+                        }));
                     } else {
                         return Err("Invalid data type".into());
                     }
@@ -337,19 +359,18 @@ impl DebugCommand {
                     return Err("Usage: watch <name> <addr_expr> <type> | watch del <name>".into());
                 }
             }
-            "save" => {
-                Ok(Self::SaveWorkspace)
-            }
-            "load" => {
-                Ok(Self::LoadWorkspace)
-            }
+            "save" => Ok(Self::SaveWorkspace),
+            "load" => Ok(Self::LoadWorkspace),
             "read" => {
                 if parts.len() < 3 {
                     return Err("Usage: read <type> <addr_expr>".into());
                 }
                 let data_type = DataType::parse(parts[1])?;
                 let addr_expr = parts[2..].join(" ");
-                Ok(Self::ReadMemory { data_type, addr_expr })
+                Ok(Self::ReadMemory {
+                    data_type,
+                    addr_expr,
+                })
             }
             "write" => {
                 if parts.len() < 4 {
@@ -362,7 +383,11 @@ impl DebugCommand {
                 } else {
                     return Err("Usage: write <type> <addr_expr> = <value_expr>\nExample: write u32 0x1000 = 0x50".into());
                 };
-                Ok(Self::WriteMemory { data_type, addr_expr, value_expr })
+                Ok(Self::WriteMemory {
+                    data_type,
+                    addr_expr,
+                    value_expr,
+                })
             }
             "del" | "delete" => {
                 if parts.get(1).copied() == Some("all") {
@@ -418,7 +443,8 @@ impl DebugCommand {
 pub(crate) fn parse_expr(s: &str) -> Result<u64, String> {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b").expect("Failed to create regex for parsing expr")
+        regex::Regex::new(r"(?i)\b(?:0x)?([0-9a-f]+)\b")
+            .expect("Failed to create regex for parsing expr")
     });
     let expr_str = re.replace_all(s, "0x$1");
 
@@ -437,7 +463,6 @@ pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
         addr
     })
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchItem {
