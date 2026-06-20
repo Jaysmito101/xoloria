@@ -63,6 +63,44 @@ pub(crate) struct DisasmCache {
     pub entries: Vec<DisasmEntry>,
 }
 
+pub(crate) struct WatchPointSnapshot {
+    has_watch: bool,
+    pre_watch_values: Vec<Option<Vec<u8>>>,
+}
+
+impl WatchPointSnapshot {
+    pub(crate) fn capture(watches: &[crate::state::WatchItem], bus: &impl BusIO) -> Self {
+        let mut has_watch = false;
+        let mut pre_watch_values = Vec::new();
+        for watch in watches {
+            if watch.break_on_change {
+                has_watch = true;
+                pre_watch_values.push(Some(watch.read_value(bus)));
+            } else {
+                pre_watch_values.push(None);
+            }
+        }
+        Self {
+            has_watch,
+            pre_watch_values,
+        }
+    }
+
+    pub(crate) fn check(self, watches: &[crate::state::WatchItem], bus: &impl BusIO) -> Option<String> {
+        if self.has_watch {
+            for (i, watch) in watches.iter().enumerate() {
+                if let Some(old_val) = &self.pre_watch_values[i] {
+                    let new_val = watch.read_value(bus);
+                    if old_val != &new_val {
+                        return Some(watch.name.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
 impl Debugger {
     pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
@@ -445,34 +483,6 @@ impl Debugger {
         self.ui.set_input_mode(InputMode::Normal);
     }
 
-    fn snapshot_watchpoints(&self, bus: &impl BusIO) -> (bool, Vec<Option<Vec<u8>>>) {
-        let mut has_watch = false;
-        let mut pre_watch_values = Vec::new();
-        for watch in &self.watches {
-            if watch.break_on_change {
-                has_watch = true;
-                pre_watch_values.push(Some(watch.read_value(bus)));
-            } else {
-                pre_watch_values.push(None);
-            }
-        }
-        (has_watch, pre_watch_values)
-    }
-
-    fn check_watchpoints(&self, bus: &impl BusIO, has_watch: bool, pre_watch_values: &[Option<Vec<u8>>]) -> Option<String> {
-        if has_watch {
-            for (i, watch) in self.watches.iter().enumerate() {
-                if let Some(old_val) = &pre_watch_values[i] {
-                    let new_val = watch.read_value(bus);
-                    if old_val != &new_val {
-                        return Some(watch.name.clone());
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn tick_hart(&mut self, hart_idx: usize) -> TickResult {
         let Some(machine) = self.machine.as_mut() else {
             return TickResult::Error("No machine".into());
@@ -483,7 +493,7 @@ impl Debugger {
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
 
-        let (has_watch, pre_watch_values) = self.snapshot_watchpoints(&bus);
+        let snapshot = WatchPointSnapshot::capture(&self.watches, &bus);
 
         let result = hart.tick(&bus);
         if result.is_ok()
@@ -492,7 +502,7 @@ impl Debugger {
             self.stack_analyzers[hart_idx].on_instruction_executed(&i);
         }
 
-        if let Some(name) = self.check_watchpoints(&bus, has_watch, &pre_watch_values) {
+        if let Some(name) = snapshot.check(&self.watches, &bus) {
             return TickResult::Watchpoint(pc, name);
         }
 
@@ -576,7 +586,7 @@ impl Debugger {
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
 
-                let (has_watch, pre_watch_values) = self.snapshot_watchpoints(&bus);
+                let snapshot = WatchPointSnapshot::capture(&self.watches, &bus);
 
                 let result = hart.tick(&bus);
                 if result.is_ok()
@@ -585,7 +595,7 @@ impl Debugger {
                     self.stack_analyzers[i].on_instruction_executed(&inst);
                 }
 
-                if let Some(name) = self.check_watchpoints(&bus, has_watch, &pre_watch_values) {
+                if let Some(name) = snapshot.check(&self.watches, &bus) {
                     watch_hits.push((i, pc, name));
                 }
 
