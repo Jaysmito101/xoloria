@@ -445,6 +445,34 @@ impl Debugger {
         self.ui.set_input_mode(InputMode::Normal);
     }
 
+    fn snapshot_watchpoints(&self, bus: &impl BusIO) -> (bool, Vec<Option<Vec<u8>>>) {
+        let mut has_watch = false;
+        let mut pre_watch_values = Vec::new();
+        for watch in &self.watches {
+            if watch.break_on_change {
+                has_watch = true;
+                pre_watch_values.push(Some(watch.read_value(bus)));
+            } else {
+                pre_watch_values.push(None);
+            }
+        }
+        (has_watch, pre_watch_values)
+    }
+
+    fn check_watchpoints(&self, bus: &impl BusIO, has_watch: bool, pre_watch_values: &[Option<Vec<u8>>]) -> Option<String> {
+        if has_watch {
+            for (i, watch) in self.watches.iter().enumerate() {
+                if let Some(old_val) = &pre_watch_values[i] {
+                    let new_val = watch.read_value(bus);
+                    if old_val != &new_val {
+                        return Some(watch.name.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
     fn tick_hart(&mut self, hart_idx: usize) -> TickResult {
         let Some(machine) = self.machine.as_mut() else {
             return TickResult::Error("No machine".into());
@@ -455,20 +483,7 @@ impl Debugger {
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
 
-        let mut has_watch = false;
-        let mut pre_watch_values = Vec::new();
-        for watch in &self.watches {
-            if watch.break_on_change {
-                has_watch = true;
-                let mut data = vec![0u8; watch.data_type.size_bytes() as usize];
-                for (i, b) in data.iter_mut().enumerate() {
-                    *b = bus.read::<u8>(watch.address + i as u64).unwrap_or(0);
-                }
-                pre_watch_values.push(Some(data));
-            } else {
-                pre_watch_values.push(None);
-            }
-        }
+        let (has_watch, pre_watch_values) = self.snapshot_watchpoints(&bus);
 
         let result = hart.tick(&bus);
         if result.is_ok()
@@ -477,18 +492,8 @@ impl Debugger {
             self.stack_analyzers[hart_idx].on_instruction_executed(&i);
         }
 
-        if has_watch {
-            for (i, watch) in self.watches.iter().enumerate() {
-                if let Some(old_val) = &pre_watch_values[i] {
-                    let mut new_val = vec![0u8; watch.data_type.size_bytes() as usize];
-                    for (j, b) in new_val.iter_mut().enumerate() {
-                        *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
-                    }
-                    if old_val != &new_val {
-                        return TickResult::Watchpoint(pc, watch.name.clone());
-                    }
-                }
-            }
+        if let Some(name) = self.check_watchpoints(&bus, has_watch, &pre_watch_values) {
+            return TickResult::Watchpoint(pc, name);
         }
 
         match result {
@@ -571,20 +576,7 @@ impl Debugger {
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
 
-                let mut has_watch = false;
-                let mut pre_watch_values = Vec::new();
-                for watch in &self.watches {
-                    if watch.break_on_change {
-                        has_watch = true;
-                        let mut data = vec![0u8; watch.data_type.size_bytes() as usize];
-                        for (j, b) in data.iter_mut().enumerate() {
-                            *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
-                        }
-                        pre_watch_values.push(Some(data));
-                    } else {
-                        pre_watch_values.push(None);
-                    }
-                }
+                let (has_watch, pre_watch_values) = self.snapshot_watchpoints(&bus);
 
                 let result = hart.tick(&bus);
                 if result.is_ok()
@@ -593,18 +585,8 @@ impl Debugger {
                     self.stack_analyzers[i].on_instruction_executed(&inst);
                 }
 
-                if has_watch {
-                    for (w_idx, watch) in self.watches.iter().enumerate() {
-                        if let Some(old_val) = &pre_watch_values[w_idx] {
-                            let mut new_val = vec![0u8; watch.data_type.size_bytes() as usize];
-                            for (j, b) in new_val.iter_mut().enumerate() {
-                                *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
-                            }
-                            if old_val != &new_val {
-                                watch_hits.push((i, pc, watch.name.clone()));
-                            }
-                        }
-                    }
+                if let Some(name) = self.check_watchpoints(&bus, has_watch, &pre_watch_values) {
+                    watch_hits.push((i, pc, name));
                 }
 
                 match result {

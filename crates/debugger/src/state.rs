@@ -297,6 +297,16 @@ pub struct WatchItem {
     pub break_on_change: bool,
 }
 
+impl WatchItem {
+    pub fn read_value(&self, bus: &impl emulator::BusIO) -> Vec<u8> {
+        let mut data = vec![0u8; self.data_type.size_bytes() as usize];
+        for (i, b) in data.iter_mut().enumerate() {
+            *b = bus.read::<u8>(self.address + i as u64).unwrap_or(0);
+        }
+        data
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Workspace {
     pub breakpoints: Vec<u64>,

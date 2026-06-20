@@ -609,9 +609,7 @@ impl Debugger {
             if let Some(machine) = self.machine.as_ref() {
                 use emulator::BusIO;
                 let bus = machine.bus();
-                for (j, b) in val_bytes.iter_mut().enumerate() {
-                    *b = bus.read::<u8>(watch.address + j as u64).unwrap_or(0);
-                }
+                val_bytes = watch.read_value(bus);
             }
 
             let val_str = match watch.data_type {
