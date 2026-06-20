@@ -105,7 +105,7 @@ impl Debugger {
                 } else if self.ui.panel == Panel::Disassembly
                     && self.ui.disasm.tab == DisasmTab::Source
                 {
-                    self.search_next(1, true);
+                    self.search_nearest();
                 }
             }
             KeyCode::Up => self.ui.search_history_up(),
@@ -699,6 +699,47 @@ impl Debugger {
                     }
                 }
                 break;
+            }
+        }
+    }
+
+    fn search_nearest(&mut self) {
+        let query = self.ui.search.query.clone();
+        if query.is_empty() {
+            return;
+        }
+        let compiled_regex = self.ui.search.compiled_regex.clone();
+
+        let is_match = |text: &str| -> bool {
+            if let Some(re) = &compiled_regex {
+                re.is_match(text)
+            } else {
+                text.to_lowercase().contains(&query.to_lowercase())
+            }
+        };
+
+        if self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source {
+            let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                let start_cursor = self.ui.disasm.source_cursor;
+                let mut nearest_cursor = None;
+                let mut min_distance = usize::MAX;
+
+                if let Some(lines) = self.get_source_file(&path) {
+                    for (idx, line) in lines.iter().enumerate() {
+                        let line_text: String = line.iter().map(|(t, _)| t.as_str()).collect();
+                        if is_match(&line_text) {
+                            let distance = (idx as isize - start_cursor as isize).abs() as usize;
+                            if distance < min_distance {
+                                min_distance = distance;
+                                nearest_cursor = Some(idx);
+                            }
+                        }
+                    }
+                }
+                if let Some(c) = nearest_cursor {
+                    self.ui.disasm.source_cursor = c;
+                }
             }
         }
     }
