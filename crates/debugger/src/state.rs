@@ -192,7 +192,6 @@ pub enum ConsoleLevel {
     Info,
     Error,
     Warn,
-    Panic,
 }
 
 #[derive(Debug, Clone)]

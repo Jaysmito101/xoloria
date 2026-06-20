@@ -1412,7 +1412,6 @@ impl Debugger {
             let (level_str, color) = match entry.level {
                 ConsoleLevel::Info => ("INFO", self.theme.info),
                 ConsoleLevel::Error => ("ERR ", self.theme.error),
-                ConsoleLevel::Panic => ("PANC", self.theme.error),
                 ConsoleLevel::Warn => ("WARN", self.theme.warn),
             };
 

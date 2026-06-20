@@ -11,7 +11,6 @@ const TICKS_PER_FRAME: usize = 10000;
 pub enum TickResult {
     Ok,
     Error(String),
-    Panic(String),
     Breakpoint(u64),
 }
 
@@ -319,16 +318,7 @@ impl Debugger {
         });
         self.last_message = Some((message, false));
     }
-
-    pub(crate) fn log_panic(&mut self, msg: impl Into<String>) {
-        let message = msg.into();
-        self.console_log.push(ConsoleEntry {
-            message: message.clone(),
-            level: ConsoleLevel::Panic,
-            tick: self.tick_count,
-        });
-        self.last_message = Some((message, true));
-    }
+    
 
     pub(crate) fn memory_size(&self) -> usize {
         1 << (self.config_memory_exp + 10)
@@ -445,10 +435,6 @@ impl Debugger {
                 }
                 TickResult::Error(msg) => {
                     self.set_error(msg);
-                    break;
-                }
-                TickResult::Panic(msg) => {
-                    self.log_panic(format!("PANIC: {}", msg));
                     break;
                 }
             }
