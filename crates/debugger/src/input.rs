@@ -9,7 +9,7 @@ impl Debugger {
         match self.ui.input_mode {
             InputMode::GotoMemory => self.handle_input_key(key),
             InputMode::Command => self.handle_command_key(key),
-            InputMode::SearchSymbols => self.handle_search_symbols_key(key),
+            InputMode::Search => self.handle_search_key(key),
             InputMode::Normal => match self.screen {
                 Screen::Setup => self.handle_setup_key(key),
                 Screen::Debug => self.handle_debug_key(key),
@@ -56,23 +56,51 @@ impl Debugger {
         }
     }
 
-    fn handle_search_symbols_key(&mut self, key: KeyEvent) {
+    fn handle_search_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc | KeyCode::Enter => {
+            KeyCode::Esc => {
                 self.ui.set_input_mode(InputMode::Normal);
             }
-            KeyCode::Backspace => {
-                if self.ui.input_buffer_is_empty() {
-                    self.ui.set_input_mode(InputMode::Normal);
+            KeyCode::Enter => {
+                let query = self.ui.input_buffer_take();
+                self.ui.set_input_mode(InputMode::Normal);
+                self.ui.search.query = query.clone();
+                if !query.is_empty() {
+                    if self.ui.search.history.last() != Some(&query) {
+                        self.ui.search.history.push(query.clone());
+                    }
+                    self.ui.search.history_index = None;
+                    
+                    match regex::RegexBuilder::new(&query).case_insensitive(true).build() {
+                        Ok(re) => {
+                            self.ui.search.compiled_regex = Some(re);
+                            self.ui.search.is_regex_error = false;
+                        }
+                        Err(_) => {
+                            self.ui.search.compiled_regex = None;
+                            self.ui.search.is_regex_error = true;
+                        }
+                    }
                 } else {
-                    self.ui.input_buffer_pop();
+                    self.ui.search.compiled_regex = None;
+                    self.ui.search.is_regex_error = false;
                 }
+                
+                if self.ui.panel == Panel::Symbols {
+                    self.ui.symbols.scroll = 0;
+                    self.ui.symbols.cursor = 0;
+                } else if self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source {
+                    self.search_next(1, true);
+                }
+            }
+            KeyCode::Up => self.ui.search_history_up(),
+            KeyCode::Down => self.ui.search_history_down(),
+            KeyCode::Backspace => {
+                self.ui.input_buffer_pop();
             }
             KeyCode::Char(c) => self.ui.input_buffer_push(c),
             _ => {}
         }
-        self.ui.symbols.search = self.ui.input_buffer().to_string();
-        self.ui.symbols.scroll = 0;
     }
 
     fn handle_setup_key(&mut self, key: KeyEvent) {
@@ -165,13 +193,20 @@ impl Debugger {
             }
             KeyCode::Char('q') => self.running = false,
 
-            KeyCode::Char('n') | KeyCode::Char(' ') => {
+            KeyCode::F(11) | KeyCode::Char(' ') => {
                 if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
                     self.step_hart(1);
                     self.ui.disasm.view_center_addr = None;
                     self.ui.disasm.cursor = 0;
                     self.disasm_cache = None;
                 }
+            }
+            
+            KeyCode::Char('n') => {
+                self.search_next(1, false);
+            }
+            KeyCode::Char('N') => {
+                self.search_next(-1, false);
             }
 
             KeyCode::Char('c') => self.hart_modes[self.ui.selected_hart] = HartMode::Running,
@@ -237,7 +272,7 @@ impl Debugger {
                         }
                     } else if self.ui.panel == Panel::Symbols {
                         let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
-                            let search = self.ui.symbols.search.to_lowercase();
+                            let search = self.ui.search.query.to_lowercase();
                             let filtered: Vec<_> = self
                                 .sorted_symbols
                                 .iter()
@@ -437,8 +472,8 @@ impl Debugger {
                 self.ui.set_input_mode(InputMode::GotoMemory);
             }
             KeyCode::Char('/') => {
-                if self.ui.panel == Panel::Symbols {
-                    self.ui.set_input_mode(InputMode::SearchSymbols);
+                if self.ui.panel == Panel::Symbols || (self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source) {
+                    self.ui.set_input_mode(InputMode::Search);
                 }
             }
 
@@ -550,7 +585,7 @@ impl Debugger {
                 } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
                     if *panel == Panel::Symbols && mouse.row > rect.y {
                         let row_idx = (mouse.row - rect.y - 1) as usize;
-                        let search = self.ui.symbols.search.to_lowercase();
+                        let search = self.ui.search.query.to_lowercase();
                         let filtered: Vec<_> = self
                             .sorted_symbols
                             .iter()
@@ -577,6 +612,65 @@ impl Debugger {
                     }
                 }
                 break;
+            }
+        }
+    }
+
+    fn search_next(&mut self, direction: i32, inclusive: bool) {
+        let query = self.ui.search.query.clone();
+        if query.is_empty() {
+            return;
+        }
+        let compiled_regex = self.ui.search.compiled_regex.clone();
+
+        let is_match = |text: &str| -> bool {
+            if let Some(re) = &compiled_regex {
+                re.is_match(text)
+            } else {
+                text.to_lowercase().contains(&query.to_lowercase())
+            }
+        };
+
+        if self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source {
+            let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
+            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                let start_cursor = self.ui.disasm.source_cursor;
+                let mut next_cursor = None;
+                if let Some(lines) = self.get_source_file(&path) {
+                    let mut curr = start_cursor;
+                    let mut found = false;
+                    
+                    if inclusive {
+                        if curr < lines.len() {
+                            let line_text: String = lines[curr].iter().map(|(t, _)| t.as_str()).collect();
+                            if is_match(&line_text) {
+                                found = true;
+                            }
+                        }
+                    }
+                    
+                    if !found {
+                        for _ in 0..lines.len() {
+                            curr = if direction > 0 {
+                                (curr + 1) % lines.len()
+                            } else {
+                                (curr + lines.len() - 1) % lines.len()
+                            };
+                            
+                            let line_text: String = lines[curr].iter().map(|(t, _)| t.as_str()).collect();
+                            if is_match(&line_text) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if found {
+                        next_cursor = Some(curr);
+                    }
+                }
+                if let Some(c) = next_cursor {
+                    self.ui.disasm.source_cursor = c;
+                }
             }
         }
     }

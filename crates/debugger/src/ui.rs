@@ -211,7 +211,7 @@ impl Debugger {
             "=== Execution ===",
             " c : Continue (Running mode)",
             " p : Pause (Debug mode)",
-            " n / Space : Step Instruction",
+            " F11 / Space : Step Instruction",
             " x : Stalled mode",
             "",
             "=== Disassembly ===",
@@ -232,7 +232,8 @@ impl Debugger {
             " j / k : Scroll memory by 16 bytes",
             "",
             "=== Symbols ===",
-            " / : Search symbols",
+            " / : Search source/symbols",
+            " n / N : Search next / previous match",
             " j / k : Navigate symbol list",
             " Enter / Click : Jump to symbol in disassembly",
             "",
@@ -621,6 +622,10 @@ impl Debugger {
                     }
                 }
 
+                let highlight_color = self.theme.highlight;
+                let query = self.ui.search.query.clone();
+                let compiled_regex = self.ui.search.compiled_regex.clone();
+                
                 let lines = self.get_source_file(&path).unwrap();
 
                 for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
@@ -668,7 +673,30 @@ impl Debugger {
                         } else if is_pc {
                             style = style.add_modifier(Modifier::BOLD);
                         }
-                        spans.push(Span::styled(text.clone(), style));
+
+                        if !query.is_empty() {
+                            if let Some(re) = &compiled_regex {
+                                let mut last = 0;
+                                for mat in re.find_iter(text) {
+                                    if mat.start() > last {
+                                        spans.push(Span::styled(text[last..mat.start()].to_string(), style));
+                                    }
+                                    spans.push(Span::styled(text[mat.start()..mat.end()].to_string(), style.fg(Color::Black).bg(highlight_color)));
+                                    last = mat.end();
+                                }
+                                if last < text.len() {
+                                    spans.push(Span::styled(text[last..].to_string(), style));
+                                }
+                            } else if let Some(idx) = text.to_lowercase().find(&query.to_lowercase()) {
+                                spans.push(Span::styled(text[..idx].to_string(), style));
+                                spans.push(Span::styled(text[idx..idx+query.len()].to_string(), style.fg(Color::Black).bg(highlight_color)));
+                                spans.push(Span::styled(text[idx+query.len()..].to_string(), style));
+                            } else {
+                                spans.push(Span::styled(text.clone(), style));
+                            }
+                        } else {
+                            spans.push(Span::styled(text.clone(), style));
+                        }
                     }
 
                     source_lines.push(Line::from(spans));
@@ -1165,40 +1193,22 @@ impl Debugger {
             return;
         }
 
-        let (inner, _) = if self.ui.input_mode == InputMode::SearchSymbols {
-            let splits = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(3), Constraint::Length(1)])
-                .split(area);
+        let inner = content_area;
 
-            let input_line = Line::from(vec![
-                Span::styled(" Search: ", Style::default().fg(self.theme.accent)),
-                Span::styled(
-                    self.ui.input_buffer(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled("_", Style::default().fg(self.theme.accent)),
-                Span::styled(
-                    " (Enter=apply, Esc=cancel)",
-                    Style::default().fg(self.theme.dim),
-                ),
-            ]);
-            frame.render_widget(
-                Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
-                splits[1],
-            );
-            (splits[0], true)
-        } else {
-            (area, false)
+        let query = &self.ui.search.query;
+        let is_match = |text: &str| -> bool {
+            if query.is_empty() { return true; }
+            if let Some(re) = &self.ui.search.compiled_regex {
+                re.is_match(text)
+            } else {
+                text.to_lowercase().contains(&query.to_lowercase())
+            }
         };
 
-        let search = self.ui.symbols.search.to_lowercase();
         let filtered: Vec<_> = self
             .sorted_symbols
             .iter()
-            .filter(|(_, name)| search.is_empty() || name.to_lowercase().contains(&search))
+            .filter(|(_, name)| is_match(name))
             .collect();
 
         self.ui.symbols.cursor = self.ui.symbols.cursor.min(filtered.len().saturating_sub(1));
@@ -1246,10 +1256,29 @@ impl Debugger {
                         self.theme.highlight
                     }),
                 ));
-                spans.push(Span::styled(
-                    name.clone(),
-                    Style::default().fg(if selected { Color::White } else { Color::Cyan }),
-                ));
+                if !query.is_empty() {
+                    let base_fg = if selected { Color::White } else { Color::Cyan };
+                    if let Some(re) = &self.ui.search.compiled_regex {
+                        if let Some(mat) = re.find(name) {
+                            spans.push(Span::styled(&name[..mat.start()], Style::default().fg(base_fg)));
+                            spans.push(Span::styled(&name[mat.start()..mat.end()], Style::default().fg(Color::Black).bg(self.theme.highlight)));
+                            spans.push(Span::styled(&name[mat.end()..], Style::default().fg(base_fg)));
+                        } else {
+                            spans.push(Span::styled(name.clone(), Style::default().fg(base_fg)));
+                        }
+                    } else if let Some(idx) = name.to_lowercase().find(&query.to_lowercase()) {
+                        spans.push(Span::styled(&name[..idx], Style::default().fg(base_fg)));
+                        spans.push(Span::styled(&name[idx..idx+query.len()], Style::default().fg(Color::Black).bg(self.theme.highlight)));
+                        spans.push(Span::styled(&name[idx+query.len()..], Style::default().fg(base_fg)));
+                    } else {
+                        spans.push(Span::styled(name.clone(), Style::default().fg(base_fg)));
+                    }
+                } else {
+                    spans.push(Span::styled(
+                        name.clone(),
+                        Style::default().fg(if selected { Color::White } else { Color::Cyan }),
+                    ));
+                }
                 Line::from(spans)
             })
             .collect();
@@ -1469,11 +1498,32 @@ impl Debugger {
             let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
             frame.render_widget(bar, area);
             return;
+        } else if self.ui.input_mode == InputMode::Search {
+            let mut prefix = "Search: ".to_string();
+            let mut style = Style::default().fg(self.theme.accent);
+            if self.ui.search.is_regex_error {
+                prefix = "Search (Regex Error): ".to_string();
+                style = Style::default().fg(self.theme.error);
+            } else if self.ui.search.compiled_regex.is_some() {
+                prefix = "Search (Regex): ".to_string();
+            }
+
+            let line = Line::from(vec![
+                Span::styled(prefix, style.add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    self.ui.input_buffer(),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("_", style),
+            ]);
+            let bar = Paragraph::new(line).style(Style::default().bg(Color::Rgb(30, 30, 50)));
+            frame.render_widget(bar, area);
+            return;
         }
 
         let mut spans = vec![
             Span::styled(
-                " n ",
+                " F11 ",
                 Style::default()
                     .fg(self.theme.accent)
                     .add_modifier(Modifier::BOLD),

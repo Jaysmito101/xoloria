@@ -118,7 +118,7 @@ pub enum InputMode {
     Normal,
     GotoMemory,
     Command,
-    SearchSymbols,
+    Search,
 }
 
 pub struct Theme {

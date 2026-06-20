@@ -24,10 +24,18 @@ pub struct ConsoleState {
 }
 
 #[derive(Default)]
+pub struct SearchState {
+    pub query: String,
+    pub history: Vec<String>,
+    pub history_index: Option<usize>,
+    pub compiled_regex: Option<regex::Regex>,
+    pub is_regex_error: bool,
+}
+
+#[derive(Default)]
 pub struct SymbolsState {
     pub scroll: usize,
     pub cursor: usize,
-    pub search: String,
     pub tab: SymbolsTab,
 }
 
@@ -56,6 +64,7 @@ pub struct UiState {
     pub symbols: SymbolsState,
     pub trace: TraceState,
     pub help: HelpState,
+    pub search: SearchState,
 
     pub reg_scroll: usize,
     pub csr_scroll: usize,
@@ -92,13 +101,14 @@ impl UiState {
             symbols: SymbolsState::default(),
             trace: TraceState::default(),
             help: HelpState::default(),
+            search: SearchState::default(),
 
             reg_scroll: 0,
             csr_scroll: 0,
             memory_addr: 0x8000_0000,
             selected_hart: 0,
             panel_rects: HashMap::new(),
-            panel_focused: false,
+            panel_focused: true,
         }
     }
 
@@ -135,6 +145,29 @@ impl UiState {
             } else {
                 self.console.history_index = Some(new_idx);
                 self.input_buffer = self.console.command_history[new_idx].clone();
+            }
+        }
+    }
+
+    pub fn search_history_up(&mut self) {
+        if self.search.history.is_empty() { return; }
+        let new_idx = match self.search.history_index {
+            None => self.search.history.len().saturating_sub(1),
+            Some(idx) => idx.saturating_sub(1),
+        };
+        self.search.history_index = Some(new_idx);
+        self.input_buffer = self.search.history[new_idx].clone();
+    }
+
+    pub fn search_history_down(&mut self) {
+        if let Some(idx) = self.search.history_index {
+            let new_idx = idx + 1;
+            if new_idx >= self.search.history.len() {
+                self.search.history_index = None;
+                self.input_buffer.clear();
+            } else {
+                self.search.history_index = Some(new_idx);
+                self.input_buffer = self.search.history[new_idx].clone();
             }
         }
     }
