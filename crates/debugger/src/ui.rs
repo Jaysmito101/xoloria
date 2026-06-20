@@ -761,12 +761,44 @@ impl Debugger {
             },
             focused,
         ) {
+            let (inner, _) = if self.ui.input_mode == InputMode::GotoAddress {
+                let splits = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(3), Constraint::Length(1)])
+                    .split(content_area);
+
+                let mut spans = vec![Span::styled(
+                    " Goto Address: 0x",
+                    Style::default().fg(self.theme.accent),
+                )];
+                spans.extend(
+                    self.render_input_spans(
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                        self.theme.accent,
+                    ),
+                );
+                spans.push(Span::styled(
+                    " (Enter=go, Esc=cancel)",
+                    Style::default().fg(self.theme.dim),
+                ));
+                let input_line = Line::from(spans);
+                frame.render_widget(
+                    Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
+                    splits[1],
+                );
+                (splits[0], true)
+            } else {
+                (content_area, false)
+            };
+
             if self.ui.disasm.tab == DisasmTab::Source {
-                self.render_source_view(frame, content_area, target_addr, &all_entries, hw_pc);
+                self.render_source_view(frame, inner, target_addr, &all_entries, hw_pc);
             } else {
                 self.render_assembly_view(
                     frame,
-                    content_area,
+                    inner,
                     &all_entries,
                     focused,
                     abs_cursor,

@@ -118,6 +118,7 @@ pub enum Screen {
 pub enum InputMode {
     Normal,
     GotoMemory,
+    GotoAddress,
     Command,
     Search,
     EditWatch(usize),

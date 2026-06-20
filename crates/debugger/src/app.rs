@@ -418,6 +418,33 @@ impl Debugger {
         self.ui.set_input_mode(InputMode::Normal);
     }
 
+    pub(crate) fn submit_goto_address(&mut self, input: &str) {
+        let input = input
+            .trim()
+            .trim_start_matches("0x")
+            .trim_start_matches("0X");
+        match u64::from_str_radix(input, 16) {
+            Ok(mut addr) => {
+                if addr < 0x80000000 {
+                    addr |= 0x80000000;
+                }
+                let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                if let Some(entry) = target_entry {
+                    self.ui.disasm.view_history.push(entry.addr);
+                } else if let Some(center) = self.ui.disasm.view_center_addr {
+                    self.ui.disasm.view_history.push(center);
+                }
+
+                self.ui.disasm.view_center_addr = Some(addr);
+                self.ui.disasm.cursor = 0;
+                self.disasm_cache = None;
+                self.ui.panel = Panel::Disassembly;
+            }
+            Err(_) => self.set_error("Invalid hex address"),
+        }
+        self.ui.set_input_mode(InputMode::Normal);
+    }
+
     fn tick_hart(&mut self, hart_idx: usize) -> TickResult {
         let Some(machine) = self.machine.as_mut() else {
             return TickResult::Error("No machine".into());

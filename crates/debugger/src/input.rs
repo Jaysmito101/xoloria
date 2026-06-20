@@ -7,7 +7,7 @@ use crate::ui_state::{DisasmTab, SymbolsTab};
 impl Debugger {
     pub fn handle_key(&mut self, key: KeyEvent) {
         match self.ui.input_mode {
-            InputMode::GotoMemory => self.handle_input_key(key),
+            InputMode::GotoMemory | InputMode::GotoAddress => self.handle_input_key(key),
             InputMode::Command => self.handle_command_key(key),
             InputMode::Search => self.handle_search_key(key),
             InputMode::EditWatch(idx) => self.handle_edit_watch_key(key, idx),
@@ -25,7 +25,12 @@ impl Debugger {
             }
             KeyCode::Enter => {
                 let input = self.ui.input_buffer_take();
-                self.submit_goto_memory(&input);
+                let mode = self.ui.input_mode;
+                if mode == InputMode::GotoMemory {
+                    self.submit_goto_memory(&input);
+                } else if mode == InputMode::GotoAddress {
+                    self.submit_goto_address(&input);
+                }
             }
             KeyCode::Backspace => {
                 self.ui.input_buffer_pop();
@@ -521,7 +526,11 @@ impl Debugger {
                 self.ui.set_input_mode(InputMode::Command);
             }
             KeyCode::Char('m') => {
-                self.ui.set_input_mode(InputMode::GotoMemory);
+                if self.ui.panel == Panel::Disassembly {
+                    self.ui.set_input_mode(InputMode::GotoAddress);
+                } else {
+                    self.ui.set_input_mode(InputMode::GotoMemory);
+                }
             }
             KeyCode::Char('/') => {
                 if self.ui.panel == Panel::Symbols
