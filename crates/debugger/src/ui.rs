@@ -1474,7 +1474,7 @@ impl Debugger {
 
     fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
         let filtered_trace: Vec<(usize, u64)> = if self.ui.trace.hide_non_symbols {
-            self.ui.trace.stack.iter().rev().enumerate().filter(|(_, &addr)| {
+            self.ui.trace.stack.iter().rev().enumerate().filter(|&(_, &addr)| {
                 self.sorted_symbols.binary_search_by_key(&addr, |(a, _)| *a).is_ok()
             }).map(|(i, &addr)| (i, addr)).collect()
         } else {
