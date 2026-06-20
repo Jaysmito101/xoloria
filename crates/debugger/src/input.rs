@@ -521,6 +521,13 @@ impl Debugger {
                 self.set_info(format!("Cleared {} breakpoints", count));
                 self.disasm_cache = None;
             }
+            KeyCode::Char('h') => {
+                if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::Trace {
+                    self.ui.trace.hide_non_symbols = !self.ui.trace.hide_non_symbols;
+                    self.ui.trace.cursor = 0;
+                    self.ui.trace.scroll = 0;
+                }
+            }
 
             KeyCode::Char(':') => {
                 self.ui.set_input_mode(InputMode::Command);

@@ -46,6 +46,7 @@ pub struct TraceState {
     pub forward_stack: Vec<u64>,
     pub scroll: usize,
     pub cursor: usize,
+    pub hide_non_symbols: bool,
 }
 
 #[derive(Default)]

@@ -1474,7 +1474,15 @@ impl Debugger {
     }
 
     fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
-        let trace_len = self.ui.trace.stack.len();
+        let filtered_trace: Vec<(usize, u64)> = if self.ui.trace.hide_non_symbols {
+            self.ui.trace.stack.iter().rev().enumerate().filter(|(_, &addr)| {
+                self.sorted_symbols.binary_search_by_key(&addr, |(a, _)| *a).is_ok()
+            }).map(|(i, &addr)| (i, addr)).collect()
+        } else {
+            self.ui.trace.stack.iter().rev().enumerate().map(|(i, &addr)| (i, addr)).collect()
+        };
+
+        let trace_len = filtered_trace.len();
         self.ui.trace.cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));
         let focused = self.ui.panel == Panel::Symbols;
 
@@ -1493,18 +1501,14 @@ impl Debugger {
         let max_scroll = trace_len.saturating_sub(visible_height);
         let scroll = self.ui.trace.scroll.min(max_scroll);
 
-        let lines: Vec<Line> = self
-            .ui
-            .trace
-            .stack
-            .iter()
-            .rev()
-            .enumerate()
+        let lines: Vec<Line> = filtered_trace
+            .into_iter()
             .skip(scroll)
             .take(visible_height)
-            .map(|(i, &addr)| {
+            .enumerate()
+            .map(|(ui_idx, (_real_idx, addr))| {
                 let mut spans = vec![];
-                let selected = focused && i == self.ui.trace.cursor;
+                let selected = focused && scroll + ui_idx == self.ui.trace.cursor;
 
                 if selected {
                     spans.push(Span::styled(
