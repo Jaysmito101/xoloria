@@ -609,7 +609,7 @@ impl Debugger {
             if let Some(machine) = self.machine.as_ref() {
                 use emulator::BusIO;
                 let bus = machine.bus();
-                val_bytes = watch.read_value(bus);
+                val_bytes = watch.read_value(bus.as_ref());
             }
 
             let val_str = match watch.data_type {

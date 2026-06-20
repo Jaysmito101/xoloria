@@ -522,7 +522,7 @@ impl Debugger {
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
 
-        let snapshot = WatchPointSnapshot::capture(&self.watches, &bus);
+        let snapshot = WatchPointSnapshot::capture(&self.watches, &*bus);
 
         let result = hart.tick(&bus);
         if result.is_ok()
@@ -531,7 +531,7 @@ impl Debugger {
             self.stack_analyzers[hart_idx].on_instruction_executed(&i);
         }
 
-        if let Some(name) = snapshot.check(&self.watches, &bus) {
+        if let Some(name) = snapshot.check(&self.watches, &*bus) {
             return TickResult::Watchpoint(pc, name);
         }
 
@@ -612,7 +612,7 @@ impl Debugger {
                 let inst_val = bus.read::<u32>(pc).unwrap_or(0);
                 let inst = Instruction::try_from(inst_val).ok();
 
-                let snapshot = WatchPointSnapshot::capture(&self.watches, &bus);
+                let snapshot = WatchPointSnapshot::capture(&self.watches, &*bus);
 
                 let result = hart.tick(&bus);
                 if result.is_ok()
@@ -621,7 +621,7 @@ impl Debugger {
                     self.stack_analyzers[i].on_instruction_executed(&inst);
                 }
 
-                if let Some(name) = snapshot.check(&self.watches, &bus) {
+                if let Some(name) = snapshot.check(&self.watches, &*bus) {
                     tick_results.push((i, TickResult::Watchpoint(pc, name)));
                     continue;
                 }
