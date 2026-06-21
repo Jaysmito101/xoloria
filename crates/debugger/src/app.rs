@@ -442,50 +442,7 @@ impl Debugger {
         self.disasm_cache = None;
     }
 
-    pub(crate) fn submit_goto_memory(&mut self, input: &str) {
-        let input = input
-            .trim()
-            .trim_start_matches("0x")
-            .trim_start_matches("0X");
-        match u64::from_str_radix(input, 16) {
-            Ok(mut addr) => {
-                if addr < 0x80000000 {
-                    addr |= 0x80000000;
-                }
-                self.ui.memory_addr = addr;
-                self.ui.panel = Panel::Memory;
-            }
-            Err(_) => self.set_error("Invalid hex address"),
-        }
-        self.ui.set_input_mode(InputMode::Normal);
-    }
 
-    pub(crate) fn submit_goto_address(&mut self, input: &str) {
-        let input = input
-            .trim()
-            .trim_start_matches("0x")
-            .trim_start_matches("0X");
-        match u64::from_str_radix(input, 16) {
-            Ok(mut addr) => {
-                if addr < 0x80000000 {
-                    addr |= 0x80000000;
-                }
-                let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
-                if let Some(entry) = target_entry {
-                    self.ui.disasm.view_history.push(entry.addr);
-                } else if let Some(center) = self.ui.disasm.view_center_addr {
-                    self.ui.disasm.view_history.push(center);
-                }
-
-                self.ui.disasm.view_center_addr = Some(addr);
-                self.ui.disasm.cursor = 0;
-                self.disasm_cache = None;
-                self.ui.panel = Panel::Disassembly;
-            }
-            Err(_) => self.set_error("Invalid hex address"),
-        }
-        self.ui.set_input_mode(InputMode::Normal);
-    }
 
     fn handle_tick_result(&mut self, hart_idx: usize, result: TickResult) -> bool {
         match result {
@@ -561,10 +518,15 @@ impl Debugger {
 
             let result = self.tick_hart(hart_idx);
 
-            let sp = self.machine.as_ref().unwrap().harts()[hart_idx].registers().x()[2];
+            let sp = self.machine.as_ref().unwrap().harts()[hart_idx]
+                .registers()
+                .x()[2];
 
             if self.ui.trace.stack.last().map(|e| e.pc) != Some(old_pc) {
-                self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(old_pc, sp));
+                self.ui
+                    .trace
+                    .stack
+                    .push(crate::ui_state::TraceEntry::new(old_pc, sp));
                 self.ui.trace.forward_stack.clear();
             }
 
@@ -662,7 +624,10 @@ impl Debugger {
             if let Some((pc, sp)) = trace_pc
                 && self.ui.trace.stack.last().map(|e| e.pc) != Some(pc)
             {
-                self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(pc, sp));
+                self.ui
+                    .trace
+                    .stack
+                    .push(crate::ui_state::TraceEntry::new(pc, sp));
                 self.ui.trace.forward_stack.clear();
             }
 

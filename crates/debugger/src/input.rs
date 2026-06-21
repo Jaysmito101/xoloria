@@ -27,9 +27,19 @@ impl Debugger {
                 let input = self.ui.input_buffer_take();
                 let mode = self.ui.input_mode;
                 if mode == InputMode::GotoMemory {
-                    self.submit_goto_memory(&input);
+                    if let Ok(addr) = crate::state::parse_addr(&input) {
+                        self.execute_command(crate::command::DebugCommand::GotoMemory(addr));
+                    } else {
+                        self.set_error("Invalid hex address");
+                    }
+                    self.ui.set_input_mode(InputMode::Normal);
                 } else if mode == InputMode::GotoAddress {
-                    self.submit_goto_address(&input);
+                    if let Ok(addr) = crate::state::parse_addr(&input) {
+                        self.execute_command(crate::command::DebugCommand::GotoAddress(addr));
+                    } else {
+                        self.set_error("Invalid hex address");
+                    }
+                    self.ui.set_input_mode(InputMode::Normal);
                 }
             }
             KeyCode::Backspace => {
@@ -49,7 +59,7 @@ impl Debugger {
             KeyCode::Esc => {
                 self.ui.set_input_mode(InputMode::Normal);
             }
-            KeyCode::Enter => self.execute_command(),
+            KeyCode::Enter => self.execute_input_buffer_command(),
             KeyCode::Up => self.ui.history_up(),
             KeyCode::Down => self.ui.history_down(),
             KeyCode::Backspace => {
@@ -166,20 +176,15 @@ impl Debugger {
             KeyCode::Char('r') => self.set_hart_mode_at_cursor(HartMode::Running),
             KeyCode::Char('s') => self.set_hart_mode_at_cursor(HartMode::Stalled),
             KeyCode::Enter => {
-                let config = MachineConfig {
-                    harts: self.config_harts,
-                    memory_size: self.memory_size(),
-                };
-                self.rebuild_machine(config);
+                self.execute_command(crate::command::DebugCommand::Reset);
                 self.screen = Screen::Debug;
                 self.ui.selected_hart = self
                     .hart_modes
                     .iter()
                     .position(|m| *m == HartMode::Debug)
                     .unwrap_or(0);
-                self.tick_count = 0;
             }
-            KeyCode::Char('q') => self.running = false,
+            KeyCode::Char('q') => self.execute_command(crate::command::DebugCommand::Quit),
             _ => {}
         }
     }
@@ -237,7 +242,7 @@ impl Debugger {
                     self.ui.panel_focused = false;
                 }
             }
-            KeyCode::Char('q') => self.running = false,
+            KeyCode::Char('q') => self.execute_command(crate::command::DebugCommand::Quit),
 
             KeyCode::F(11) | KeyCode::Char(' ') => {
                 if self.ui.panel == Panel::Csr
@@ -248,26 +253,22 @@ impl Debugger {
                             .ui
                             .watch_cursor
                             .min(self.watches.len().saturating_sub(1));
-                        self.watches[cursor].break_on_change =
-                            !self.watches[cursor].break_on_change;
+                        self.execute_command(crate::command::DebugCommand::ToggleWatchBreakpoint(cursor));
                     }
                 } else if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
-                    self.step_hart(1);
-                    self.ui.disasm.view_center_addr = None;
-                    self.ui.disasm.cursor = 0;
-                    self.disasm_cache = None;
+                    self.execute_command(crate::command::DebugCommand::Step(1));
                 }
             }
 
             KeyCode::Char('n') => {
-                self.search_next(1, false);
+                self.execute_command(crate::command::DebugCommand::SearchNext(1, false));
             }
             KeyCode::Char('N') => {
-                self.search_next(-1, false);
+                self.execute_command(crate::command::DebugCommand::SearchNext(-1, false));
             }
 
-            KeyCode::Char('c') => self.hart_modes[self.ui.selected_hart] = HartMode::Running,
-            KeyCode::Char('p') => self.hart_modes[self.ui.selected_hart] = HartMode::Debug,
+            KeyCode::Char('c') => self.execute_command(crate::command::DebugCommand::Continue),
+            KeyCode::Char('p') => self.execute_command(crate::command::DebugCommand::Pause),
 
             KeyCode::Char('e') => {
                 if self.ui.panel == Panel::Csr
@@ -291,10 +292,7 @@ impl Debugger {
                             .ui
                             .watch_cursor
                             .min(self.watches.len().saturating_sub(1));
-                        self.watches.remove(cursor);
-                        if self.ui.watch_cursor >= self.watches.len() && !self.watches.is_empty() {
-                            self.ui.watch_cursor = self.watches.len() - 1;
-                        }
+                        self.execute_command(crate::command::DebugCommand::DeleteWatchIndex(cursor));
                     }
                 }
             }
@@ -522,7 +520,7 @@ impl Debugger {
                     if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
                         let target_line = (self.ui.disasm.source_cursor + 1) as u32;
                         if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
-                            self.toggle_breakpoint_at(addr);
+                            self.execute_command(crate::command::DebugCommand::Breakpoint(Some(crate::command::BreakpointTarget::Address(addr))));
                         } else {
                             self.set_error("No mapping for this source line");
                         }
@@ -538,15 +536,12 @@ impl Debugger {
                         .unwrap_or(0);
                     if let Some(entry) = target_entry.as_ref() {
                         let addr = entry.addr;
-                        self.toggle_breakpoint_at(addr);
+                        self.execute_command(crate::command::DebugCommand::Breakpoint(Some(crate::command::BreakpointTarget::Address(addr))));
                     }
                 }
             }
             KeyCode::Char('D') => {
-                let count = self.breakpoints.len();
-                self.breakpoints.clear();
-                self.set_info(format!("Cleared {} breakpoints", count));
-                self.disasm_cache = None;
+                self.execute_command(crate::command::DebugCommand::Delete(crate::command::DeleteTarget::All));
             }
             KeyCode::Char('h') => {
                 if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::Trace {
@@ -807,7 +802,7 @@ impl Debugger {
         }
     }
 
-    fn search_next(&mut self, direction: i32, inclusive: bool) {
+    pub(crate) fn search_next(&mut self, direction: i32, inclusive: bool) {
         let query = self.ui.search.query.clone();
         if query.is_empty() {
             return;

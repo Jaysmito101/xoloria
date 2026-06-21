@@ -46,6 +46,12 @@ pub enum DebugCommand {
         addr_expr: String,
         value_expr: String,
     },
+    SearchNext(i32, bool),
+    Quit,
+    GotoAddress(u64),
+    GotoMemory(u64),
+    DeleteWatchIndex(usize),
+    ToggleWatchBreakpoint(usize),
 }
 
 #[derive(Debug)]
@@ -183,7 +189,7 @@ impl DebugCommand {
 }
 
 impl Debugger {
-    pub(crate) fn execute_command(&mut self) {
+    pub(crate) fn execute_input_buffer_command(&mut self) {
         let input = self.ui.input_buffer_take();
         let cmd = input.trim().to_string();
         self.ui.set_input_mode(InputMode::Normal);
@@ -200,7 +206,12 @@ impl Debugger {
                     self.set_error(msg);
                 }
             }
-            Ok(command) => match command {
+            Ok(command) => self.execute_command(command),
+        }
+    }
+
+    pub(crate) fn execute_command(&mut self, command: DebugCommand) {
+        match command {
                 DebugCommand::Breakpoint(target) => match target {
                     None => {
                         let addr = self
@@ -388,7 +399,37 @@ impl Debugger {
                 },
                 DebugCommand::SaveWorkspace => self.save_workspace(),
                 DebugCommand::LoadWorkspace => self.load_workspace(),
-            },
+                DebugCommand::SearchNext(delta, wrap) => self.search_next(delta, wrap),
+                DebugCommand::Quit => self.running = false,
+                DebugCommand::GotoAddress(addr) => {
+                    let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                    if let Some(entry) = target_entry {
+                        self.ui.disasm.view_history.push(entry.addr);
+                    } else if let Some(center) = self.ui.disasm.view_center_addr {
+                        self.ui.disasm.view_history.push(center);
+                    }
+                    self.ui.disasm.view_center_addr = Some(addr);
+                    self.ui.disasm.cursor = 0;
+                    self.disasm_cache = None;
+                    self.ui.panel = Panel::Disassembly;
+                }
+                DebugCommand::GotoMemory(addr) => {
+                    self.ui.memory_addr = addr;
+                    self.ui.panel = Panel::Memory;
+                }
+                DebugCommand::DeleteWatchIndex(idx) => {
+                    if idx < self.watches.len() {
+                        self.watches.remove(idx);
+                        if self.ui.watch_cursor >= self.watches.len() && !self.watches.is_empty() {
+                            self.ui.watch_cursor = self.watches.len() - 1;
+                        }
+                    }
+                }
+                DebugCommand::ToggleWatchBreakpoint(idx) => {
+                    if idx < self.watches.len() {
+                        self.watches[idx].break_on_change = !self.watches[idx].break_on_change;
+                    }
+                }
+            }
         }
-    }
 }
