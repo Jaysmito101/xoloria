@@ -3,9 +3,10 @@ use emulator::BusIO;
 use emulator::instructions::Instruction;
 use std::collections::HashSet;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum JumpTarget {
     Known(u64),
+    Call(u64),
     Unknown,
 }
 
@@ -74,13 +75,22 @@ impl DisasmEntry {
             return self;
         };
         self.jump_target = match instr {
-            Instruction::Jal { imm, .. } => {
-                Some(JumpTarget::Known((self.addr as i64 + *imm as i64) as u64))
+            Instruction::Jal { rd, imm, .. } => {
+                let target = (self.addr as i64 + *imm as i64) as u64;
+                if *rd == emulator::registers::GeneralRegisterName::Ra {
+                    Some(JumpTarget::Call(target))
+                } else {
+                    Some(JumpTarget::Known(target))
+                }
             }
-            Instruction::Jalr { rs1, imm, .. } => {
+            Instruction::Jalr { rd, rs1, imm, .. } => {
                 if self.addr == pc {
                     let target = ((x_regs[*rs1 as u8 as usize] as i64 + *imm as i64) & !1) as u64;
-                    Some(JumpTarget::Known(target))
+                    if *rd == emulator::registers::GeneralRegisterName::Ra {
+                        Some(JumpTarget::Call(target))
+                    } else {
+                        Some(JumpTarget::Known(target))
+                    }
                 } else {
                     Some(JumpTarget::Unknown)
                 }
@@ -259,6 +269,23 @@ impl Debugger {
 
         for entry in &mut entries {
             entry.symbol = self.symbols.get(&entry.addr).cloned();
+        }
+
+        for i in 0..entries.len().saturating_sub(1) {
+            if let Some(Instruction::Auipc { rd: rd1, imm: imm1 }) = entries[i].instruction {
+                if let Some(Instruction::Jalr { rd: rd2, rs1, imm: imm2 }) = entries[i + 1].instruction {
+                    if rd1 == emulator::registers::GeneralRegisterName::Ra && rs1 == emulator::registers::GeneralRegisterName::Ra {
+                        let target = entries[i].addr.wrapping_add(imm1 as i32 as i64 as u64).wrapping_add(imm2 as i32 as i64 as u64);
+                        if rd2 == emulator::registers::GeneralRegisterName::Ra {
+                            entries[i].jump_target = Some(JumpTarget::Call(target));
+                            entries[i + 1].jump_target = Some(JumpTarget::Call(target));
+                        } else {
+                            entries[i].jump_target = Some(JumpTarget::Known(target));
+                            entries[i + 1].jump_target = Some(JumpTarget::Known(target));
+                        }
+                    }
+                }
+            }
         }
 
         self.disasm_cache = Some(DisasmCache {

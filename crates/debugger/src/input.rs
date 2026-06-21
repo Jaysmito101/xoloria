@@ -941,7 +941,8 @@ impl Debugger {
             Panel::Memory => {
                 self.ui.memory_tab = match self.ui.memory_tab {
                     crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
-                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::CallStack,
+                    crate::ui_state::MemoryTab::CallStack => crate::ui_state::MemoryTab::Hex,
                 };
             }
             Panel::Symbols => {

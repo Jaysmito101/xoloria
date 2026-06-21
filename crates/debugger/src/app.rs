@@ -100,6 +100,7 @@ impl WatchPointSnapshot {
 
 pub(crate) struct TickContext<'a> {
     inst: Option<Instruction>,
+    inst_size: u64,
     snapshot: WatchPointSnapshot,
     pub pc: u64,
     pub sp: u64,
@@ -121,10 +122,12 @@ impl<'a> TickContext<'a> {
         let pc = hart.registers().pc();
         let sp = hart.registers().x()[2];
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
+        let inst_size = if (inst_val & 0b11) != 0b11 { 2 } else { 4 };
         let inst = Instruction::try_from(inst_val).ok();
         let snapshot = WatchPointSnapshot::capture(watches, bus);
         Self {
             inst,
+            inst_size,
             snapshot,
             pc,
             sp,
@@ -141,7 +144,8 @@ impl<'a> TickContext<'a> {
         if result.is_ok()
             && let Some(i) = self.inst
         {
-            self.analyzer.on_instruction_executed(&i);
+            let next_pc = self.hart.registers().pc();
+            self.analyzer.on_instruction_executed(&i, self.pc, self.pc + self.inst_size, next_pc);
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);
 

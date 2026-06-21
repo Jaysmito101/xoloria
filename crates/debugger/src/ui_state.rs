@@ -117,6 +117,7 @@ pub enum MemoryTab {
     #[default]
     Hex,
     Stack,
+    CallStack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

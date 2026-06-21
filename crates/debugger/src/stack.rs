@@ -16,34 +16,85 @@ pub struct StackFrame {
     pub pushes: Vec<StackPush>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub target_pc: u64,
+    pub return_pc: u64,
+    pub stack_frame: Option<StackFrame>,
+}
+
+#[derive(Debug, Clone)]
 pub struct StackAnalyzer {
-    pub current_frame: Option<StackFrame>,
+    pub call_stack: Vec<CallFrame>,
+}
+
+impl Default for StackAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StackAnalyzer {
     pub fn new() -> Self {
         Self {
-            current_frame: None,
+            call_stack: vec![CallFrame {
+                target_pc: 0,
+                return_pc: 0,
+                stack_frame: None,
+            }],
         }
     }
 
-    pub fn on_instruction_executed(&mut self, inst: &Instruction) {
+    pub fn current_frame_mut(&mut self) -> Option<&mut Option<StackFrame>> {
+        self.call_stack.last_mut().map(|f| &mut f.stack_frame)
+    }
+
+    pub fn current_frame(&self) -> Option<&StackFrame> {
+        self.call_stack.last().and_then(|f| f.stack_frame.as_ref())
+    }
+
+    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64) {
         match inst {
+            Instruction::Jal { rd, .. } if *rd == GeneralRegisterName::Ra => {
+                self.call_stack.push(CallFrame {
+                    target_pc: next_pc,
+                    return_pc,
+                    stack_frame: None,
+                });
+            }
+            Instruction::Jalr { rd, rs1, .. } => {
+                if *rd == GeneralRegisterName::Ra {
+                    self.call_stack.push(CallFrame {
+                        target_pc: next_pc,
+                        return_pc,
+                        stack_frame: None,
+                    });
+                } else if *rs1 == GeneralRegisterName::Ra && *rd == GeneralRegisterName::Zero {
+                    if let Some(last) = self.call_stack.last() {
+                        if last.return_pc == next_pc && self.call_stack.len() > 1 {
+                            self.call_stack.pop();
+                        }
+                    }
+                }
+            }
             Instruction::Addi { rd, rs1, imm }
                 if *rd == GeneralRegisterName::Sp && *rs1 == GeneralRegisterName::Sp =>
             {
                 if *imm < 0 {
-                    self.current_frame = Some(StackFrame {
-                        size: -imm,
-                        pushes: Vec::new(),
-                    });
-                } else if *imm > 0
-                    && let Some(frame) = &mut self.current_frame
-                {
-                    frame.size -= *imm;
-                    if frame.size <= 0 {
-                        self.current_frame = None;
+                    if let Some(frame_opt) = self.current_frame_mut() {
+                        *frame_opt = Some(StackFrame {
+                            size: -imm,
+                            pushes: Vec::new(),
+                        });
+                    }
+                } else if *imm > 0 {
+                    if let Some(Some(frame)) = self.current_frame_mut() {
+                        frame.size -= *imm;
+                        if frame.size <= 0 {
+                            if let Some(f) = self.current_frame_mut() {
+                                *f = None;
+                            }
+                        }
                     }
                 }
             }
@@ -64,7 +115,7 @@ impl StackAnalyzer {
     }
 
     fn record_push(&mut self, offset: i32, data_type: DataType, reg: GeneralRegisterName) {
-        if let Some(frame) = &mut self.current_frame {
+        if let Some(Some(frame)) = self.current_frame_mut() {
             if let Some(existing) = frame.pushes.iter_mut().find(|p| p.offset == offset) {
                 existing.data_type = data_type;
                 existing.reg = reg;

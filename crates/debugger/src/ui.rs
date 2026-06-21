@@ -1003,7 +1003,7 @@ impl Debugger {
         for (i, e) in all_entries.iter().enumerate() {
             if focused && abs_cursor == i {
                 match &e.jump_target {
-                    Some(JumpTarget::Known(addr)) => {
+                    Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) => {
                         if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
                             active_jump = Some((i, dst_idx));
                         } else {
@@ -1016,11 +1016,25 @@ impl Debugger {
                     None => {}
                 }
             } else if focused
-                && let Some(JumpTarget::Known(addr)) = &e.jump_target
-                && let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr)
-                && abs_cursor == dst_idx
+                && (matches!(&e.jump_target, Some(JumpTarget::Known(addr)) if {
+                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
+                        abs_cursor == dst_idx
+                    } else {
+                        false
+                    }
+                }) || matches!(&e.jump_target, Some(JumpTarget::Call(addr)) if {
+                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
+                        abs_cursor == dst_idx
+                    } else {
+                        false
+                    }
+                }))
             {
-                active_jump = Some((i, dst_idx));
+                if let Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) = &e.jump_target {
+                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
+                        active_jump = Some((i, dst_idx));
+                    }
+                }
             }
         }
 
@@ -1149,16 +1163,25 @@ impl Debugger {
             spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));
 
             match &e.jump_target {
-                Some(JumpTarget::Known(addr)) => {
+                Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) => {
                     let sym_name = self
                         .sorted_symbols
                         .iter()
                         .find(|(a, _)| a == addr)
                         .map(|(_, n)| n.as_str());
+                    let is_call = matches!(e.jump_target, Some(JumpTarget::Call(_)));
                     let target_str = if let Some(sym) = sym_name {
-                        format!(" → {:#x} <{}>", addr, sym)
+                        if is_call {
+                            format!(" ⇒ Call {:#x} <{}>", addr, sym)
+                        } else {
+                            format!(" → {:#x} <{}>", addr, sym)
+                        }
                     } else {
-                        format!(" → {:#x}", addr)
+                        if is_call {
+                            format!(" ⇒ Call {:#x}", addr)
+                        } else {
+                            format!(" → {:#x}", addr)
+                        }
                     };
                     let target_color = if is_cursor {
                         self.theme.target
@@ -1232,6 +1255,7 @@ impl Debugger {
         let active_tab = match self.ui.memory_tab {
             crate::ui_state::MemoryTab::Hex => 0,
             crate::ui_state::MemoryTab::Stack => 1,
+            crate::ui_state::MemoryTab::CallStack => 2,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
@@ -1239,13 +1263,14 @@ impl Debugger {
             area,
             Panel::Memory,
             "Memory",
-            &["Hex", "Stack"],
+            &["Hex", "Stack", "Call Stack"],
             active_tab,
             focused,
         ) {
             match self.ui.memory_tab {
                 crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, content_area),
                 crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, content_area),
+                crate::ui_state::MemoryTab::CallStack => self.render_callstack(frame, content_area),
             }
         }
     }
@@ -1339,7 +1364,7 @@ impl Debugger {
         let analyzer = &self.stack_analyzers[hart_idx];
         let mut lines = Vec::new();
 
-        if let Some(frame_info) = &analyzer.current_frame {
+        if let Some(frame_info) = analyzer.current_frame() {
             lines.push(Line::from(vec![
                 Span::styled("Stack Allocation: ", Style::default().fg(self.theme.dim)),
                 Span::styled(
@@ -1442,6 +1467,51 @@ impl Debugger {
                 "No stack frame detected.",
                 Style::default().fg(self.theme.dim),
             )));
+        }
+
+        let paragraph = Paragraph::new(lines).scroll((self.ui.stack_scroll as u16, 0));
+        frame.render_widget(paragraph, area);
+    }
+
+    fn render_callstack(&mut self, frame: &mut Frame, area: Rect) {
+        let hart_idx = self.ui.selected_hart;
+        if hart_idx >= self.stack_analyzers.len() {
+            return;
+        }
+
+        let analyzer = &self.stack_analyzers[hart_idx];
+        let mut lines = Vec::new();
+
+        lines.push(Line::from(vec![
+            Span::styled("► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled("[Entry]", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        ]));
+
+        for (i, call) in analyzer.call_stack.iter().enumerate() {
+            if i == 0 {
+                continue;
+            }
+            let depth = i;
+            let prefix = "  ".repeat(depth);
+            
+            let sym_name = self
+                .sorted_symbols
+                .iter()
+                .find(|(a, _)| *a == call.target_pc)
+                .map(|(_, n)| n.as_str());
+
+            let display_name = if let Some(sym) = sym_name {
+                format!("{} ({:#x})", sym, call.target_pc)
+            } else {
+                format!("func_{:#x}", call.target_pc)
+            };
+
+            lines.push(Line::from(vec![
+                Span::raw(prefix),
+                Span::styled("└─► ", Style::default().fg(self.theme.dim)),
+                Span::styled(display_name, Style::default().fg(self.theme.target)),
+                Span::styled(format!("  [ret: {:#x}]", call.return_pc), Style::default().fg(self.theme.dim)),
+            ]));
         }
 
         let paragraph = Paragraph::new(lines).scroll((self.ui.stack_scroll as u16, 0));
