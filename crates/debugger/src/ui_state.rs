@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::state::*;
 
@@ -51,7 +51,6 @@ impl TraceEntry {
     pub fn new(pc: u64, sp: u64) -> Self {
         Self { pc, sp }
     }
-
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
@@ -128,8 +127,8 @@ pub enum MemoryTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RegistersTab {
     #[default]
-    Csr,
     Gpr,
+    Csr,
 }
 
 impl UiState {

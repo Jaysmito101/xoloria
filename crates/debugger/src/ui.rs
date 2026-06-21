@@ -427,8 +427,8 @@ impl Debugger {
     fn render_registers_tab(&mut self, frame: &mut Frame, area: Rect) {
         let focused = self.ui.panel == Panel::Csr;
         let active_tab = match self.ui.registers_tab {
-            crate::ui_state::RegistersTab::Csr => 0,
-            crate::ui_state::RegistersTab::Gpr => 1,
+            crate::ui_state::RegistersTab::Gpr => 0,
+            crate::ui_state::RegistersTab::Csr => 1,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
@@ -436,7 +436,7 @@ impl Debugger {
             area,
             Panel::Csr,
             "Registers",
-            &["CSR", "GPR"],
+            &["GPR", "CSR"],
             active_tab,
             focused,
         ) {
