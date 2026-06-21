@@ -1565,7 +1565,9 @@ impl Debugger {
                 ));
 
                 if sym_name.is_none()
-                    && let Some(inst) = self.disassemble_instruction_at(entry.pc)
+                    && let Some(inst) = self
+                        .disassembler()
+                        .and_then(|d| d.disassemble_instruction_at(entry.pc))
                 {
                     spans.push(Span::styled(
                         format!("{{{}}} ", inst),

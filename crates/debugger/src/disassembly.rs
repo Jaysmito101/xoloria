@@ -1,20 +1,12 @@
-use std::collections::HashSet;
-use emulator::instructions::Instruction;
-use emulator::BusIO;
 use crate::app::Debugger;
+use emulator::BusIO;
+use emulator::instructions::Instruction;
+use std::collections::HashSet;
 
+#[derive(Clone)]
 pub enum JumpTarget {
     Known(u64),
     Unknown,
-}
-
-impl Clone for JumpTarget {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Known(a) => Self::Known(*a),
-            Self::Unknown => Self::Unknown,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -46,66 +38,64 @@ impl<'a> Disassembler<'a> {
         Self { bus, breakpoints }
     }
 
-    pub fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
+    fn read_raw(&self, addr: u64) -> Option<(u32, bool)> {
         let raw: u32 = self.bus.read(addr).ok()?;
         let is_compressed = raw & 0b11 != 0b11;
-        let decode_result = Instruction::try_from(raw);
-        match decode_result {
-            Ok(instr) => Some(format!("{}", instr)),
-            Err(_) if is_compressed => Some(format!(".half {:#06x}", raw & 0xFFFF)),
-            Err(_) => Some(format!(".word {:#010x}", raw)),
-        }
+        Some((raw, is_compressed))
     }
 
-    pub fn decode_at(
-        &self,
-        addr: u64,
-        pc: u64,
-        x_regs: &[u64; 32],
-    ) -> Option<(DisasmEntry, u64)> {
-        let raw: u32 = self.bus.read(addr).ok()?;
-        let is_compressed = raw & 0b11 != 0b11;
-        let step = if is_compressed { 2 } else { 4 };
-
-        let decode_result = Instruction::try_from(raw);
-
-        let text = match decode_result {
+    fn raw_to_text(raw: u32, is_compressed: bool) -> String {
+        match Instruction::try_from(raw) {
             Ok(instr) => format!("{}", instr),
             Err(_) if is_compressed => format!(".half {:#06x}", raw & 0xFFFF),
             Err(_) => format!(".word {:#010x}", raw),
-        };
-
-        let jump_target = self.extract_jump_target(raw, addr, pc, x_regs);
-
-        let entry = DisasmEntry {
-            addr,
-            text,
-            is_pc: addr == pc,
-            is_bp: self.breakpoints.contains(&addr),
-            jump_target,
-            symbol: None,
-            is_compressed,
-        };
-        Some((entry, step))
+        }
     }
 
-    pub fn extract_jump_target(&self, raw: u32, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<JumpTarget> {
-        let decode_result = Instruction::try_from(raw);
+    pub fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
+        let (raw, is_compressed) = self.read_raw(addr)?;
+        Some(Self::raw_to_text(raw, is_compressed))
+    }
 
-        let instr = match decode_result {
-            Ok(instr) => instr,
-            Err(_) => return None,
-        };
+    pub fn decode_at(&self, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<(DisasmEntry, u64)> {
+        let (raw, is_compressed) = self.read_raw(addr)?;
+        let step = if is_compressed { 2 } else { 4 };
+        let text = Self::raw_to_text(raw, is_compressed);
 
+        let instr = Instruction::try_from(raw).ok();
+        let jump_target = instr
+            .as_ref()
+            .and_then(|i| self.extract_jump_target(i, addr, pc, x_regs));
+
+        Some((
+            DisasmEntry {
+                addr,
+                text,
+                is_pc: addr == pc,
+                is_bp: self.breakpoints.contains(&addr),
+                jump_target,
+                symbol: None,
+                is_compressed,
+            },
+            step,
+        ))
+    }
+
+    pub fn extract_jump_target(
+        &self,
+        instr: &Instruction,
+        addr: u64,
+        pc: u64,
+        x_regs: &[u64; 32],
+    ) -> Option<JumpTarget> {
         match instr {
             Instruction::Jal { imm, .. } => {
-                let target = (addr as i64 + imm as i64) as u64;
+                let target = (addr as i64 + *imm as i64) as u64;
                 Some(JumpTarget::Known(target))
             }
             Instruction::Jalr { rs1, imm, .. } => {
                 if addr == pc {
-                    let rs1_idx = rs1 as u8 as usize;
-                    let target = ((x_regs[rs1_idx] as i64 + imm as i64) & !1) as u64;
+                    let target = ((x_regs[*rs1 as u8 as usize] as i64 + *imm as i64) & !1) as u64;
                     Some(JumpTarget::Known(target))
                 } else {
                     Some(JumpTarget::Unknown)
@@ -117,7 +107,7 @@ impl<'a> Disassembler<'a> {
             | Instruction::Bge { imm, .. }
             | Instruction::Bltu { imm, .. }
             | Instruction::Bgeu { imm, .. } => {
-                let target = (addr as i64 + imm as i64) as u64;
+                let target = (addr as i64 + *imm as i64) as u64;
                 Some(JumpTarget::Known(target))
             }
             _ => None,
@@ -126,10 +116,9 @@ impl<'a> Disassembler<'a> {
 }
 
 impl Debugger {
-    pub(crate) fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
+    pub(crate) fn disassembler(&self) -> Option<Disassembler<'_>> {
         let machine = self.machine.as_ref()?;
-        let disassembler = Disassembler::new(&machine.bus, &self.breakpoints);
-        disassembler.disassemble_instruction_at(addr)
+        Some(Disassembler::new(&machine.bus, &self.breakpoints))
     }
 
     pub(crate) fn resolve_cursor_target(&mut self) -> (u64, Option<DisasmEntry>, Vec<DisasmEntry>) {
@@ -172,30 +161,27 @@ impl Debugger {
         }
 
         let x_regs = hart.registers().x();
-
         let cursor = self.ui.disasm.cursor;
+
         let before = if cursor < 0 {
             count / 3 + (-cursor) as usize + 50
         } else {
             count / 3
         };
-
         let after = if cursor > 0 {
             count - count / 3 + cursor as usize + 50
         } else {
             count - count / 3
         };
 
-        let mut entries: Vec<DisasmEntry> = Vec::new();
         let disassembler = Disassembler::new(&machine.bus, &self.breakpoints);
+        let mut entries: Vec<DisasmEntry> = Vec::new();
 
         if before > 0 {
             let scan_start = pc.saturating_sub(before as u64 * 4);
             let mut addr = scan_start;
             while addr < pc {
-                if let Some((entry, step)) =
-                    disassembler.decode_at(addr, hw_pc, x_regs)
-                {
+                if let Some((entry, step)) = disassembler.decode_at(addr, hw_pc, x_regs) {
                     entries.push(entry);
                     addr += step;
                 } else {
@@ -208,9 +194,7 @@ impl Debugger {
 
         let mut addr = pc;
         for _ in 0..after {
-            if let Some((entry, step)) =
-                disassembler.decode_at(addr, hw_pc, x_regs)
-            {
+            if let Some((entry, step)) = disassembler.decode_at(addr, hw_pc, x_regs) {
                 entries.push(entry);
                 addr += step;
             } else {
