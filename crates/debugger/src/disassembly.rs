@@ -67,6 +67,7 @@ impl DisasmEntry {
         }
     }
 
+    #[inline(always)]
     pub fn with_jump_target(mut self, x_regs: &[u64; 32], pc: u64) -> Self {
         let Some(instr) = &self.instruction else {
             self.jump_target = None;
@@ -126,6 +127,7 @@ pub(crate) struct DisasmCache {
 }
 
 impl DisasmCache {
+    #[inline(always)]
     fn matches(&self, hart: usize, pc: u64, bp_gen: u64, cursor: i32) -> bool {
         self.hart == hart && self.pc == pc && self.breakpoint_gen == bp_gen && self.cursor == cursor
     }
