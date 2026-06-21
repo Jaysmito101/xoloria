@@ -41,7 +41,7 @@ impl HartMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Panel {
     Disassembly,
-    Csr,
+    Registers,
     Memory,
     Symbols,
     Console,
@@ -66,8 +66,8 @@ impl ConsoleTab {
 impl Panel {
     pub fn next(self) -> Self {
         match self {
-            Self::Disassembly => Self::Csr,
-            Self::Csr => Self::Memory,
+            Self::Disassembly => Self::Registers,
+            Self::Registers => Self::Memory,
             Self::Memory => Self::Symbols,
             Self::Symbols => Self::Console,
             Self::Console => Self::Disassembly,
@@ -76,10 +76,10 @@ impl Panel {
 
     pub fn nav(self, dir: Direction) -> Self {
         match (self, dir) {
-            (Self::Csr, Direction::Right) => Self::Disassembly,
-            (Self::Csr, Direction::Down) => Self::Memory,
+            (Self::Registers, Direction::Right) => Self::Disassembly,
+            (Self::Registers, Direction::Down) => Self::Memory,
             (Self::Memory, Direction::Right) => Self::Disassembly,
-            (Self::Memory, Direction::Up) => Self::Csr,
+            (Self::Memory, Direction::Up) => Self::Registers,
             (Self::Memory, Direction::Down) => Self::Console,
             (Self::Disassembly, Direction::Left) => Self::Memory,
             (Self::Disassembly, Direction::Down) => Self::Symbols,
@@ -201,7 +201,6 @@ pub struct MachineConfig {
     pub memory_size: usize,
 }
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
     U8,
@@ -254,8 +253,6 @@ impl std::fmt::Display for DataType {
         write!(f, "{}", name)
     }
 }
-
-
 
 pub(crate) fn parse_expr(s: &str) -> Result<u64, String> {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
