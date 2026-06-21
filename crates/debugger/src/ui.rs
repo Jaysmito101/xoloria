@@ -1030,7 +1030,8 @@ impl Debugger {
                     }
                 }))
             {
-                if let Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) = &e.jump_target {
+                if let Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) = &e.jump_target
+                {
                     if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
                         active_jump = Some((i, dst_idx));
                     }
@@ -1473,49 +1474,109 @@ impl Debugger {
         frame.render_widget(paragraph, area);
     }
 
-    fn render_callstack(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_callstack(&mut self, frame: &mut Frame, content_area: Rect) {
         let hart_idx = self.ui.selected_hart;
         if hart_idx >= self.stack_analyzers.len() {
             return;
         }
 
         let analyzer = &self.stack_analyzers[hart_idx];
-        let mut lines = Vec::new();
+        let focused = self.ui.panel == Panel::Memory
+            && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack;
 
-        lines.push(Line::from(vec![
-            Span::styled("► ", Style::default().fg(self.theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("[Entry]", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]));
+        let mut items = Vec::new();
+        items.push(("[Entry]".to_string(), 0, 0, 0));
 
         for (i, call) in analyzer.call_stack.iter().enumerate() {
             if i == 0 {
                 continue;
             }
-            let depth = i;
-            let prefix = "  ".repeat(depth);
-            
             let sym_name = self
                 .sorted_symbols
                 .iter()
                 .find(|(a, _)| *a == call.target_pc)
                 .map(|(_, n)| n.as_str());
-
             let display_name = if let Some(sym) = sym_name {
                 format!("{} ({:#x})", sym, call.target_pc)
             } else {
                 format!("func_{:#x}", call.target_pc)
             };
-
-            lines.push(Line::from(vec![
-                Span::raw(prefix),
-                Span::styled("└─► ", Style::default().fg(self.theme.dim)),
-                Span::styled(display_name, Style::default().fg(self.theme.target)),
-                Span::styled(format!("  [ret: {:#x}]", call.return_pc), Style::default().fg(self.theme.dim)),
-            ]));
+            items.push((display_name, call.target_pc, call.return_pc, i));
         }
 
-        let paragraph = Paragraph::new(lines).scroll((self.ui.stack_scroll as u16, 0));
-        frame.render_widget(paragraph, area);
+        let items_len = items.len();
+        self.ui.callstack_cursor = self.ui.callstack_cursor.min(items_len.saturating_sub(1));
+
+        let visible_height = content_area.height as usize;
+        if self.ui.callstack_cursor < self.ui.callstack_scroll {
+            self.ui.callstack_scroll = self.ui.callstack_cursor;
+        } else if self.ui.callstack_cursor >= self.ui.callstack_scroll + visible_height {
+            self.ui.callstack_scroll = self
+                .ui
+                .callstack_cursor
+                .saturating_sub(visible_height.saturating_sub(1));
+        }
+        let max_scroll = items_len.saturating_sub(visible_height);
+        let scroll = self.ui.callstack_scroll.min(max_scroll);
+
+        let mut lines = Vec::new();
+        for (ui_idx, (display_name, _, ret_pc, depth)) in items
+            .into_iter()
+            .enumerate()
+            .skip(scroll)
+            .take(visible_height)
+        {
+            let selected = focused && ui_idx == self.ui.callstack_cursor;
+
+            let mut spans = vec![];
+            if selected {
+                spans.push(Span::styled(
+                    " ► ",
+                    Style::default()
+                        .fg(self.theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                spans.push(Span::raw("   "));
+            }
+
+            if depth == 0 {
+                spans.push(Span::styled(
+                    display_name,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                let prefix = "  ".repeat(depth);
+                spans.push(Span::raw(prefix));
+                spans.push(Span::styled("└─► ", Style::default().fg(self.theme.dim)));
+
+                let fg_color = if selected {
+                    self.theme.accent
+                } else {
+                    self.theme.target
+                };
+                spans.push(Span::styled(display_name, Style::default().fg(fg_color)));
+                spans.push(Span::styled(
+                    format!("  [ret: {:#x}]", ret_pc),
+                    Style::default().fg(self.theme.dim),
+                ));
+            }
+
+            lines.push(Line::from(spans));
+        }
+
+        if lines.is_empty() {
+            frame.render_widget(
+                Paragraph::new(" No call stack available")
+                    .style(Style::default().fg(self.theme.dim)),
+                content_area,
+            );
+        } else {
+            let paragraph = Paragraph::new(lines);
+            frame.render_widget(paragraph, content_area);
+        }
     }
 
     fn render_symbols(&mut self, frame: &mut Frame, area: Rect) {

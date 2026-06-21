@@ -92,6 +92,10 @@ pub struct UiState {
     pub memory_addr: u64,
     pub memory_tab: MemoryTab,
     pub stack_scroll: usize,
+    #[serde(default)]
+    pub callstack_scroll: usize,
+    #[serde(default)]
+    pub callstack_cursor: usize,
     pub selected_hart: usize,
     #[serde(skip)]
     pub panel_rects: HashMap<Panel, Rect>,
@@ -151,6 +155,8 @@ impl UiState {
             memory_addr: 0x8000_0000,
             memory_tab: MemoryTab::default(),
             stack_scroll: 0,
+            callstack_scroll: 0,
+            callstack_cursor: 0,
             selected_hart: 0,
             panel_rects: HashMap::new(),
             panel_focused: true,

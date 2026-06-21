@@ -328,6 +328,9 @@ impl Debugger {
                 self.console_log.clear();
                 self.ui.trace.stack.clear();
                 self.ui.trace.forward_stack.clear();
+                for analyzer in &mut self.stack_analyzers {
+                    *analyzer = crate::stack::StackAnalyzer::new();
+                }
                 self.set_info("Machine reset");
             }
             DebugCommand::ClearTrace => {

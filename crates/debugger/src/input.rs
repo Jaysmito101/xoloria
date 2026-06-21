@@ -272,6 +272,28 @@ impl Debugger {
 
             KeyCode::Char('c') => self.execute_command(crate::command::DebugCommand::Continue),
             KeyCode::Char('p') => self.execute_command(crate::command::DebugCommand::Pause),
+            KeyCode::Char('r') => {
+                if self.ui.panel == Panel::Memory && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
+                    let hart_idx = self.ui.selected_hart;
+                    if hart_idx < self.stack_analyzers.len() {
+                        let analyzer = &self.stack_analyzers[hart_idx];
+                        if self.ui.callstack_cursor > 0 && self.ui.callstack_cursor < analyzer.call_stack.len() {
+                            let target_addr = analyzer.call_stack[self.ui.callstack_cursor].return_pc;
+                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                            if self.ui.disasm.view_center_addr == Some(target_addr) {
+                                self.ui.panel = Panel::Disassembly;
+                            } else {
+                                if let Some(entry) = target_entry.as_ref() {
+                                    self.ui.disasm.view_history.push(entry.addr);
+                                }
+                                self.ui.disasm.view_center_addr = Some(target_addr);
+                                self.ui.disasm.cursor = 0;
+                                self.disasm_cache = None;
+                            }
+                        }
+                    }
+                }
+            }
 
             KeyCode::Char('e') => {
                 if self.ui.panel == Panel::Csr
@@ -432,6 +454,25 @@ impl Debugger {
                             self.ui.disasm.view_center_addr = Some(t_addr);
                             self.ui.disasm.cursor = 0;
                             self.disasm_cache = None;
+                        }
+                    }
+                } else if self.ui.panel == Panel::Memory && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
+                    let hart_idx = self.ui.selected_hart;
+                    if hart_idx < self.stack_analyzers.len() {
+                        let analyzer = &self.stack_analyzers[hart_idx];
+                        if self.ui.callstack_cursor > 0 && self.ui.callstack_cursor < analyzer.call_stack.len() {
+                            let target_addr = analyzer.call_stack[self.ui.callstack_cursor].target_pc;
+                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                            if self.ui.disasm.view_center_addr == Some(target_addr) {
+                                self.ui.panel = Panel::Disassembly;
+                            } else {
+                                if let Some(entry) = target_entry.as_ref() {
+                                    self.ui.disasm.view_history.push(entry.addr);
+                                }
+                                self.ui.disasm.view_center_addr = Some(target_addr);
+                                self.ui.disasm.cursor = 0;
+                                self.disasm_cache = None;
+                            }
                         }
                     }
                 }
@@ -648,6 +689,8 @@ impl Debugger {
             Panel::Memory => {
                 if self.ui.memory_tab == crate::ui_state::MemoryTab::Stack {
                     self.ui.stack_scroll = (self.ui.stack_scroll as i32 + delta).max(0) as usize;
+                } else if self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
+                    self.ui.callstack_cursor = (self.ui.callstack_cursor as i32 + delta).max(0) as usize;
                 } else {
                     let byte_delta = delta as i64 * 16;
                     self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
@@ -763,6 +806,31 @@ impl Debugger {
                         self.ui.disasm.cursor = 0;
                         self.disasm_cache = None;
                         self.ui.panel = Panel::Disassembly;
+                    }
+                } else if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+                    && *panel == Panel::Memory
+                    && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack
+                    && mouse.row > rect.y
+                {
+                    let row_idx = (mouse.row - rect.y - 1) as usize;
+                    let hart_idx = self.ui.selected_hart;
+                    if hart_idx < self.stack_analyzers.len() {
+                        let analyzer = &self.stack_analyzers[hart_idx];
+                        let callstack_idx = self.ui.callstack_scroll + row_idx;
+                        if callstack_idx < analyzer.call_stack.len() {
+                            self.ui.callstack_cursor = callstack_idx;
+                            if callstack_idx > 0 {
+                                let t_addr = analyzer.call_stack[callstack_idx].target_pc;
+                                let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                                if let Some(entry) = target_entry.as_ref() {
+                                    self.ui.disasm.view_history.push(entry.addr);
+                                }
+                                self.ui.disasm.view_center_addr = Some(t_addr);
+                                self.ui.disasm.cursor = 0;
+                                self.disasm_cache = None;
+                                self.ui.panel = Panel::Disassembly;
+                            }
+                        }
                     }
                 }
                 break;
