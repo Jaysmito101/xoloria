@@ -409,32 +409,48 @@ impl Debugger {
                         self.disasm_cache = None;
                     }
                 } else if self.ui.panel == Panel::Symbols {
-                    let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
-                        let search = self.ui.search.query.to_lowercase();
-                        let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
-                            .iter()
-                            .filter(|(_, name)| {
-                                search.is_empty() || name.to_lowercase().contains(&search)
-                            })
-                            .collect();
-                        filtered.get(self.ui.symbols.cursor).map(|t| t.0)
-                    } else {
-                        let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
-                            self.ui
-                                .trace
-                                .stack
+                    let target_addr = match self.ui.symbols.tab {
+                        SymbolsTab::Symbols => {
+                            let search = self.ui.search.query.to_lowercase();
+                            let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                                 .iter()
-                                .rev()
-                                .filter(|e| {
-                                    self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
-                                        .binary_search_by_key(&e.pc, |(a, _)| *a)
-                                        .is_ok()
+                                .filter(|(_, name)| {
+                                    search.is_empty() || name.to_lowercase().contains(&search)
                                 })
-                                .collect()
-                        } else {
-                            self.ui.trace.stack.iter().rev().collect()
-                        };
-                        filtered_trace.get(self.ui.trace.cursor).map(|e| e.pc)
+                                .collect();
+                            filtered.get(self.ui.symbols.cursor).map(|t| t.0)
+                        }
+                        SymbolsTab::Trace => {
+                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                                self.ui
+                                    .trace
+                                    .stack
+                                    .iter()
+                                    .rev()
+                                    .filter(|e| {
+                                        self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                            .is_ok()
+                                    })
+                                    .collect()
+                            } else {
+                                self.ui.trace.stack.iter().rev().collect()
+                            };
+                            filtered_trace.get(self.ui.trace.cursor).map(|e| e.pc)
+                        }
+                        SymbolsTab::CallStack => {
+                            let hart_idx = self.ui.selected_hart;
+                            if hart_idx < self.stack_analyzers.len() {
+                                let analyzer = &self.stack_analyzers[hart_idx];
+                                if self.ui.callstack_cursor > 0 && self.ui.callstack_cursor < analyzer.call_stack.len() {
+                                    Some(analyzer.call_stack[self.ui.callstack_cursor].target_pc)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        }
                     };
 
                     if let Some(t_addr) = target_addr {
@@ -453,25 +469,6 @@ impl Debugger {
                             self.ui.disasm.view_center_addr = Some(t_addr);
                             self.ui.disasm.cursor = 0;
                             self.disasm_cache = None;
-                        }
-                    }
-                } else if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::CallStack {
-                    let hart_idx = self.ui.selected_hart;
-                    if hart_idx < self.stack_analyzers.len() {
-                        let analyzer = &self.stack_analyzers[hart_idx];
-                        if self.ui.callstack_cursor > 0 && self.ui.callstack_cursor < analyzer.call_stack.len() {
-                            let target_addr = analyzer.call_stack[self.ui.callstack_cursor].target_pc;
-                            let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
-                            if self.ui.disasm.view_center_addr == Some(target_addr) {
-                                self.ui.panel = Panel::Disassembly;
-                            } else {
-                                if let Some(entry) = target_entry.as_ref() {
-                                    self.ui.disasm.view_history.push(entry.addr);
-                                }
-                                self.ui.disasm.view_center_addr = Some(target_addr);
-                                self.ui.disasm.cursor = 0;
-                                self.disasm_cache = None;
-                            }
                         }
                     }
                 }
@@ -748,44 +745,66 @@ impl Debugger {
                     && mouse.row > rect.y
                 {
                     let row_idx = (mouse.row - rect.y - 1) as usize;
-                    let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
-                        let search = self.ui.search.query.to_lowercase();
-                        let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
-                            .iter()
-                            .filter(|(_, name)| {
-                                search.is_empty() || name.to_lowercase().contains(&search)
-                            })
-                            .collect();
-
-                        let symbol_idx = self.ui.symbols.scroll + row_idx;
-                        if symbol_idx < filtered.len() {
-                            self.ui.symbols.cursor = symbol_idx;
-                            filtered.get(symbol_idx).map(|t| t.0)
-                        } else {
-                            None
-                        }
-                    } else {
-                        let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
-                            self.ui
-                                .trace
-                                .stack
+                    let target_addr = match self.ui.symbols.tab {
+                        SymbolsTab::Symbols => {
+                            let search = self.ui.search.query.to_lowercase();
+                            let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                                 .iter()
-                                .rev()
-                                .filter(|e| {
-                                    self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
-                                        .binary_search_by_key(&e.pc, |(a, _)| *a)
-                                        .is_ok()
+                                .filter(|(_, name)| {
+                                    search.is_empty() || name.to_lowercase().contains(&search)
                                 })
-                                .collect()
-                        } else {
-                            self.ui.trace.stack.iter().rev().collect()
-                        };
-                        let trace_idx = self.ui.trace.scroll + row_idx;
-                        if trace_idx < filtered_trace.len() {
-                            self.ui.trace.cursor = trace_idx;
-                            filtered_trace.get(trace_idx).map(|e| e.pc)
-                        } else {
-                            None
+                                .collect();
+
+                            let symbol_idx = self.ui.symbols.scroll + row_idx;
+                            if symbol_idx < filtered.len() {
+                                self.ui.symbols.cursor = symbol_idx;
+                                filtered.get(symbol_idx).map(|t| t.0)
+                            } else {
+                                None
+                            }
+                        }
+                        SymbolsTab::Trace => {
+                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                                self.ui
+                                    .trace
+                                    .stack
+                                    .iter()
+                                    .rev()
+                                    .filter(|e| {
+                                        self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                            .is_ok()
+                                    })
+                                    .collect()
+                            } else {
+                                self.ui.trace.stack.iter().rev().collect()
+                            };
+                            let trace_idx = self.ui.trace.scroll + row_idx;
+                            if trace_idx < filtered_trace.len() {
+                                self.ui.trace.cursor = trace_idx;
+                                filtered_trace.get(trace_idx).map(|e| e.pc)
+                            } else {
+                                None
+                            }
+                        }
+                        SymbolsTab::CallStack => {
+                            let hart_idx = self.ui.selected_hart;
+                            if hart_idx < self.stack_analyzers.len() {
+                                let analyzer = &self.stack_analyzers[hart_idx];
+                                let callstack_idx = self.ui.callstack_scroll + row_idx;
+                                if callstack_idx < analyzer.call_stack.len() {
+                                    self.ui.callstack_cursor = callstack_idx;
+                                    if callstack_idx > 0 {
+                                        Some(analyzer.call_stack[callstack_idx].target_pc)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
                         }
                     };
 
@@ -796,37 +815,15 @@ impl Debugger {
                             .as_ref()
                             .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
-                        if let Some(entry) = target_entry.as_ref() {
-                            self.ui.disasm.view_history.push(entry.addr);
-                        }
-                        self.ui.disasm.view_center_addr = Some(t_addr);
-                        self.ui.disasm.cursor = 0;
-                        self.disasm_cache = None;
-                        self.ui.panel = Panel::Disassembly;
-                    }
-                } else if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-                    && *panel == Panel::Symbols
-                    && self.ui.symbols.tab == SymbolsTab::CallStack
-                    && mouse.row > rect.y
-                {
-                    let row_idx = (mouse.row - rect.y - 1) as usize;
-                    let hart_idx = self.ui.selected_hart;
-                    if hart_idx < self.stack_analyzers.len() {
-                        let analyzer = &self.stack_analyzers[hart_idx];
-                        let callstack_idx = self.ui.callstack_scroll + row_idx;
-                        if callstack_idx < analyzer.call_stack.len() {
-                            self.ui.callstack_cursor = callstack_idx;
-                            if callstack_idx > 0 {
-                                let t_addr = analyzer.call_stack[callstack_idx].target_pc;
-                                let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
-                                if let Some(entry) = target_entry.as_ref() {
-                                    self.ui.disasm.view_history.push(entry.addr);
-                                }
-                                self.ui.disasm.view_center_addr = Some(t_addr);
-                                self.ui.disasm.cursor = 0;
-                                self.disasm_cache = None;
-                                self.ui.panel = Panel::Disassembly;
+                        if self.ui.disasm.view_center_addr == Some(t_addr) {
+                            self.ui.panel = Panel::Disassembly;
+                        } else {
+                            if let Some(entry) = target_entry.as_ref() {
+                                self.ui.disasm.view_history.push(entry.addr);
                             }
+                            self.ui.disasm.view_center_addr = Some(t_addr);
+                            self.ui.disasm.cursor = 0;
+                            self.disasm_cache = None;
                         }
                     }
                 }

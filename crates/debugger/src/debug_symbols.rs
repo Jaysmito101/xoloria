@@ -180,28 +180,63 @@ impl DebugSymbols {
         target_addr: u64,
         local_entries: Option<&[DisasmEntry]>,
     ) -> Option<(String, u32)> {
+        if let Some(loc) = self.source_locations.get(&target_addr) {
+            return Some(loc.clone());
+        }
+
+        let mut sym_start = 0;
+        let mut sym_end = u64::MAX;
+        let search = self
+            .sorted_symbols
+            .binary_search_by_key(&target_addr, |(a, _)| *a);
+        match search {
+            Ok(idx) => {
+                sym_start = self.sorted_symbols[idx].0;
+                if idx + 1 < self.sorted_symbols.len() {
+                    sym_end = self.sorted_symbols[idx + 1].0;
+                }
+            }
+            Err(idx) => {
+                if idx > 0 {
+                    sym_start = self.sorted_symbols[idx - 1].0;
+                }
+                if idx < self.sorted_symbols.len() {
+                    sym_end = self.sorted_symbols[idx].0;
+                }
+            }
+        }
+
         if let Some(entries) = local_entries
             && let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr)
         {
             for i in (0..=abs_cursor).rev() {
-                if let Some(entry) = entries.get(i)
-                    && let Some(loc) = self.source_locations.get(&entry.addr)
-                {
-                    return Some(loc.clone());
+                if let Some(entry) = entries.get(i) {
+                    if entry.addr < sym_start {
+                        break;
+                    }
+                    if let Some(loc) = self.source_locations.get(&entry.addr) {
+                        return Some(loc.clone());
+                    }
                 }
             }
             for i in (abs_cursor + 1)..entries.len() {
-                if let Some(entry) = entries.get(i)
-                    && let Some(loc) = self.source_locations.get(&entry.addr)
-                {
-                    return Some(loc.clone());
+                if let Some(entry) = entries.get(i) {
+                    if entry.addr >= sym_end {
+                        break;
+                    }
+                    if let Some(loc) = self.source_locations.get(&entry.addr) {
+                        return Some(loc.clone());
+                    }
                 }
             }
         }
 
         let mut best_addr = None;
         for &addr in self.source_locations.keys() {
-            if addr <= target_addr && (best_addr.is_none() || addr > best_addr.unwrap()) {
+            if addr <= target_addr
+                && addr >= sym_start
+                && (best_addr.is_none() || addr > best_addr.unwrap())
+            {
                 best_addr = Some(addr);
             }
         }
