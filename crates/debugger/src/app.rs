@@ -130,7 +130,17 @@ impl<'a> TickContext<'a> {
         let inst_val = bus.read::<u32>(pc).unwrap_or(0);
         let inst = Instruction::try_from(inst_val).ok();
         let snapshot = WatchPointSnapshot::capture(watches, bus);
-        Self { inst, snapshot, pc, sp, hart, watches, bus, analyzer, trace }
+        Self {
+            inst,
+            snapshot,
+            pc,
+            sp,
+            hart,
+            watches,
+            bus,
+            analyzer,
+            trace,
+        }
     }
 
     pub(crate) fn tick(self) -> (emulator::Result<()>, Option<String>) {
@@ -141,14 +151,16 @@ impl<'a> TickContext<'a> {
             self.analyzer.on_instruction_executed(&i);
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);
-        
+
         if let Some(trace) = self.trace {
             if trace.stack.last().map(|e| e.pc) != Some(self.pc) {
-                trace.stack.push(crate::ui_state::TraceEntry::new(self.pc, self.sp));
+                trace
+                    .stack
+                    .push(crate::ui_state::TraceEntry::new(self.pc, self.sp));
                 trace.forward_stack.clear();
             }
         }
-        
+
         (result, watch_hit)
     }
 }
@@ -490,8 +502,6 @@ impl Debugger {
         self.disasm_cache = None;
     }
 
-
-
     fn handle_tick_result(&mut self, hart_idx: usize, result: TickResult) -> bool {
         match result {
             TickResult::Ok => false,
@@ -525,9 +535,8 @@ impl Debugger {
         let Some(machine) = self.machine.as_mut() else {
             return TickResult::Error("No machine".into());
         };
-        let bus = machine.bus().clone();
-        let hart = &mut machine.harts_mut()[hart_idx];
-        
+        let hart = &mut machine.harts[hart_idx];
+
         let trace_opt = if hart_idx == self.ui.selected_hart {
             Some(&mut self.ui.trace)
         } else {
@@ -537,14 +546,14 @@ impl Debugger {
         let ctx = TickContext::begin(
             hart,
             &self.watches,
-            &*bus,
+            &machine.bus,
             &mut self.stack_analyzers[hart_idx],
             trace_opt,
         );
         let pc = ctx.pc;
 
         let (result, watch_hit) = ctx.tick();
-        
+
         if let Some(name) = watch_hit {
             return TickResult::Watchpoint(pc, name);
         }
@@ -592,42 +601,39 @@ impl Debugger {
         }
 
         for _ in 0..10000 {
-            let Some(machine) = self.machine.as_ref() else {
+            let Some(machine) = self.machine.as_mut() else {
                 return;
             };
-            let bus = machine.bus().clone();
-
             let running: Vec<bool> = self
                 .hart_modes
                 .iter()
                 .map(|m| *m == HartMode::Running)
                 .collect();
 
-            let harts = self.machine.as_mut().unwrap().harts_mut();
             let mut tick_results: Vec<(usize, TickResult)> = Vec::new();
 
-            for (i, hart) in harts.iter_mut().enumerate() {
+            for (i, hart) in machine.harts.iter_mut().enumerate() {
                 if !running[i] {
                     continue;
                 }
-                
+
                 let trace_opt = if i == self.ui.selected_hart {
-            Some(&mut self.ui.trace)
-        } else {
-            None
-        };
+                    Some(&mut self.ui.trace)
+                } else {
+                    None
+                };
 
-        let ctx = TickContext::begin(
-            hart,
-            &self.watches,
-            &*bus,
-            &mut self.stack_analyzers[i],
-            trace_opt,
-        );
-        let pc = ctx.pc;
+                let ctx = TickContext::begin(
+                    hart,
+                    &self.watches,
+                    &machine.bus,
+                    &mut self.stack_analyzers[i],
+                    trace_opt,
+                );
+                let pc = ctx.pc;
 
-        let (result, watch_hit) = ctx.tick();
-                
+                let (result, watch_hit) = ctx.tick();
+
                 if let Some(name) = watch_hit {
                     tick_results.push((i, TickResult::Watchpoint(pc, name)));
                     continue;
@@ -672,7 +678,7 @@ impl Debugger {
     pub(crate) fn do_read_memory(&mut self, data_type: crate::state::DataType, addr: u64) {
         use emulator::BusIO;
         let bus = match self.machine.as_ref() {
-            Some(m) => m.bus(),
+            Some(m) => &m.bus,
             None => return self.set_error("Machine not loaded"),
         };
 
@@ -709,7 +715,7 @@ impl Debugger {
     ) {
         use emulator::BusIO;
         let bus = match self.machine.as_ref() {
-            Some(m) => m.bus(),
+            Some(m) => &m.bus,
             None => return self.set_error("Machine not loaded"),
         };
 
@@ -808,9 +814,8 @@ impl Debugger {
         let Some(machine) = self.machine.as_ref() else {
             return vec![0xFF; len];
         };
-        let bus = machine.bus();
         (0..len)
-            .map(|offset| bus.read::<u8>(addr + offset as u64).unwrap_or(0xFF))
+            .map(|offset| machine.bus.read::<u8>(addr + offset as u64).unwrap_or(0xFF))
             .collect()
     }
 
@@ -819,7 +824,7 @@ impl Debugger {
         let hw_pc = self
             .machine
             .as_ref()
-            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
             .unwrap_or(0);
         let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
         let center_idx = entries
@@ -839,7 +844,7 @@ impl Debugger {
             return Vec::new();
         };
 
-        let hart = &machine.harts()[self.ui.selected_hart];
+        let hart = &machine.harts[self.ui.selected_hart];
         let hw_pc = hart.registers().pc();
         let bp_gen = self.breakpoints.len() as u64;
         let pc = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
@@ -854,7 +859,6 @@ impl Debugger {
         }
 
         let x_regs = hart.registers().x();
-        let bus = machine.bus();
 
         let cursor = self.ui.disasm.cursor;
         let before = if cursor < 0 {
@@ -876,7 +880,7 @@ impl Debugger {
             let mut addr = scan_start;
             while addr < pc {
                 if let Some((entry, step)) =
-                    Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs)
+                    Self::decode_at(addr, &machine.bus, hw_pc, &self.breakpoints, x_regs)
                 {
                     entries.push(entry);
                     addr += step;
@@ -891,7 +895,7 @@ impl Debugger {
         let mut addr = pc;
         for _ in 0..after {
             if let Some((entry, step)) =
-                Self::decode_at(addr, bus, hw_pc, &self.breakpoints, x_regs)
+                Self::decode_at(addr, &machine.bus, hw_pc, &self.breakpoints, x_regs)
             {
                 entries.push(entry);
                 addr += step;
@@ -959,8 +963,7 @@ impl Debugger {
 
     pub(crate) fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
         let machine = self.machine.as_ref()?;
-        let bus = machine.bus();
-        let raw: u32 = bus.read(addr).ok()?;
+        let raw: u32 = machine.bus.read(addr).ok()?;
         let is_compressed = raw & 0b11 != 0b11;
 
         let decode_result = Instruction::try_from(raw);

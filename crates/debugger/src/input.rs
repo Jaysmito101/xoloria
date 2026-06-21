@@ -253,7 +253,9 @@ impl Debugger {
                             .ui
                             .watch_cursor
                             .min(self.watches.len().saturating_sub(1));
-                        self.execute_command(crate::command::DebugCommand::ToggleWatchBreakpoint(cursor));
+                        self.execute_command(crate::command::DebugCommand::ToggleWatchBreakpoint(
+                            cursor,
+                        ));
                     }
                 } else if self.hart_modes[self.ui.selected_hart] == HartMode::Debug {
                     self.execute_command(crate::command::DebugCommand::Step(1));
@@ -292,7 +294,9 @@ impl Debugger {
                             .ui
                             .watch_cursor
                             .min(self.watches.len().saturating_sub(1));
-                        self.execute_command(crate::command::DebugCommand::DeleteWatchIndex(cursor));
+                        self.execute_command(crate::command::DebugCommand::DeleteWatchIndex(
+                            cursor,
+                        ));
                     }
                 }
             }
@@ -376,7 +380,7 @@ impl Debugger {
                         let _hw_pc = self
                             .machine
                             .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
                         if let Some(entry) = target_entry.as_ref()
                             && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
@@ -422,7 +426,7 @@ impl Debugger {
                             let _hw_pc = self
                                 .machine
                                 .as_ref()
-                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                                .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                                 .unwrap_or(0);
                             if self.ui.disasm.view_center_addr == Some(t_addr) {
                                 self.ui.panel = Panel::Disassembly;
@@ -457,15 +461,18 @@ impl Debugger {
                     let hw_pc = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
                     let current_sp = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().x()[2])
+                        .map(|m| m.harts[self.ui.selected_hart].registers().x()[2])
                         .unwrap_or(0);
                     let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
-                    self.ui.trace.forward_stack.push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
+                    self.ui
+                        .trace
+                        .forward_stack
+                        .push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
 
                     let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
                     if let Some(entry) = target_entry.as_ref() {
@@ -485,15 +492,18 @@ impl Debugger {
                     let hw_pc = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
                     let current_sp = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().x()[2])
+                        .map(|m| m.harts[self.ui.selected_hart].registers().x()[2])
                         .unwrap_or(0);
                     let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
-                    self.ui.trace.stack.push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
+                    self.ui
+                        .trace
+                        .stack
+                        .push(crate::ui_state::TraceEntry::new(center_addr, current_sp));
 
                     let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
                     if let Some(entry) = target_entry.as_ref() {
@@ -513,14 +523,16 @@ impl Debugger {
                     let hw_pc = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
 
                     let target_addr = target_addr;
                     if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
                         let target_line = (self.ui.disasm.source_cursor + 1) as u32;
                         if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
-                            self.execute_command(crate::command::DebugCommand::Breakpoint(Some(crate::command::BreakpointTarget::Address(addr))));
+                            self.execute_command(crate::command::DebugCommand::Breakpoint(Some(
+                                crate::command::BreakpointTarget::Address(addr),
+                            )));
                         } else {
                             self.set_error("No mapping for this source line");
                         }
@@ -532,16 +544,20 @@ impl Debugger {
                     let _hw_pc = self
                         .machine
                         .as_ref()
-                        .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                        .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
                     if let Some(entry) = target_entry.as_ref() {
                         let addr = entry.addr;
-                        self.execute_command(crate::command::DebugCommand::Breakpoint(Some(crate::command::BreakpointTarget::Address(addr))));
+                        self.execute_command(crate::command::DebugCommand::Breakpoint(Some(
+                            crate::command::BreakpointTarget::Address(addr),
+                        )));
                     }
                 }
             }
             KeyCode::Char('D') => {
-                self.execute_command(crate::command::DebugCommand::Delete(crate::command::DeleteTarget::All));
+                self.execute_command(crate::command::DebugCommand::Delete(
+                    crate::command::DeleteTarget::All,
+                ));
             }
             KeyCode::Char('h') => {
                 if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::Trace {
@@ -572,7 +588,7 @@ impl Debugger {
 
             KeyCode::Home => {
                 if let Some(m) = self.machine.as_ref() {
-                    let pc = m.harts()[self.ui.selected_hart].registers().pc();
+                    let pc = m.harts[self.ui.selected_hart].registers().pc();
                     if self.ui.panel == Panel::Memory {
                         self.ui.memory_addr = pc;
                     } else if self.ui.panel == Panel::Disassembly {
@@ -598,7 +614,7 @@ impl Debugger {
                             let _hw_pc = self
                                 .machine
                                 .as_ref()
-                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                                .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                                 .unwrap_or(0);
                             if let Some(entry) = target_entry.as_ref() {
                                 self.ui.disasm.view_history.push(entry.addr);
@@ -744,7 +760,7 @@ impl Debugger {
                             let _hw_pc = self
                                 .machine
                                 .as_ref()
-                                .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                                .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                                 .unwrap_or(0);
                             if let Some(entry) = target_entry.as_ref() {
                                 self.ui.disasm.view_history.push(entry.addr);
@@ -872,7 +888,7 @@ impl Debugger {
                         let hw_pc = self
                             .machine
                             .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
                         if let Some((_, target_line)) =
                             self.map_addr_to_source(target_addr, Some(&entries))
@@ -900,7 +916,7 @@ impl Debugger {
                         let hw_pc = self
                             .machine
                             .as_ref()
-                            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+                            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
                         if let Some((path, _)) =
                             self.map_addr_to_source(target_addr, Some(&entries))

@@ -269,7 +269,7 @@ impl Debugger {
                 let priv_mode = self
                     .machine
                     .as_ref()
-                    .map(|m| m.harts()[i].privilage_mode())
+                    .map(|m| m.harts[i].privilage_mode())
                     .map(|p| format!(" {}", p))
                     .unwrap_or_default();
                 Line::from(vec![
@@ -299,7 +299,7 @@ impl Debugger {
             frame.render_widget(block, area);
             return;
         };
-        let regs = machine.harts()[self.ui.selected_hart].registers();
+        let regs = machine.harts[self.ui.selected_hart].registers();
 
         let mut all_rows: Vec<Row> = Vec::with_capacity(33);
 
@@ -466,7 +466,7 @@ impl Debugger {
         let Some(machine) = self.machine.as_ref() else {
             return;
         };
-        let regs = machine.harts()[self.ui.selected_hart].registers();
+        let regs = machine.harts[self.ui.selected_hart].registers();
         let panel_width = area.width.saturating_sub(2) as usize;
 
         let all_csrs: Vec<(ControlRegisterName, u64)> = regs.csrs();
@@ -607,8 +607,7 @@ impl Debugger {
 
             let mut val_bytes = vec![0u8; watch.data_type.size_bytes() as usize];
             if let Some(machine) = self.machine.as_ref() {
-                let bus = machine.bus();
-                val_bytes = watch.read_value(bus.as_ref());
+                val_bytes = watch.read_value(machine.bus.as_ref());
             }
 
             let val_str = match watch.data_type {
@@ -703,7 +702,7 @@ impl Debugger {
         let hw_pc = self
             .machine
             .as_ref()
-            .map(|m| m.harts()[self.ui.selected_hart].registers().pc())
+            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
             .unwrap_or(0);
         let center_addr = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
 
@@ -992,7 +991,7 @@ impl Debugger {
     ) {
         let x_regs = {
             if let Some(machine) = self.machine.as_ref() {
-                *machine.harts()[self.ui.selected_hart].registers().x()
+                *machine.harts[self.ui.selected_hart].registers().x()
             } else {
                 [0; 32]
             }
@@ -1354,7 +1353,7 @@ impl Debugger {
                 .machine
                 .as_ref()
                 .map(|m| {
-                    m.harts()[hart_idx].registers().x()
+                    m.harts[hart_idx].registers().x()
                         [emulator::registers::GeneralRegisterName::Sp as usize]
                 })
                 .unwrap_or(0);
@@ -1473,30 +1472,31 @@ impl Debugger {
     }
 
     fn render_trace(&mut self, frame: &mut Frame, content_area: Rect) {
-        let filtered_trace: Vec<(usize, crate::ui_state::TraceEntry)> = if self.ui.trace.hide_non_symbols {
-            self.ui
-                .trace
-                .stack
-                .iter()
-                .rev()
-                .enumerate()
-                .filter(|&(_, e)| {
-                    self.sorted_symbols
-                        .binary_search_by_key(&e.pc, |(a, _)| *a)
-                        .is_ok()
-                })
-                .map(|(i, &e)| (i, e))
-                .collect()
-        } else {
-            self.ui
-                .trace
-                .stack
-                .iter()
-                .rev()
-                .enumerate()
-                .map(|(i, &e)| (i, e))
-                .collect()
-        };
+        let filtered_trace: Vec<(usize, crate::ui_state::TraceEntry)> =
+            if self.ui.trace.hide_non_symbols {
+                self.ui
+                    .trace
+                    .stack
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .filter(|&(_, e)| {
+                        self.sorted_symbols
+                            .binary_search_by_key(&e.pc, |(a, _)| *a)
+                            .is_ok()
+                    })
+                    .map(|(i, &e)| (i, e))
+                    .collect()
+            } else {
+                self.ui
+                    .trace
+                    .stack
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(i, &e)| (i, e))
+                    .collect()
+            };
 
         let trace_len = filtered_trace.len();
         self.ui.trace.cursor = self.ui.trace.cursor.min(trace_len.saturating_sub(1));

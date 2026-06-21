@@ -49,24 +49,14 @@ impl MachineBuilder {
 }
 
 pub struct Machine {
-    bus: Arc<Bus>,
-    _mmu: Arc<MemoryManagementUnit>,
-    harts: Vec<Hart>,
-    cycle_count: u64,
+    pub bus: Arc<Bus>,
+    pub _mmu: Arc<MemoryManagementUnit>,
+    pub harts: Vec<Hart>,
+    pub cycle_count: u64,
 }
 
 impl Machine {
     const RTC_DIVISOR: u64 = 100;
-
-    pub fn harts(&self) -> &[Hart] {
-        &self.harts
-    }
-    pub fn harts_mut(&mut self) -> &mut [Hart] {
-        &mut self.harts
-    }
-    pub fn bus(&self) -> &Arc<Bus> {
-        &self.bus
-    }
 
     fn new(params: MachineParams) -> Result<Self> {
         let mmu = Arc::new(MemoryManagementUnit::new()?);
