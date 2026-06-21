@@ -105,6 +105,54 @@ impl WatchPointSnapshot {
     }
 }
 
+pub(crate) struct TickContext<'a> {
+    inst: Option<Instruction>,
+    snapshot: WatchPointSnapshot,
+    pub pc: u64,
+    pub sp: u64,
+    hart: &'a mut emulator::Hart,
+    watches: &'a [crate::state::WatchItem],
+    bus: &'a emulator::Bus,
+    analyzer: &'a mut crate::stack::StackAnalyzer,
+    trace: Option<&'a mut crate::ui_state::TraceState>,
+}
+
+impl<'a> TickContext<'a> {
+    pub(crate) fn begin(
+        hart: &'a mut emulator::Hart,
+        watches: &'a [crate::state::WatchItem],
+        bus: &'a emulator::Bus,
+        analyzer: &'a mut crate::stack::StackAnalyzer,
+        trace: Option<&'a mut crate::ui_state::TraceState>,
+    ) -> Self {
+        let pc = hart.registers().pc();
+        let sp = hart.registers().x()[2];
+        let inst_val = bus.read::<u32>(pc).unwrap_or(0);
+        let inst = Instruction::try_from(inst_val).ok();
+        let snapshot = WatchPointSnapshot::capture(watches, bus);
+        Self { inst, snapshot, pc, sp, hart, watches, bus, analyzer, trace }
+    }
+
+    pub(crate) fn tick(self) -> (emulator::Result<()>, Option<String>) {
+        let result = self.hart.tick(self.bus);
+        if result.is_ok()
+            && let Some(i) = self.inst
+        {
+            self.analyzer.on_instruction_executed(&i);
+        }
+        let watch_hit = self.snapshot.check(self.watches, self.bus);
+        
+        if let Some(trace) = self.trace {
+            if trace.stack.last().map(|e| e.pc) != Some(self.pc) {
+                trace.stack.push(crate::ui_state::TraceEntry::new(self.pc, self.sp));
+                trace.forward_stack.clear();
+            }
+        }
+        
+        (result, watch_hit)
+    }
+}
+
 impl Debugger {
     pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
@@ -479,20 +527,25 @@ impl Debugger {
         };
         let bus = machine.bus().clone();
         let hart = &mut machine.harts_mut()[hart_idx];
-        let pc = hart.registers().pc();
-        let inst_val = bus.read::<u32>(pc).unwrap_or(0);
-        let inst = Instruction::try_from(inst_val).ok();
+        
+        let trace_opt = if hart_idx == self.ui.selected_hart {
+            Some(&mut self.ui.trace)
+        } else {
+            None
+        };
 
-        let snapshot = WatchPointSnapshot::capture(&self.watches, &*bus);
+        let ctx = TickContext::begin(
+            hart,
+            &self.watches,
+            &*bus,
+            &mut self.stack_analyzers[hart_idx],
+            trace_opt,
+        );
+        let pc = ctx.pc;
 
-        let result = hart.tick(&bus);
-        if result.is_ok()
-            && let Some(i) = inst
-        {
-            self.stack_analyzers[hart_idx].on_instruction_executed(&i);
-        }
-
-        if let Some(name) = snapshot.check(&self.watches, &*bus) {
+        let (result, watch_hit) = ctx.tick();
+        
+        if let Some(name) = watch_hit {
             return TickResult::Watchpoint(pc, name);
         }
 
@@ -512,23 +565,8 @@ impl Debugger {
     pub fn step_hart(&mut self, n: usize) {
         for _ in 0..n {
             let hart_idx = self.ui.selected_hart;
-            let old_pc = self.machine.as_ref().unwrap().harts()[hart_idx]
-                .registers()
-                .pc();
 
             let result = self.tick_hart(hart_idx);
-
-            let sp = self.machine.as_ref().unwrap().harts()[hart_idx]
-                .registers()
-                .x()[2];
-
-            if self.ui.trace.stack.last().map(|e| e.pc) != Some(old_pc) {
-                self.ui
-                    .trace
-                    .stack
-                    .push(crate::ui_state::TraceEntry::new(old_pc, sp));
-                self.ui.trace.forward_stack.clear();
-            }
 
             match result {
                 TickResult::Ok => {
@@ -567,29 +605,30 @@ impl Debugger {
 
             let harts = self.machine.as_mut().unwrap().harts_mut();
             let mut tick_results: Vec<(usize, TickResult)> = Vec::new();
-            let mut trace_pc: Option<(u64, u64)> = None;
 
             for (i, hart) in harts.iter_mut().enumerate() {
                 if !running[i] {
                     continue;
                 }
-                let pc = hart.registers().pc();
-                if i == self.ui.selected_hart {
-                    trace_pc = Some((pc, hart.registers().x()[2]));
-                }
-                let inst_val = bus.read::<u32>(pc).unwrap_or(0);
-                let inst = Instruction::try_from(inst_val).ok();
+                
+                let trace_opt = if i == self.ui.selected_hart {
+            Some(&mut self.ui.trace)
+        } else {
+            None
+        };
 
-                let snapshot = WatchPointSnapshot::capture(&self.watches, &*bus);
+        let ctx = TickContext::begin(
+            hart,
+            &self.watches,
+            &*bus,
+            &mut self.stack_analyzers[i],
+            trace_opt,
+        );
+        let pc = ctx.pc;
 
-                let result = hart.tick(&bus);
-                if result.is_ok()
-                    && let Some(inst) = inst
-                {
-                    self.stack_analyzers[i].on_instruction_executed(&inst);
-                }
-
-                if let Some(name) = snapshot.check(&self.watches, &*bus) {
+        let (result, watch_hit) = ctx.tick();
+                
+                if let Some(name) = watch_hit {
                     tick_results.push((i, TickResult::Watchpoint(pc, name)));
                     continue;
                 }
@@ -619,16 +658,6 @@ impl Debugger {
                         }
                     }
                 }
-            }
-
-            if let Some((pc, sp)) = trace_pc
-                && self.ui.trace.stack.last().map(|e| e.pc) != Some(pc)
-            {
-                self.ui
-                    .trace
-                    .stack
-                    .push(crate::ui_state::TraceEntry::new(pc, sp));
-                self.ui.trace.forward_stack.clear();
             }
 
             if should_return {
