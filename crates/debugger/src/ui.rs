@@ -10,7 +10,7 @@ use ratatui::{
 
 use crate::app::Debugger;
 use crate::state::*;
-use crate::ui_state::{DisasmTab, SymbolsTab};
+use crate::ui_state::DisasmTab;
 
 impl Debugger {
     pub fn render(&mut self, frame: &mut Frame) {
@@ -145,8 +145,7 @@ impl Debugger {
             .constraints([
                 Constraint::Length(3),
                 Constraint::Min(10),
-                Constraint::Length(8),
-                Constraint::Length(6),
+                Constraint::Length(14),
                 Constraint::Length(1),
             ])
             .split(area);
@@ -163,18 +162,19 @@ impl Debugger {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(mid[0]);
 
-        let lower_mid = Layout::default()
+
+
+        let bottom_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(layout[2]);
 
-        self.render_registers(frame, left_chunks[0]);
-        self.render_registers_tab(frame, left_chunks[1]);
+        self.render_registers_tab(frame, left_chunks[0]);
+        self.render_memory(frame, left_chunks[1]);
         self.render_disassembly(frame, mid[1]);
-        self.render_memory(frame, lower_mid[0]);
-        self.render_symbols(frame, lower_mid[1]);
-        self.render_console(frame, layout[3]);
-        self.render_bottom_bar(frame, layout[4]);
+        self.render_console(frame, bottom_chunks[0]);
+        self.render_symbols(frame, bottom_chunks[1]);
+        self.render_bottom_bar(frame, layout[3]);
 
         if self.ui.help.show {
             self.render_help_modal(frame);
@@ -291,12 +291,8 @@ impl Debugger {
         frame.render_widget(tabs, area);
     }
 
-    fn render_registers(&mut self, frame: &mut Frame, area: Rect) {
-        self.ui.panel_rects.insert(Panel::Registers, area);
-        let focused = self.ui.panel == Panel::Registers;
+    fn render_registers(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
         let Some(machine) = self.machine.as_ref() else {
-            let block = self.panel_block("Registers", focused);
-            frame.render_widget(block, area);
             return;
         };
         let regs = machine.harts[self.ui.selected_hart].registers();
@@ -352,12 +348,6 @@ impl Debugger {
             .take(visible_height)
             .collect();
 
-        let title = if scroll > 0 {
-            format!("Registers [{}/{}]", scroll, max_scroll)
-        } else {
-            "Registers".into()
-        };
-
         let table = Table::new(
             visible_rows,
             [
@@ -366,7 +356,6 @@ impl Debugger {
                 Constraint::Min(10),
             ],
         )
-        .block(self.panel_block(&title, focused))
         .header(
             Row::new(vec!["Name", "Hex", "Decimal"]).style(
                 Style::default()
@@ -441,7 +430,7 @@ impl Debugger {
         let focused = self.ui.panel == Panel::Csr;
         let active_tab = match self.ui.registers_tab {
             crate::ui_state::RegistersTab::Csr => 0,
-            crate::ui_state::RegistersTab::Watch => 1,
+            crate::ui_state::RegistersTab::Gpr => 1,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
@@ -449,15 +438,13 @@ impl Debugger {
             area,
             Panel::Csr,
             "Registers",
-            &["CSR", "Watch List"],
+            &["CSR", "GPR"],
             active_tab,
             focused,
         ) {
             match self.ui.registers_tab {
                 crate::ui_state::RegistersTab::Csr => self.render_csr(frame, content_area, focused),
-                crate::ui_state::RegistersTab::Watch => {
-                    self.render_watch_list(frame, content_area, focused)
-                }
+                crate::ui_state::RegistersTab::Gpr => self.render_registers(frame, content_area, focused),
             }
         }
     }
@@ -1256,7 +1243,7 @@ impl Debugger {
         let active_tab = match self.ui.memory_tab {
             crate::ui_state::MemoryTab::Hex => 0,
             crate::ui_state::MemoryTab::Stack => 1,
-            crate::ui_state::MemoryTab::CallStack => 2,
+            crate::ui_state::MemoryTab::Watch => 2,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
@@ -1264,14 +1251,14 @@ impl Debugger {
             area,
             Panel::Memory,
             "Memory",
-            &["Hex", "Stack", "Call Stack"],
+            &["Hex", "Stack", "Watch List"],
             active_tab,
             focused,
         ) {
             match self.ui.memory_tab {
                 crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, content_area),
                 crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, content_area),
-                crate::ui_state::MemoryTab::CallStack => self.render_callstack(frame, content_area),
+                crate::ui_state::MemoryTab::Watch => self.render_watch_list(frame, content_area, focused),
             }
         }
     }
@@ -1481,8 +1468,8 @@ impl Debugger {
         }
 
         let analyzer = &self.stack_analyzers[hart_idx];
-        let focused = self.ui.panel == Panel::Memory
-            && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack;
+        let focused = self.ui.panel == Panel::Symbols
+            && self.ui.symbols.tab == crate::ui_state::SymbolsTab::CallStack;
 
         let mut items = Vec::new();
         items.push(("[Entry]".to_string(), 0, 0, 0));
@@ -1582,22 +1569,24 @@ impl Debugger {
     fn render_symbols(&mut self, frame: &mut Frame, area: Rect) {
         let focused = self.ui.panel == Panel::Symbols;
         let active_tab = match self.ui.symbols.tab {
-            SymbolsTab::Trace => 0,
-            SymbolsTab::Symbols => 1,
+            crate::ui_state::SymbolsTab::Trace => 0,
+            crate::ui_state::SymbolsTab::Symbols => 1,
+            crate::ui_state::SymbolsTab::CallStack => 2,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
             frame,
             area,
             Panel::Symbols,
-            "Symbols / Trace",
-            &["Trace", "Symbols"],
+            "Symbols & Trace",
+            &["Trace", "Symbols", "Call Stack"],
             active_tab,
             focused,
         ) {
             match self.ui.symbols.tab {
-                SymbolsTab::Trace => self.render_trace(frame, content_area),
-                SymbolsTab::Symbols => self.render_symbols_list(frame, content_area),
+                crate::ui_state::SymbolsTab::Trace => self.render_trace(frame, content_area),
+                crate::ui_state::SymbolsTab::Symbols => self.render_symbols_list(frame, content_area),
+                crate::ui_state::SymbolsTab::CallStack => self.render_callstack(frame, content_area),
             }
         }
     }

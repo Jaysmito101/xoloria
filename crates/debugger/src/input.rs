@@ -246,8 +246,8 @@ impl Debugger {
             KeyCode::Char('q') => self.execute_command(crate::command::DebugCommand::Quit),
 
             KeyCode::F(11) | KeyCode::Char(' ') => {
-                if self.ui.panel == Panel::Csr
-                    && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch
+                if self.ui.panel == Panel::Memory
+                    && self.ui.memory_tab == crate::ui_state::MemoryTab::Watch
                 {
                     if !self.watches.is_empty() {
                         let cursor = self
@@ -273,7 +273,7 @@ impl Debugger {
             KeyCode::Char('c') => self.execute_command(crate::command::DebugCommand::Continue),
             KeyCode::Char('p') => self.execute_command(crate::command::DebugCommand::Pause),
             KeyCode::Char('r') => {
-                if self.ui.panel == Panel::Memory && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
+                if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::CallStack {
                     let hart_idx = self.ui.selected_hart;
                     if hart_idx < self.stack_analyzers.len() {
                         let analyzer = &self.stack_analyzers[hart_idx];
@@ -296,8 +296,8 @@ impl Debugger {
             }
 
             KeyCode::Char('e') => {
-                if self.ui.panel == Panel::Csr
-                    && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch
+                if self.ui.panel == Panel::Memory
+                    && self.ui.memory_tab == crate::ui_state::MemoryTab::Watch
                     && !self.watches.is_empty()
                 {
                     let cursor = self
@@ -308,8 +308,8 @@ impl Debugger {
                 }
             }
             KeyCode::Delete | KeyCode::Char('d') => {
-                if self.ui.panel == Panel::Csr
-                    && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch
+                if self.ui.panel == Panel::Memory
+                    && self.ui.memory_tab == crate::ui_state::MemoryTab::Watch
                     && !self.watches.is_empty()
                 {
                     let cursor = self
@@ -322,14 +322,14 @@ impl Debugger {
 
             KeyCode::Tab => {
                 if self.ui.panel_focused {
-                    self.toggle_active_panel_tab();
+                    self.toggle_active_panel_tab(true);
                 } else {
                     self.select_hart_relative(1);
                 }
             }
             KeyCode::BackTab => {
                 if self.ui.panel_focused {
-                    self.toggle_active_panel_tab();
+                    self.toggle_active_panel_tab(false);
                 } else {
                     self.select_hart_relative(-1);
                 }
@@ -456,7 +456,7 @@ impl Debugger {
                             self.disasm_cache = None;
                         }
                     }
-                } else if self.ui.panel == Panel::Memory && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
+                } else if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::CallStack {
                     let hart_idx = self.ui.selected_hart;
                     if hart_idx < self.stack_analyzers.len() {
                         let analyzer = &self.stack_analyzers[hart_idx];
@@ -689,21 +689,18 @@ impl Debugger {
             Panel::Memory => {
                 if self.ui.memory_tab == crate::ui_state::MemoryTab::Stack {
                     self.ui.stack_scroll = (self.ui.stack_scroll as i32 + delta).max(0) as usize;
-                } else if self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack {
-                    self.ui.callstack_cursor = (self.ui.callstack_cursor as i32 + delta).max(0) as usize;
+                } else if self.ui.memory_tab == crate::ui_state::MemoryTab::Watch {
+                    let new_cursor = (self.ui.watch_cursor as i32 + delta).max(0) as usize;
+                    let max_cursor = self.watches.len().saturating_sub(1);
+                    self.ui.watch_cursor = new_cursor.min(max_cursor);
                 } else {
                     let byte_delta = delta as i64 * 16;
                     self.ui.memory_addr = (self.ui.memory_addr as i64 + byte_delta).max(0) as u64;
                 }
             }
-            Panel::Registers => {
-                self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;
-            }
             Panel::Csr => {
-                if self.ui.registers_tab == crate::ui_state::RegistersTab::Watch {
-                    let new_cursor = (self.ui.watch_cursor as i32 + delta).max(0) as usize;
-                    let max_cursor = self.watches.len().saturating_sub(1);
-                    self.ui.watch_cursor = new_cursor.min(max_cursor);
+                if self.ui.registers_tab == crate::ui_state::RegistersTab::Gpr {
+                    self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;
                 } else {
                     self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize;
                 }
@@ -715,6 +712,8 @@ impl Debugger {
                 if self.ui.symbols.tab == SymbolsTab::Symbols {
                     self.ui.symbols.cursor =
                         (self.ui.symbols.cursor as i32 + delta).max(0) as usize;
+                } else if self.ui.symbols.tab == SymbolsTab::CallStack {
+                    self.ui.callstack_cursor = (self.ui.callstack_cursor as i32 + delta).max(0) as usize;
                 } else {
                     self.ui.trace.cursor = (self.ui.trace.cursor as i32 + delta).max(0) as usize;
                 }
@@ -808,8 +807,8 @@ impl Debugger {
                         self.ui.panel = Panel::Disassembly;
                     }
                 } else if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-                    && *panel == Panel::Memory
-                    && self.ui.memory_tab == crate::ui_state::MemoryTab::CallStack
+                    && *panel == Panel::Symbols
+                    && self.ui.symbols.tab == SymbolsTab::CallStack
                     && mouse.row > rect.y
                 {
                     let row_idx = (mouse.row - rect.y - 1) as usize;
@@ -938,7 +937,7 @@ impl Debugger {
         }
     }
 
-    fn toggle_active_panel_tab(&mut self) {
+    fn toggle_active_panel_tab(&mut self, forward: bool) {
         match self.ui.panel {
             Panel::Disassembly => {
                 self.ui.disasm.tab = match self.ui.disasm.tab {
@@ -1002,27 +1001,43 @@ impl Debugger {
             }
             Panel::Csr => {
                 self.ui.registers_tab = match self.ui.registers_tab {
-                    crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Watch,
-                    crate::ui_state::RegistersTab::Watch => crate::ui_state::RegistersTab::Csr,
+                    crate::ui_state::RegistersTab::Csr => crate::ui_state::RegistersTab::Gpr,
+                    crate::ui_state::RegistersTab::Gpr => crate::ui_state::RegistersTab::Csr,
                 };
             }
             Panel::Memory => {
-                self.ui.memory_tab = match self.ui.memory_tab {
-                    crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
-                    crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::CallStack,
-                    crate::ui_state::MemoryTab::CallStack => crate::ui_state::MemoryTab::Hex,
-                };
+                if forward {
+                    self.ui.memory_tab = match self.ui.memory_tab {
+                        crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Stack,
+                        crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Watch,
+                        crate::ui_state::MemoryTab::Watch => crate::ui_state::MemoryTab::Hex,
+                    };
+                } else {
+                    self.ui.memory_tab = match self.ui.memory_tab {
+                        crate::ui_state::MemoryTab::Hex => crate::ui_state::MemoryTab::Watch,
+                        crate::ui_state::MemoryTab::Watch => crate::ui_state::MemoryTab::Stack,
+                        crate::ui_state::MemoryTab::Stack => crate::ui_state::MemoryTab::Hex,
+                    };
+                }
             }
             Panel::Symbols => {
-                self.ui.symbols.tab = match self.ui.symbols.tab {
-                    SymbolsTab::Symbols => SymbolsTab::Trace,
-                    SymbolsTab::Trace => SymbolsTab::Symbols,
-                };
+                if forward {
+                    self.ui.symbols.tab = match self.ui.symbols.tab {
+                        SymbolsTab::Trace => SymbolsTab::Symbols,
+                        SymbolsTab::Symbols => SymbolsTab::CallStack,
+                        SymbolsTab::CallStack => SymbolsTab::Trace,
+                    };
+                } else {
+                    self.ui.symbols.tab = match self.ui.symbols.tab {
+                        SymbolsTab::Trace => SymbolsTab::CallStack,
+                        SymbolsTab::CallStack => SymbolsTab::Symbols,
+                        SymbolsTab::Symbols => SymbolsTab::Trace,
+                    };
+                }
             }
             Panel::Console => {
                 self.ui.console.tab = self.ui.console.tab.next();
             }
-            Panel::Registers => {}
         }
     }
 }

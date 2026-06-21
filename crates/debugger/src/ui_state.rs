@@ -114,6 +114,7 @@ pub enum SymbolsTab {
     #[default]
     Trace,
     Symbols,
+    CallStack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -121,14 +122,14 @@ pub enum MemoryTab {
     #[default]
     Hex,
     Stack,
-    CallStack,
+    Watch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum RegistersTab {
     #[default]
     Csr,
-    Watch,
+    Gpr,
 }
 
 impl UiState {

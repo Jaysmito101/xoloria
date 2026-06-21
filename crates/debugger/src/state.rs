@@ -40,7 +40,6 @@ impl HartMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Panel {
-    Registers,
     Disassembly,
     Csr,
     Memory,
@@ -67,34 +66,27 @@ impl ConsoleTab {
 impl Panel {
     pub fn next(self) -> Self {
         match self {
-            Self::Registers => Self::Disassembly,
             Self::Disassembly => Self::Csr,
             Self::Csr => Self::Memory,
             Self::Memory => Self::Symbols,
             Self::Symbols => Self::Console,
-            Self::Console => Self::Registers,
+            Self::Console => Self::Disassembly,
         }
     }
 
     pub fn nav(self, dir: Direction) -> Self {
         match (self, dir) {
-            (Self::Registers, Direction::Right) => Self::Disassembly,
-            (Self::Registers, Direction::Down) => Self::Csr,
             (Self::Csr, Direction::Right) => Self::Disassembly,
-            (Self::Csr, Direction::Up) => Self::Registers,
             (Self::Csr, Direction::Down) => Self::Memory,
-            (Self::Disassembly, Direction::Left) => Self::Registers,
-            (Self::Disassembly, Direction::Down) => Self::Symbols,
+            (Self::Memory, Direction::Right) => Self::Disassembly,
             (Self::Memory, Direction::Up) => Self::Csr,
-            (Self::Memory, Direction::Left) => Self::Csr,
-            (Self::Memory, Direction::Right) => Self::Symbols,
             (Self::Memory, Direction::Down) => Self::Console,
-            (Self::Symbols, Direction::Up) => Self::Disassembly,
-            (Self::Symbols, Direction::Left) => Self::Memory,
-            (Self::Symbols, Direction::Down) => Self::Console,
+            (Self::Disassembly, Direction::Left) => Self::Memory,
+            (Self::Disassembly, Direction::Down) => Self::Symbols,
             (Self::Console, Direction::Up) => Self::Memory,
-            (Self::Console, Direction::Left) => Self::Csr,
             (Self::Console, Direction::Right) => Self::Symbols,
+            (Self::Symbols, Direction::Up) => Self::Disassembly,
+            (Self::Symbols, Direction::Left) => Self::Console,
             _ => self,
         }
     }
