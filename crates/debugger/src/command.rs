@@ -20,11 +20,18 @@ pub enum WatchCommand {
 }
 
 #[derive(Debug)]
+pub enum ThemeCommand {
+    Reload,
+    Set(String),
+}
+
+#[derive(Debug)]
 pub enum DebugCommand {
     Breakpoint(Option<BreakpointTarget>),
     Delete(DeleteTarget),
     Info(InfoTarget),
     Watch(WatchCommand),
+    Theme(ThemeCommand),
     SaveWorkspace,
     LoadWorkspace,
     Memory(u64),
@@ -107,6 +114,15 @@ impl DebugCommand {
                 }
             }
             "clear" => Ok(Self::ClearTrace),
+            "theme" => {
+                if parts.len() == 2 && parts[1] == "reload" {
+                    Ok(Self::Theme(ThemeCommand::Reload))
+                } else if parts.len() == 3 && parts[1] == "set" {
+                    Ok(Self::Theme(ThemeCommand::Set(parts[2].to_string())))
+                } else {
+                    Err("Usage: theme reload | theme set <name>".into())
+                }
+            }
             "save" => Ok(Self::SaveWorkspace),
             "load" => Ok(Self::LoadWorkspace),
             "read" => {
@@ -397,6 +413,26 @@ impl Debugger {
                         self.set_info(format!("Deleted watchpoint '{}'", name));
                     } else {
                         self.set_error(format!("Watchpoint '{}' not found", name));
+                    }
+                }
+            },
+            DebugCommand::Theme(cmd) => match cmd {
+                ThemeCommand::Reload => {
+                    match crate::theme::Theme::load() {
+                        Ok(theme) => {
+                            self.theme = theme;
+                            self.set_info("Reloaded theme");
+                        }
+                        Err(e) => self.set_error(e),
+                    }
+                }
+                ThemeCommand::Set(name) => {
+                    match crate::theme::Theme::set(&name) {
+                        Ok(theme) => {
+                            self.theme = theme;
+                            self.set_info(format!("Set theme to {}", name));
+                        }
+                        Err(e) => self.set_error(e),
                     }
                 }
             },

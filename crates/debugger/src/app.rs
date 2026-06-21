@@ -7,7 +7,7 @@ use emulator::{BusIO, Machine, MachineBuilder};
 use crate::debug_symbols::DebugSymbols;
 use crate::disassembly::DisasmCache;
 use crate::ui_state::UiState;
-use crate::{StackAnalyzer, state::*};
+use crate::{stack::StackAnalyzer, state::*};
 
 pub enum TickResult {
     Ok,
@@ -30,7 +30,7 @@ pub struct Debugger {
     pub(crate) breakpoints: HashSet<u64>,
     pub(crate) console_log: Vec<ConsoleEntry>,
     pub(crate) tracing_log: std::sync::Arc<std::sync::Mutex<Vec<ConsoleEntry>>>,
-    pub(crate) theme: Theme,
+    pub(crate) theme: crate::theme::Theme,
 
     pub(crate) ui: UiState,
 
@@ -182,7 +182,7 @@ impl Debugger {
         };
 
         let min_ram = ((binary.len() as u64).next_power_of_two().ilog2() - 10).max(4) as u32;
-        Ok(Self {
+        let mut app = Self {
             binary,
             config_harts: 1,
             config_memory_exp: min_ram,
@@ -195,13 +195,20 @@ impl Debugger {
             breakpoints: HashSet::new(),
             console_log,
             tracing_log: Arc::new(Mutex::new(Vec::new())),
-            theme: Theme::default(),
+            theme: crate::theme::Theme::default(),
             ui: UiState::new(),
             disasm_cache: None,
             debug_symbols,
             stack_analyzers: vec![StackAnalyzer::new(); 1],
             watches: Vec::new(),
-        })
+        };
+
+        match crate::theme::Theme::load() {
+            Ok(theme) => app.theme = theme,
+            Err(e) => app.set_error(e),
+        }
+
+        Ok(app)
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {

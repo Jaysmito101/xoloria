@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,72 +113,6 @@ pub enum InputMode {
     Command,
     Search,
     EditWatch(usize),
-}
-
-pub struct Theme {
-    pub accent: Color,
-    pub dim: Color,
-    pub highlight: Color,
-    pub error: Color,
-    pub warn: Color,
-    pub running: Color,
-    pub stalled: Color,
-    pub border: Color,
-    pub jump: Color,
-    pub branch: Color,
-    pub system: Color,
-    pub breakpoint: Color,
-    pub cursor_bg: Color,
-    pub target: Color,
-    pub info: Color,
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Self {
-            accent: Color::Cyan,
-            dim: Color::DarkGray,
-            highlight: Color::Yellow,
-            error: Color::Red,
-            warn: Color::Yellow,
-            running: Color::Green,
-            stalled: Color::Rgb(180, 80, 80),
-            border: Color::Rgb(80, 80, 100),
-            jump: Color::Magenta,
-            branch: Color::Yellow,
-            system: Color::Red,
-            breakpoint: Color::Red,
-            cursor_bg: Color::Rgb(50, 50, 70),
-            target: Color::Rgb(120, 200, 120),
-            info: Color::Rgb(100, 180, 255),
-        }
-    }
-}
-
-impl Theme {
-    pub fn mode_color(&self, mode: HartMode) -> Color {
-        match mode {
-            HartMode::Debug => self.accent,
-            HartMode::Running => self.running,
-            HartMode::Stalled => self.stalled,
-        }
-    }
-
-    pub fn instruction_color(&self, text: &str) -> Color {
-        let mnemonic = text.split_whitespace().next().unwrap_or("");
-        if matches!(mnemonic, "jal" | "jalr") {
-            self.jump
-        } else if matches!(mnemonic, "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu") {
-            self.branch
-        } else if matches!(
-            mnemonic,
-            "ecall" | "ebreak" | "mret" | "sret" | "wfi" | "fence" | "fence.i"
-        ) {
-            self.system
-        } else {
-            Color::White
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

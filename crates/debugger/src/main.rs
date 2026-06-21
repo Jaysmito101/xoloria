@@ -9,17 +9,16 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-mod app;
-mod command;
-mod debug_symbols;
-mod input;
-mod stack;
-mod state;
-pub use stack::*;
-mod disassembly;
-
-mod ui;
-mod ui_state;
+pub mod app;
+pub mod command;
+pub mod debug_symbols;
+pub mod input;
+pub mod stack;
+pub mod state;
+pub mod theme;
+pub mod ui;
+pub mod ui_state;
+pub mod disassembly;
 
 use app::Debugger;
 use std::io::Write;

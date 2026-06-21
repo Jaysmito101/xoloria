@@ -3,7 +3,7 @@ use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs, Wrap},
 };
@@ -14,6 +14,9 @@ use crate::ui_state::DisasmTab;
 
 impl Debugger {
     pub fn render(&mut self, frame: &mut Frame) {
+        if let Some(bg) = self.theme.bg {
+            frame.render_widget(ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(bg)), frame.area());
+        }
         match self.screen {
             Screen::Setup => self.render_setup(frame),
             Screen::Debug => self.render_debug(frame),
@@ -1086,7 +1089,7 @@ impl Debugger {
                 Span::styled(
                     "◄",
                     Style::default()
-                        .fg(self.theme.target)
+                        .fg(self.theme.highlight)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
@@ -1096,7 +1099,7 @@ impl Debugger {
             let text_color = if e.is_pc {
                 self.theme.accent
             } else if is_target_line && self.ui.disasm.show_targets {
-                self.theme.target
+                self.theme.highlight
             } else {
                 self.theme.instruction_color(&e.text)
             };
@@ -1117,16 +1120,16 @@ impl Debugger {
                 Style::default().fg(self.theme.dim)
             };
 
-            let bg = if is_cursor {
-                self.theme.cursor_bg
+            let bg_style = if let Some(c) = if is_cursor { self.theme.selection_bg } else { None } {
+                Style::default().bg(c)
             } else {
-                Color::Reset
+                Style::default()
             };
 
             let compressed_marker = if e.is_compressed {
-                Span::styled(" [C] ", Style::default().fg(self.theme.dim).bg(bg))
+                Span::styled(" [C] ", Style::default().fg(self.theme.dim).patch(bg_style))
             } else {
-                Span::styled(" ", Style::default().bg(bg))
+                Span::styled(" ", Style::default().patch(bg_style))
             };
 
             let arrow_prefix = if let Some((src, dst)) = active_jump {
@@ -1156,21 +1159,21 @@ impl Debugger {
                 || active_unknown.is_some()
                 || active_offscreen.is_some()
             {
-                self.theme.target
+                self.theme.highlight
             } else {
-                Color::Reset
+                self.theme.fg
             };
-            let arrow_span = Span::styled(arrow_prefix, Style::default().fg(arrow_color).bg(bg));
+            let arrow_span = Span::styled(arrow_prefix, Style::default().fg(arrow_color).patch(bg_style));
 
             let mut spans = vec![
                 marker,
-                Span::styled(" ", Style::default().bg(bg)),
+                Span::styled(" ", Style::default().patch(bg_style)),
                 arrow_span,
-                Span::styled(format!(" {:#010x} ", e.addr), addr_style.bg(bg)),
+                Span::styled(format!(" {:#010x} ", e.addr), addr_style.patch(bg_style)),
                 compressed_marker,
             ];
 
-            spans.push(Span::styled(e.text.clone(), base_style.bg(bg)));
+            spans.push(Span::styled(e.text.clone(), base_style.patch(bg_style)));
 
             match &e.jump_target {
                 Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) => {
@@ -1190,24 +1193,24 @@ impl Debugger {
                         sym_name.map_or_else(String::new, |s| format!(" <{}>", s))
                     );
                     let target_color = if is_cursor {
-                        self.theme.target
+                        self.theme.highlight
                     } else {
                         self.theme.dim
                     };
                     spans.push(Span::styled(
                         target_str,
-                        Style::default().fg(target_color).bg(bg),
+                        Style::default().fg(target_color).patch(bg_style),
                     ));
                 }
                 Some(JumpTarget::Unknown) => {
                     let target_color = if is_cursor {
-                        self.theme.target
+                        self.theme.highlight
                     } else {
                         self.theme.dim
                     };
                     spans.push(Span::styled(
                         " → ???",
-                        Style::default().fg(target_color).bg(bg),
+                        Style::default().fg(target_color).patch(bg_style),
                     ));
                 }
                 None => {}
@@ -1225,7 +1228,7 @@ impl Debugger {
                     }
                     spans.push(Span::styled(
                         reg_str,
-                        Style::default().fg(self.theme.dim).bg(bg),
+                        Style::default().fg(self.theme.dim).patch(bg_style),
                     ));
                 }
             }
@@ -1237,7 +1240,7 @@ impl Debugger {
             {
                 spans.push(Span::styled(
                     format!(" @ {}", loc),
-                    Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
+                    Style::default().fg(Color::Rgb(130, 130, 180)).patch(bg_style),
                 ));
             }
 
@@ -1572,7 +1575,7 @@ impl Debugger {
                 spans.push(Span::styled(
                     display_name,
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(self.theme.accent)
                         .add_modifier(Modifier::BOLD),
                 ));
             } else {
@@ -1583,7 +1586,7 @@ impl Debugger {
                 let fg_color = if selected {
                     self.theme.accent
                 } else {
-                    self.theme.target
+                    self.theme.fg
                 };
                 spans.push(Span::styled(display_name, Style::default().fg(fg_color)));
                 spans.push(Span::styled(
@@ -1601,7 +1604,7 @@ impl Debugger {
                 all_lines.push(Line::from(vec![
                     Span::raw("   "),
                     Span::raw(prefix),
-                    Span::styled(args_str, Style::default().fg(Color::Yellow)),
+                    Span::styled(args_str, Style::default().fg(self.theme.warn)),
                 ]));
             }
         }
@@ -2168,14 +2171,14 @@ impl Debugger {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("BP "),
-            Span::styled(" t ", Style::default().fg(self.theme.target)),
+            Span::styled(" t ", Style::default().fg(self.theme.highlight)),
             Span::raw("Trace "),
             Span::styled(
                 " T ",
-                Style::default().fg(if self.ui.disasm.show_targets {
-                    self.theme.target
-                } else {
+                Style::default().fg(if self.ui.trace.forward_stack.is_empty() {
                     self.theme.dim
+                } else {
+                    self.theme.highlight
                 }),
             ),
             Span::raw("Jumps "),
@@ -2216,15 +2219,15 @@ impl Debugger {
         let border_style = if focused {
             if self.ui.panel_focused {
                 Style::default()
-                    .fg(self.theme.highlight)
+                    .fg(self.theme.border_focused)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(self.theme.accent)
             }
         } else {
-            Style::default().fg(self.theme.border)
+            Style::default().fg(self.theme.border_unfocused)
         };
-        Block::default()
+        let mut block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
             .title(format!(" {} ", title))
@@ -2235,8 +2238,14 @@ impl Debugger {
                     self.theme.accent
                 }
             } else {
-                Color::White
-            }))
+                self.theme.fg
+            }));
+            
+        if let Some(bg) = self.theme.panel_bg {
+            block = block.bg(bg);
+        }
+        
+        block
     }
 
     fn setup_field_row<'a>(&self, label: &'a str, value: &'a str, selected: bool) -> Line<'a> {
