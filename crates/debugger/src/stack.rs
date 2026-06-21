@@ -22,6 +22,7 @@ pub struct CallFrame {
     pub return_pc: u64,
     pub stack_frame: Option<StackFrame>,
     pub entry_sp: u64,
+    pub args: [u64; 8],
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ impl StackAnalyzer {
                 return_pc: 0,
                 stack_frame: None,
                 entry_sp: 0,
+                args: [0; 8],
             }],
         }
     }
@@ -55,7 +57,7 @@ impl StackAnalyzer {
         self.call_stack.last().and_then(|f| f.stack_frame.as_ref())
     }
 
-    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64, current_sp: u64) -> Option<String> {
+    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64, current_sp: u64, args: [u64; 8]) -> Option<String> {
         match inst {
             Instruction::Jal { rd, .. } if *rd == GeneralRegisterName::Ra => {
                 self.call_stack.push(CallFrame {
@@ -63,6 +65,7 @@ impl StackAnalyzer {
                     return_pc,
                     stack_frame: None,
                     entry_sp: current_sp,
+                    args,
                 });
             }
             Instruction::Jalr { rd, rs1, .. } => {
@@ -72,6 +75,7 @@ impl StackAnalyzer {
                         return_pc,
                         stack_frame: None,
                         entry_sp: current_sp,
+                        args,
                     });
                 } else if *rs1 == GeneralRegisterName::Ra && *rd == GeneralRegisterName::Zero {
                     if let Some(last) = self.call_stack.last() {

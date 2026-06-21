@@ -10,6 +10,7 @@ pub struct DebugSymbols {
     pub source_files_cache: SourceFileCache,
     pub symbols: HashMap<u64, String>,
     pub sorted_symbols: Vec<(u64, String)>,
+    pub function_params: HashMap<u64, Vec<String>>,
     pub syntax_set: syntect::parsing::SyntaxSet,
     pub theme_set: syntect::highlighting::ThemeSet,
 }
@@ -24,7 +25,7 @@ impl DebugSymbols {
     }
 
     pub fn new(elf_path: &str) -> Self {
-        let (source_lines, source_locations, symbols) = Self::load_elf_symbols(elf_path);
+        let (source_lines, source_locations, symbols, function_params) = Self::load_elf_symbols(elf_path);
 
         let sorted_symbols = {
             let mut s: Vec<_> = symbols.clone().into_iter().collect();
@@ -38,6 +39,7 @@ impl DebugSymbols {
             source_files_cache: HashMap::new(),
             symbols,
             sorted_symbols,
+            function_params,
             syntax_set: syntect::parsing::SyntaxSet::load_defaults_newlines(),
             theme_set: syntect::highlighting::ThemeSet::load_defaults(),
         }
@@ -49,15 +51,17 @@ impl DebugSymbols {
         HashMap<u64, String>,
         HashMap<u64, (String, u32)>,
         HashMap<u64, String>,
+        HashMap<u64, Vec<String>>,
     ) {
         let mut source_map = HashMap::new();
         let mut source_locs = HashMap::new();
         let mut symbol_map = HashMap::new();
+        let mut function_params = HashMap::new();
         let data = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not read ELF file: {}", e);
-                return (source_map, source_locs, symbol_map);
+                return (source_map, source_locs, symbol_map, function_params);
             }
         };
 
@@ -65,7 +69,7 @@ impl DebugSymbols {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("Warning: could not parse ELF: {}", e);
-                return (source_map, source_locs, symbol_map);
+                return (source_map, source_locs, symbol_map, function_params);
             }
         };
 
@@ -106,15 +110,49 @@ impl DebugSymbols {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("Warning: could not load DWARF sections: {}", e);
-                return (source_map, source_locs, symbol_map);
+                return (source_map, source_locs, symbol_map, function_params);
             }
         };
+
+        let mut iter = dwarf.units();
+        while let Ok(Some(header)) = iter.next() {
+            if let Ok(unit) = dwarf.unit(header) {
+                let mut entries = unit.entries();
+                let mut current_subprogram_addr = None;
+                let mut depth = 0;
+                while let Ok(Some((delta_depth, entry))) = entries.next_dfs() {
+                    depth += delta_depth;
+                    if entry.tag() == gimli::DW_TAG_subprogram {
+                        if let Ok(Some(gimli::AttributeValue::Addr(addr))) = entry.attr_value(gimli::DW_AT_low_pc) {
+                            current_subprogram_addr = Some(addr);
+                            function_params.insert(addr, Vec::new());
+                        } else {
+                            current_subprogram_addr = None;
+                        }
+                    } else if entry.tag() == gimli::DW_TAG_formal_parameter {
+                        if let Some(addr) = current_subprogram_addr {
+                            if let Ok(Some(attr)) = entry.attr_value(gimli::DW_AT_name) {
+                                if let Ok(s) = dwarf.attr_string(&unit, attr) {
+                                    if let Ok(name) = s.to_string() {
+                                        if let Some(params) = function_params.get_mut(&addr) {
+                                            params.push(name.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if delta_depth <= 0 && depth <= 1 {
+                        current_subprogram_addr = None;
+                    }
+                }
+            }
+        }
 
         let ctx = match addr2line::Context::from_dwarf(dwarf) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("Warning: could not build addr2line context: {}", e);
-                return (source_map, source_locs, symbol_map);
+                return (source_map, source_locs, symbol_map, function_params);
             }
         };
 
@@ -138,7 +176,7 @@ impl DebugSymbols {
             }
         }
 
-        (source_map, source_locs, symbol_map)
+        (source_map, source_locs, symbol_map, function_params)
     }
 
     pub fn get_source_file(

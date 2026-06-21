@@ -133,12 +133,17 @@ impl<'a> TickContext<'a> {
         {
             let next_pc = self.hart.registers().pc();
             let current_sp = self.hart.registers().x()[2];
+            let mut args = [0; 8];
+            for i in 0..8 {
+                args[i] = self.hart.registers().x()[10 + i];
+            }
             stack_warning = self.analyzer.on_instruction_executed(
                 &i,
                 self.pc,
                 self.pc + self.inst_size,
                 next_pc,
                 current_sp,
+                args,
             );
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);

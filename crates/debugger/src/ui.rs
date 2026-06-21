@@ -162,8 +162,6 @@ impl Debugger {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(mid[0]);
 
-
-
         let bottom_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -444,7 +442,9 @@ impl Debugger {
         ) {
             match self.ui.registers_tab {
                 crate::ui_state::RegistersTab::Csr => self.render_csr(frame, content_area, focused),
-                crate::ui_state::RegistersTab::Gpr => self.render_registers(frame, content_area, focused),
+                crate::ui_state::RegistersTab::Gpr => {
+                    self.render_registers(frame, content_area, focused)
+                }
             }
         }
     }
@@ -726,7 +726,10 @@ impl Debugger {
         };
 
         if self.ui.disasm.tab == DisasmTab::Source
-            && let Some((path, _)) = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&all_entries)))
+            && let Some((path, _)) = self
+                .debug_symbols
+                .as_ref()
+                .and_then(|ds| ds.map_addr_to_source(target_addr, Some(&all_entries)))
         {
             let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
             title = format!("{} [{}]", title, short_path);
@@ -800,7 +803,10 @@ impl Debugger {
         hw_pc: u64,
     ) {
         let visible_height = content_area.height as usize;
-        let source_loc = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(all_entries)));
+        let source_loc = self
+            .debug_symbols
+            .as_ref()
+            .and_then(|ds| ds.map_addr_to_source(target_addr, Some(all_entries)));
 
         if let Some((path, target_line_from_loc)) = source_loc {
             if Some(target_addr) != self.ui.disasm.last_target_addr {
@@ -808,7 +814,12 @@ impl Debugger {
                 self.ui.disasm.last_target_addr = Some(target_addr);
             }
 
-            let lines_len = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)).map(|l| l.len()).unwrap_or(0);
+            let lines_len = self
+                .debug_symbols
+                .as_mut()
+                .and_then(|ds| ds.get_source_file(&path))
+                .map(|l| l.len())
+                .unwrap_or(0);
             if lines_len > 0 {
                 self.ui.disasm.source_cursor = self
                     .ui
@@ -828,12 +839,22 @@ impl Debugger {
                 let theme_dim = self.theme.dim;
                 let theme_accent = self.theme.accent;
                 let theme_breakpoint = self.theme.breakpoint;
-                let mapped_addr = self.debug_symbols.as_ref().and_then(|ds| ds.map_source_to_addr(&path, target_line as u32, hw_pc));
-                let hw_pc_line = self.debug_symbols.as_ref().and_then(|ds| ds.get_hw_pc_line(&path, hw_pc)).map(|l| l as usize);
+                let mapped_addr = self
+                    .debug_symbols
+                    .as_ref()
+                    .and_then(|ds| ds.map_source_to_addr(&path, target_line as u32, hw_pc));
+                let hw_pc_line = self
+                    .debug_symbols
+                    .as_ref()
+                    .and_then(|ds| ds.get_hw_pc_line(&path, hw_pc))
+                    .map(|l| l as usize);
 
                 let mut bp_lines = std::collections::HashSet::new();
                 for &bp in &self.breakpoints {
-                    if let Some((p, l)) = self.debug_symbols.as_ref().and_then(|ds| ds.source_locations.get(&bp))
+                    if let Some((p, l)) = self
+                        .debug_symbols
+                        .as_ref()
+                        .and_then(|ds| ds.source_locations.get(&bp))
                         && p == &path
                     {
                         bp_lines.insert(*l as usize);
@@ -844,7 +865,11 @@ impl Debugger {
                 let query = self.ui.search.query.clone();
                 let compiled_regex = self.ui.search.compiled_regex.clone();
 
-                let lines = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)).unwrap();
+                let lines = self
+                    .debug_symbols
+                    .as_mut()
+                    .and_then(|ds| ds.get_source_file(&path))
+                    .unwrap();
 
                 for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                     let is_target = i + 1 == target_line;
@@ -1016,13 +1041,10 @@ impl Debugger {
                         false
                     }
                 }))
+                && let Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) = &e.jump_target
+                && let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr)
             {
-                if let Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) = &e.jump_target
-                {
-                    if let Some(dst_idx) = all_entries.iter().position(|t| t.addr == *addr) {
-                        active_jump = Some((i, dst_idx));
-                    }
-                }
+                active_jump = Some((i, dst_idx));
             }
         }
 
@@ -1152,24 +1174,21 @@ impl Debugger {
 
             match &e.jump_target {
                 Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) => {
-                    let sym_name = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                    let sym_name = self
+                        .debug_symbols
+                        .as_ref()
+                        .map(|ds| ds.sorted_symbols.as_slice())
+                        .unwrap_or(&[])
                         .iter()
                         .find(|(a, _)| a == addr)
                         .map(|(_, n)| n.as_str());
                     let is_call = matches!(e.jump_target, Some(JumpTarget::Call(_)));
-                    let target_str = if let Some(sym) = sym_name {
-                        if is_call {
-                            format!(" ⇒ Call {:#x} <{}>", addr, sym)
-                        } else {
-                            format!(" → {:#x} <{}>", addr, sym)
-                        }
-                    } else {
-                        if is_call {
-                            format!(" ⇒ Call {:#x}", addr)
-                        } else {
-                            format!(" → {:#x}", addr)
-                        }
-                    };
+                    let target_str = format!(
+                        " → {}{:#x}{}",
+                        if is_call { "Call " } else { "" },
+                        addr,
+                        sym_name.map_or_else(String::new, |s| format!(" <{}>", s))
+                    );
                     let target_color = if is_cursor {
                         self.theme.target
                     } else {
@@ -1211,7 +1230,11 @@ impl Debugger {
                 }
             }
 
-            if let Some(loc) = self.debug_symbols.as_ref().and_then(|ds| ds.source_lines.get(&e.addr)) {
+            if let Some(loc) = self
+                .debug_symbols
+                .as_ref()
+                .and_then(|ds| ds.source_lines.get(&e.addr))
+            {
                 spans.push(Span::styled(
                     format!(" @ {}", loc),
                     Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
@@ -1257,7 +1280,9 @@ impl Debugger {
             match self.ui.memory_tab {
                 crate::ui_state::MemoryTab::Hex => self.render_memory_hex(frame, content_area),
                 crate::ui_state::MemoryTab::Stack => self.render_memory_stack(frame, content_area),
-                crate::ui_state::MemoryTab::Watch => self.render_watch_list(frame, content_area, focused),
+                crate::ui_state::MemoryTab::Watch => {
+                    self.render_watch_list(frame, content_area, focused)
+                }
             }
         }
     }
@@ -1471,48 +1496,65 @@ impl Debugger {
             && self.ui.symbols.tab == crate::ui_state::SymbolsTab::CallStack;
 
         let mut items = Vec::new();
-        items.push(("[Entry]".to_string(), 0, 0, 0));
+        items.push(("[Entry]".to_string(), None, 0, 0, 0));
 
         for (i, call) in analyzer.call_stack.iter().enumerate() {
             if i == 0 {
                 continue;
             }
             let sym_name = self
-                .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                .debug_symbols
+                .as_ref()
+                .map(|ds| ds.sorted_symbols.as_slice())
+                .unwrap_or(&[])
                 .iter()
                 .find(|(a, _)| *a == call.target_pc)
                 .map(|(_, n)| n.as_str());
+            let mut args_opt = None;
             let display_name = if let Some(sym) = sym_name {
-                format!("{} ({:#x})", sym, call.target_pc)
+                let mut args_str = String::new();
+                if let Some(params) = self
+                    .debug_symbols
+                    .as_ref()
+                    .and_then(|ds| ds.function_params.get(&call.target_pc))
+                {
+                    let mut args_vec = Vec::new();
+                    for (j, param_name) in params.iter().enumerate() {
+                        if j < 8 {
+                            args_vec.push(format!("{}={:#x}", param_name, call.args[j]));
+                        } else {
+                            args_vec.push(param_name.clone());
+                        }
+                    }
+                    if !args_vec.is_empty() {
+                        args_str = format!("({})", args_vec.join(", "));
+                    } else {
+                        args_str = "()".to_string();
+                    }
+                }
+                if args_str.is_empty() {
+                    format!("{} ({:#x})", sym, call.target_pc)
+                } else {
+                    args_opt = Some(args_str);
+                    sym.to_string()
+                }
             } else {
                 format!("func_{:#x}", call.target_pc)
             };
-            items.push((display_name, call.target_pc, call.return_pc, i));
+            items.push((display_name, args_opt, call.target_pc, call.return_pc, i));
         }
 
         let items_len = items.len();
         self.ui.callstack_cursor = self.ui.callstack_cursor.min(items_len.saturating_sub(1));
 
-        let visible_height = content_area.height as usize;
-        if self.ui.callstack_cursor < self.ui.callstack_scroll {
-            self.ui.callstack_scroll = self.ui.callstack_cursor;
-        } else if self.ui.callstack_cursor >= self.ui.callstack_scroll + visible_height {
-            self.ui.callstack_scroll = self
-                .ui
-                .callstack_cursor
-                .saturating_sub(visible_height.saturating_sub(1));
-        }
-        let max_scroll = items_len.saturating_sub(visible_height);
-        let scroll = self.ui.callstack_scroll.min(max_scroll);
+        let mut all_lines = Vec::new();
+        let mut cursor_visual_line = 0;
 
-        let mut lines = Vec::new();
-        for (ui_idx, (display_name, _, ret_pc, depth)) in items
-            .into_iter()
-            .enumerate()
-            .skip(scroll)
-            .take(visible_height)
-        {
+        for (ui_idx, (display_name, args_opt, _, ret_pc, depth)) in items.into_iter().enumerate() {
             let selected = focused && ui_idx == self.ui.callstack_cursor;
+            if selected {
+                cursor_visual_line = all_lines.len();
+            }
 
             let mut spans = vec![];
             if selected {
@@ -1550,8 +1592,38 @@ impl Debugger {
                 ));
             }
 
-            lines.push(Line::from(spans));
+            all_lines.push(Line::from(spans));
+
+            if let Some(args_str) = args_opt
+                && args_str != "()"
+            {
+                let prefix = "  ".repeat(depth + 1);
+                all_lines.push(Line::from(vec![
+                    Span::raw("   "),
+                    Span::raw(prefix),
+                    Span::styled(args_str, Style::default().fg(Color::Yellow)),
+                ]));
+            }
         }
+
+        let visible_height = content_area.height as usize;
+        let items_len = all_lines.len();
+
+        if cursor_visual_line < self.ui.callstack_scroll {
+            self.ui.callstack_scroll = cursor_visual_line;
+        } else if cursor_visual_line >= self.ui.callstack_scroll + visible_height {
+            self.ui.callstack_scroll =
+                cursor_visual_line.saturating_sub(visible_height.saturating_sub(1));
+        }
+
+        let max_scroll = items_len.saturating_sub(visible_height);
+        let scroll = self.ui.callstack_scroll.min(max_scroll);
+
+        let lines: Vec<Line> = all_lines
+            .into_iter()
+            .skip(scroll)
+            .take(visible_height)
+            .collect();
 
         if lines.is_empty() {
             frame.render_widget(
@@ -1584,8 +1656,12 @@ impl Debugger {
         ) {
             match self.ui.symbols.tab {
                 crate::ui_state::SymbolsTab::Trace => self.render_trace(frame, content_area),
-                crate::ui_state::SymbolsTab::Symbols => self.render_symbols_list(frame, content_area),
-                crate::ui_state::SymbolsTab::CallStack => self.render_callstack(frame, content_area),
+                crate::ui_state::SymbolsTab::Symbols => {
+                    self.render_symbols_list(frame, content_area)
+                }
+                crate::ui_state::SymbolsTab::CallStack => {
+                    self.render_callstack(frame, content_area)
+                }
             }
         }
     }
@@ -1600,7 +1676,10 @@ impl Debugger {
                     .rev()
                     .enumerate()
                     .filter(|&(_, e)| {
-                        self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                        self.debug_symbols
+                            .as_ref()
+                            .map(|ds| ds.sorted_symbols.as_slice())
+                            .unwrap_or(&[])
                             .binary_search_by_key(&e.pc, |(a, _)| *a)
                             .is_ok()
                     })
@@ -1669,7 +1748,10 @@ impl Debugger {
                 }
 
                 let sym_name = self
-                    .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+                    .debug_symbols
+                    .as_ref()
+                    .map(|ds| ds.sorted_symbols.as_slice())
+                    .unwrap_or(&[])
                     .iter()
                     .find(|(a, _)| a == &entry.pc)
                     .map(|(_, n)| n.as_str());
@@ -1696,7 +1778,11 @@ impl Debugger {
 
                 if let Some(sym) = sym_name {
                     spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
-                } else if let Some((path, line)) = self.debug_symbols.as_ref().and_then(|ds| ds.source_locations.get(&entry.pc)) {
+                } else if let Some((path, line)) = self
+                    .debug_symbols
+                    .as_ref()
+                    .and_then(|ds| ds.source_locations.get(&entry.pc))
+                {
                     let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
                     spans.push(Span::styled(
                         format!("{}:{}", short, line),
@@ -1733,7 +1819,10 @@ impl Debugger {
         };
 
         let filtered: Vec<_> = self
-            .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
+            .debug_symbols
+            .as_ref()
+            .map(|ds| ds.sorted_symbols.as_slice())
+            .unwrap_or(&[])
             .iter()
             .filter(|(_, name)| is_match(name))
             .collect();
