@@ -21,6 +21,7 @@ pub struct CallFrame {
     pub target_pc: u64,
     pub return_pc: u64,
     pub stack_frame: Option<StackFrame>,
+    pub entry_sp: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,7 @@ impl StackAnalyzer {
                 target_pc: 0,
                 return_pc: 0,
                 stack_frame: None,
+                entry_sp: 0,
             }],
         }
     }
@@ -53,13 +55,14 @@ impl StackAnalyzer {
         self.call_stack.last().and_then(|f| f.stack_frame.as_ref())
     }
 
-    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64) {
+    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64, current_sp: u64) -> Option<String> {
         match inst {
             Instruction::Jal { rd, .. } if *rd == GeneralRegisterName::Ra => {
                 self.call_stack.push(CallFrame {
                     target_pc: next_pc,
                     return_pc,
                     stack_frame: None,
+                    entry_sp: current_sp,
                 });
             }
             Instruction::Jalr { rd, rs1, .. } => {
@@ -68,11 +71,18 @@ impl StackAnalyzer {
                         target_pc: next_pc,
                         return_pc,
                         stack_frame: None,
+                        entry_sp: current_sp,
                     });
                 } else if *rs1 == GeneralRegisterName::Ra && *rd == GeneralRegisterName::Zero {
                     if let Some(last) = self.call_stack.last() {
                         if last.return_pc == next_pc && self.call_stack.len() > 1 {
-                            self.call_stack.pop();
+                            let popped = self.call_stack.pop().unwrap();
+                            if popped.entry_sp != current_sp {
+                                return Some(format!(
+                                    "Stack pointer mismatch on return from {:#x}: expected {:#x}, got {:#x}",
+                                    popped.target_pc, popped.entry_sp, current_sp
+                                ));
+                            }
                         }
                     }
                 }
@@ -112,6 +122,7 @@ impl StackAnalyzer {
             }
             _ => {}
         }
+        None
     }
 
     fn record_push(&mut self, offset: i32, data_type: DataType, reg: GeneralRegisterName) {

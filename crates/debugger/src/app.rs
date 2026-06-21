@@ -139,13 +139,15 @@ impl<'a> TickContext<'a> {
         }
     }
 
-    pub(crate) fn tick(self) -> (emulator::Result<()>, Option<String>) {
+    pub(crate) fn tick(self) -> (emulator::Result<()>, Option<String>, Option<String>) {
         let result = self.hart.tick(self.bus);
+        let mut stack_warning = None;
         if result.is_ok()
             && let Some(i) = self.inst
         {
             let next_pc = self.hart.registers().pc();
-            self.analyzer.on_instruction_executed(&i, self.pc, self.pc + self.inst_size, next_pc);
+            let current_sp = self.hart.registers().x()[2];
+            stack_warning = self.analyzer.on_instruction_executed(&i, self.pc, self.pc + self.inst_size, next_pc, current_sp);
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);
 
@@ -158,7 +160,7 @@ impl<'a> TickContext<'a> {
             }
         }
 
-        (result, watch_hit)
+        (result, watch_hit, stack_warning)
     }
 }
 
@@ -549,8 +551,11 @@ impl Debugger {
         );
         let pc = ctx.pc;
 
-        let (result, watch_hit) = ctx.tick();
+        let (result, watch_hit, stack_warning) = ctx.tick();
 
+        if let Some(warn) = stack_warning {
+            return TickResult::Error(warn);
+        }
         if let Some(name) = watch_hit {
             return TickResult::Watchpoint(pc, name);
         }
@@ -629,8 +634,12 @@ impl Debugger {
                 );
                 let pc = ctx.pc;
 
-                let (result, watch_hit) = ctx.tick();
+                let (result, watch_hit, stack_warning) = ctx.tick();
 
+                if let Some(warn) = stack_warning {
+                    tick_results.push((i, TickResult::Error(warn)));
+                    continue;
+                }
                 if let Some(name) = watch_hit {
                     tick_results.push((i, TickResult::Watchpoint(pc, name)));
                     continue;
