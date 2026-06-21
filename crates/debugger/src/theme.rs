@@ -162,8 +162,34 @@ impl Theme {
     }
     pub fn get_predefined(name: &str) -> Option<&'static str> {
         match name {
+            "catppuccin" => Some(include_str!("themes/catppuccin_mocha.json")),
             "catppuccin_mocha" => Some(include_str!("themes/catppuccin_mocha.json")),
-            "evergarden" => Some(include_str!("themes/evergarden.json")),
+            "catppuccin_latte" => Some(include_str!("themes/catppuccin_latte.json")),
+            "catppuccin_frappe" => Some(include_str!("themes/catppuccin_frappe.json")),
+            "catppuccin_macchiato" => Some(include_str!("themes/catppuccin_macchiato.json")),
+            
+            "evergarden" => Some(include_str!("themes/evergarden.json")), 
+
+            "everforest" => Some(include_str!("themes/everforest_dark_hard.json")),
+            "everforest_dark_hard" => Some(include_str!("themes/everforest_dark_hard.json")),
+            "everforest_dark_medium" => Some(include_str!("themes/everforest_dark_medium.json")),
+            "everforest_dark_soft" => Some(include_str!("themes/everforest_dark_soft.json")),
+            "everforest_light_hard" => Some(include_str!("themes/everforest_light_hard.json")),
+            "everforest_light_medium" => Some(include_str!("themes/everforest_light_medium.json")),
+            "everforest_light_soft" => Some(include_str!("themes/everforest_light_soft.json")),
+            
+            "gruvbox" => Some(include_str!("themes/gruvbox_dark.json")),
+            "gruvbox_dark" => Some(include_str!("themes/gruvbox_dark.json")),
+            "gruvbox_light" => Some(include_str!("themes/gruvbox_light.json")),
+            
+            "tokyonight" => Some(include_str!("themes/tokyonight_night.json")),
+            "tokyonight_night" => Some(include_str!("themes/tokyonight_night.json")),
+            "tokyonight_storm" => Some(include_str!("themes/tokyonight_storm.json")),
+            "tokyonight_moon" => Some(include_str!("themes/tokyonight_moon.json")),
+            "tokyonight_day" => Some(include_str!("themes/tokyonight_day.json")),
+            
+            "dracula" => Some(include_str!("themes/dracula.json")),
+            
             _ => None,
         }
     }

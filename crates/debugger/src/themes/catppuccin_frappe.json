@@ -1,0 +1,16 @@
+{
+    "fg": "#c6d0f5",
+    "bg": "#303446",
+    "bg_highlight": "#414559",
+    "border": "#626880",
+    "text_muted": "#838ba7",
+    "text_error": "#e78284",
+    "text_info": "#8caaee",
+    "text_warning": "#e5c890",
+    "text_success": "#a6d189",
+    "keyword": "#ca9ee6",
+    "number": "#ef9f76",
+    "string": "#a6d189",
+    "comment": "#737994",
+    "function": "#8caaee"
+}
