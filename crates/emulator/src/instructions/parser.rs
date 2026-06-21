@@ -718,18 +718,13 @@ impl Instruction {
                             | (value.bits(5, 1) as i32) << 6
                             | (value.bits(2, 1) as i32) << 5
                             | (value.bits(6, 1) as i32) << 4;
-                        let nzimm = if imm & (1 << 8) != 0 {
-                            (imm | !0 << 9) as i16 as i32
-                        } else {
-                            imm as i16 as i32
-                        };
-                        if nzimm == 0 {
+                        if imm == 0 {
                             return Err(InstructionError::IllegalInstruction);
                         }
                         Ok(Self::Addi {
                             rd: GeneralRegisterName::Sp,
                             rs1: GeneralRegisterName::Sp,
-                            imm: nzimm,
+                            imm,
                         })
                     }
                     _ => {
