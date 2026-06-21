@@ -726,7 +726,7 @@ impl Debugger {
         };
 
         if self.ui.disasm.tab == DisasmTab::Source
-            && let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&all_entries))
+            && let Some((path, _)) = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&all_entries)))
         {
             let short_path: &str = path.rsplit(['/', '\\']).next().unwrap_or(&path);
             title = format!("{} [{}]", title, short_path);
@@ -800,7 +800,7 @@ impl Debugger {
         hw_pc: u64,
     ) {
         let visible_height = content_area.height as usize;
-        let source_loc = self.map_addr_to_source(target_addr, Some(all_entries));
+        let source_loc = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(all_entries)));
 
         if let Some((path, target_line_from_loc)) = source_loc {
             if Some(target_addr) != self.ui.disasm.last_target_addr {
@@ -808,7 +808,7 @@ impl Debugger {
                 self.ui.disasm.last_target_addr = Some(target_addr);
             }
 
-            let lines_len = self.get_source_file(&path).map(|l| l.len()).unwrap_or(0);
+            let lines_len = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)).map(|l| l.len()).unwrap_or(0);
             if lines_len > 0 {
                 self.ui.disasm.source_cursor = self
                     .ui
@@ -828,12 +828,12 @@ impl Debugger {
                 let theme_dim = self.theme.dim;
                 let theme_accent = self.theme.accent;
                 let theme_breakpoint = self.theme.breakpoint;
-                let mapped_addr = self.map_source_to_addr(&path, target_line as u32, hw_pc);
-                let hw_pc_line = self.get_hw_pc_line(&path, hw_pc).map(|l| l as usize);
+                let mapped_addr = self.debug_symbols.as_ref().and_then(|ds| ds.map_source_to_addr(&path, target_line as u32, hw_pc));
+                let hw_pc_line = self.debug_symbols.as_ref().and_then(|ds| ds.get_hw_pc_line(&path, hw_pc)).map(|l| l as usize);
 
                 let mut bp_lines = std::collections::HashSet::new();
                 for &bp in &self.breakpoints {
-                    if let Some((p, l)) = self.source_locations.get(&bp)
+                    if let Some((p, l)) = self.debug_symbols.as_ref().and_then(|ds| ds.source_locations.get(&bp))
                         && p == &path
                     {
                         bp_lines.insert(*l as usize);
@@ -844,7 +844,7 @@ impl Debugger {
                 let query = self.ui.search.query.clone();
                 let compiled_regex = self.ui.search.compiled_regex.clone();
 
-                let lines = self.get_source_file(&path).unwrap();
+                let lines = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)).unwrap();
 
                 for (i, line_tokens) in lines.iter().enumerate().skip(scroll).take(visible_height) {
                     let is_target = i + 1 == target_line;
@@ -1152,8 +1152,7 @@ impl Debugger {
 
             match &e.jump_target {
                 Some(JumpTarget::Known(addr)) | Some(JumpTarget::Call(addr)) => {
-                    let sym_name = self
-                        .sorted_symbols
+                    let sym_name = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                         .iter()
                         .find(|(a, _)| a == addr)
                         .map(|(_, n)| n.as_str());
@@ -1212,7 +1211,7 @@ impl Debugger {
                 }
             }
 
-            if let Some(loc) = self.source_lines.get(&e.addr) {
+            if let Some(loc) = self.debug_symbols.as_ref().and_then(|ds| ds.source_lines.get(&e.addr)) {
                 spans.push(Span::styled(
                     format!(" @ {}", loc),
                     Style::default().fg(Color::Rgb(130, 130, 180)).bg(bg),
@@ -1479,7 +1478,7 @@ impl Debugger {
                 continue;
             }
             let sym_name = self
-                .sorted_symbols
+                .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                 .iter()
                 .find(|(a, _)| *a == call.target_pc)
                 .map(|(_, n)| n.as_str());
@@ -1601,7 +1600,7 @@ impl Debugger {
                     .rev()
                     .enumerate()
                     .filter(|&(_, e)| {
-                        self.sorted_symbols
+                        self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                             .binary_search_by_key(&e.pc, |(a, _)| *a)
                             .is_ok()
                     })
@@ -1670,7 +1669,7 @@ impl Debugger {
                 }
 
                 let sym_name = self
-                    .sorted_symbols
+                    .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                     .iter()
                     .find(|(a, _)| a == &entry.pc)
                     .map(|(_, n)| n.as_str());
@@ -1697,7 +1696,7 @@ impl Debugger {
 
                 if let Some(sym) = sym_name {
                     spans.push(Span::styled(sym, Style::default().fg(Color::Cyan)));
-                } else if let Some((path, line)) = self.source_locations.get(&entry.pc) {
+                } else if let Some((path, line)) = self.debug_symbols.as_ref().and_then(|ds| ds.source_locations.get(&entry.pc)) {
                     let short: &str = path.rsplit(['/', '\\']).next().unwrap_or(path);
                     spans.push(Span::styled(
                         format!("{}:{}", short, line),
@@ -1734,7 +1733,7 @@ impl Debugger {
         };
 
         let filtered: Vec<_> = self
-            .sorted_symbols
+            .debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
             .iter()
             .filter(|(_, name)| is_match(name))
             .collect();

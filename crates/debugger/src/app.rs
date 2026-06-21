@@ -1,11 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use emulator::instructions::Instruction;
 use emulator::{BusIO, Machine, MachineBuilder};
 
-use crate::disassembly::{DisasmCache, DisasmEntry};
-use crate::state::*;
+use crate::debug_symbols::DebugSymbols;
+use crate::disassembly::DisasmCache;
 use crate::ui_state::UiState;
+use crate::{StackAnalyzer, state::*};
 
 pub enum TickResult {
     Ok,
@@ -34,26 +36,10 @@ pub struct Debugger {
 
     pub(crate) disasm_cache: Option<DisasmCache>,
 
-    pub(crate) source_lines: HashMap<u64, String>,
-    pub(crate) source_locations: HashMap<u64, (String, u32)>,
-    pub(crate) source_files_cache:
-        HashMap<String, Option<Vec<Vec<(String, ratatui::style::Style)>>>>,
-    pub(crate) symbols: HashMap<u64, String>,
-    pub(crate) sorted_symbols: Vec<(u64, String)>,
-
-    pub(crate) syntax_set: syntect::parsing::SyntaxSet,
-    pub(crate) theme_set: syntect::highlighting::ThemeSet,
+    pub(crate) debug_symbols: Option<crate::debug_symbols::DebugSymbols>,
 
     pub(crate) stack_analyzers: Vec<crate::stack::StackAnalyzer>,
     pub(crate) watches: Vec<crate::state::WatchItem>,
-}
-
-fn syntect_style_to_ratatui(style: syntect::highlighting::Style) -> ratatui::style::Style {
-    ratatui::style::Style::default().fg(ratatui::style::Color::Rgb(
-        style.foreground.r,
-        style.foreground.g,
-        style.foreground.b,
-    ))
 }
 
 pub(crate) struct WatchPointSnapshot {
@@ -147,17 +133,23 @@ impl<'a> TickContext<'a> {
         {
             let next_pc = self.hart.registers().pc();
             let current_sp = self.hart.registers().x()[2];
-            stack_warning = self.analyzer.on_instruction_executed(&i, self.pc, self.pc + self.inst_size, next_pc, current_sp);
+            stack_warning = self.analyzer.on_instruction_executed(
+                &i,
+                self.pc,
+                self.pc + self.inst_size,
+                next_pc,
+                current_sp,
+            );
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);
 
-        if let Some(trace) = self.trace {
-            if trace.stack.last().map(|e| e.pc) != Some(self.pc) {
-                trace
-                    .stack
-                    .push(crate::ui_state::TraceEntry::new(self.pc, self.sp));
-                trace.forward_stack.clear();
-            }
+        if let Some(trace) = self.trace
+            && trace.stack.last().map(|e| e.pc) != Some(self.pc)
+        {
+            trace
+                .stack
+                .push(crate::ui_state::TraceEntry::new(self.pc, self.sp));
+            trace.forward_stack.clear();
         }
 
         (result, watch_hit, stack_warning)
@@ -167,27 +159,28 @@ impl<'a> TickContext<'a> {
 impl Debugger {
     pub fn new(binary_path: &str, elf_path: Option<&str>) -> anyhow::Result<Self> {
         let binary = std::fs::read(binary_path)?;
-        let (source_lines, source_locations, symbols) = match elf_path {
-            Some(path) => Self::load_elf_symbols(path),
-            None => (HashMap::new(), HashMap::new(), HashMap::new()),
+        let (console_log, debug_symbols) = if let Some(ds) = elf_path.map(DebugSymbols::new) {
+            (
+                vec![ConsoleEntry {
+                    message: format!(
+                        "Loaded {} source locations and {} symbols from ELF debug info",
+                        ds.source_lines.len(),
+                        ds.symbols.len()
+                    ),
+                    level: ConsoleLevel::Info,
+                    tick: 0,
+                }],
+                Some(ds),
+            )
+        } else {
+            (Vec::new(), None)
         };
-        let mut console_log = Vec::new();
-        if !source_lines.is_empty() || !symbols.is_empty() {
-            console_log.push(ConsoleEntry {
-                message: format!(
-                    "Loaded {} source locations and {} symbols from ELF debug info",
-                    source_lines.len(),
-                    symbols.len()
-                ),
-                level: ConsoleLevel::Info,
-                tick: 0,
-            });
-        }
-        let min_ram = (binary.len() as u64).next_power_of_two().ilog2() - 10;
+
+        let min_ram = ((binary.len() as u64).next_power_of_two().ilog2() - 10).max(4) as u32;
         Ok(Self {
             binary,
             config_harts: 1,
-            config_memory_exp: min_ram.clamp(4, 20),
+            config_memory_exp: min_ram,
             machine: None,
             hart_modes: vec![HartMode::Debug; 1],
             screen: Screen::Setup,
@@ -196,221 +189,14 @@ impl Debugger {
             last_message: None,
             breakpoints: HashSet::new(),
             console_log,
-            tracing_log: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+            tracing_log: Arc::new(Mutex::new(Vec::new())),
             theme: Theme::default(),
             ui: UiState::new(),
             disasm_cache: None,
-            source_lines,
-            source_locations,
-            source_files_cache: HashMap::new(),
-            symbols: symbols.clone(),
-            sorted_symbols: {
-                let mut s: Vec<_> = symbols.into_iter().collect();
-                s.sort_by_key(|(addr, _)| *addr);
-                s
-            },
-            syntax_set: syntect::parsing::SyntaxSet::load_defaults_newlines(),
-            theme_set: syntect::highlighting::ThemeSet::load_defaults(),
-            stack_analyzers: vec![crate::stack::StackAnalyzer::new(); 1],
+            debug_symbols,
+            stack_analyzers: vec![StackAnalyzer::new(); 1],
             watches: Vec::new(),
         })
-    }
-
-    fn load_elf_symbols(
-        path: &str,
-    ) -> (
-        HashMap<u64, String>,
-        HashMap<u64, (String, u32)>,
-        HashMap<u64, String>,
-    ) {
-        let mut source_map = HashMap::new();
-        let mut source_locs = HashMap::new();
-        let mut symbol_map = HashMap::new();
-        let data = match std::fs::read(path) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("Warning: could not read ELF file: {}", e);
-                return (source_map, source_locs, symbol_map);
-            }
-        };
-
-        let obj = match object::File::parse(&*data) {
-            Ok(o) => o,
-            Err(e) => {
-                eprintln!("Warning: could not parse ELF: {}", e);
-                return (source_map, source_locs, symbol_map);
-            }
-        };
-
-        use object::{Object, ObjectSection, ObjectSymbol};
-
-        for sym in obj.symbols() {
-            if sym.is_definition()
-                && let Ok(name) = sym.name()
-                && !name.is_empty()
-                && !name.starts_with(".L")
-            {
-                let demangled = rustc_demangle::demangle(name).to_string();
-                symbol_map.insert(sym.address(), demangled);
-            }
-        }
-        let endian = if obj.is_little_endian() {
-            gimli::RunTimeEndian::Little
-        } else {
-            gimli::RunTimeEndian::Big
-        };
-
-        let load_section = |id: gimli::SectionId| -> Result<
-            gimli::EndianSlice<'_, gimli::RunTimeEndian>,
-            gimli::Error,
-        > {
-            let section_data = obj
-                .section_by_name(id.name())
-                .and_then(|s| s.uncompressed_data().ok());
-            let slice = match section_data {
-                Some(std::borrow::Cow::Borrowed(bytes)) => bytes,
-                Some(std::borrow::Cow::Owned(_)) => &[],
-                None => &[],
-            };
-            Ok(gimli::EndianSlice::new(slice, endian))
-        };
-
-        let dwarf = match gimli::Dwarf::load(&load_section) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("Warning: could not load DWARF sections: {}", e);
-                return (source_map, source_locs, symbol_map);
-            }
-        };
-
-        let ctx = match addr2line::Context::from_dwarf(dwarf) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("Warning: could not build addr2line context: {}", e);
-                return (source_map, source_locs, symbol_map);
-            }
-        };
-
-        for section in obj.sections() {
-            let addr = section.address();
-            let size = section.size();
-            if size == 0 {
-                continue;
-            }
-            let mut offset = 0u64;
-            while offset < size {
-                let pc = addr + offset;
-                if let Ok(Some(loc)) = ctx.find_location(pc)
-                    && let (Some(file), Some(line)) = (loc.file, loc.line)
-                {
-                    let short: &str = file.rsplit(['/', '\\']).next().unwrap_or(file);
-                    source_map.insert(pc, format!("{}:{}", short, line));
-                    source_locs.insert(pc, (file.to_string(), line));
-                }
-                offset += 2;
-            }
-        }
-
-        (source_map, source_locs, symbol_map)
-    }
-
-    pub(crate) fn get_source_file(
-        &mut self,
-        path: &str,
-    ) -> Option<&Vec<Vec<(String, ratatui::style::Style)>>> {
-        if !self.source_files_cache.contains_key(path) {
-            let content = std::fs::read_to_string(path).ok();
-            let parsed = content.map(|s| {
-                let syntax = self
-                    .syntax_set
-                    .find_syntax_for_file(path)
-                    .unwrap_or(None)
-                    .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
-
-                let theme = &self.theme_set.themes["base16-ocean.dark"];
-                let mut h = syntect::easy::HighlightLines::new(syntax, theme);
-
-                s.lines()
-                    .map(|line| {
-                        let ranges: Vec<(syntect::highlighting::Style, &str)> =
-                            h.highlight_line(line, &self.syntax_set).unwrap_or_default();
-                        ranges
-                            .into_iter()
-                            .map(|(style, text)| {
-                                (text.to_string(), syntect_style_to_ratatui(style))
-                            })
-                            .collect()
-                    })
-                    .collect()
-            });
-            self.source_files_cache.insert(path.to_string(), parsed);
-        }
-        self.source_files_cache.get(path).unwrap().as_ref()
-    }
-
-    pub(crate) fn map_addr_to_source(
-        &self,
-        target_addr: u64,
-        local_entries: Option<&[DisasmEntry]>,
-    ) -> Option<(String, u32)> {
-        if let Some(entries) = local_entries
-            && let Some(abs_cursor) = entries.iter().position(|e| e.addr == target_addr)
-        {
-            for i in (0..=abs_cursor).rev() {
-                if let Some(entry) = entries.get(i)
-                    && let Some(loc) = self.source_locations.get(&entry.addr)
-                {
-                    return Some(loc.clone());
-                }
-            }
-            for i in (abs_cursor + 1)..entries.len() {
-                if let Some(entry) = entries.get(i)
-                    && let Some(loc) = self.source_locations.get(&entry.addr)
-                {
-                    return Some(loc.clone());
-                }
-            }
-        }
-
-        let mut best_addr = None;
-        for &addr in self.source_locations.keys() {
-            if addr <= target_addr && (best_addr.is_none() || addr > best_addr.unwrap()) {
-                best_addr = Some(addr);
-            }
-        }
-        best_addr.and_then(|addr| self.source_locations.get(&addr).cloned())
-    }
-
-    pub(crate) fn map_source_to_addr(&self, path: &str, line: u32, hw_pc: u64) -> Option<u64> {
-        let mut best_addr = None;
-        let mut min_diff = u64::MAX;
-        for (addr, (loc_path, loc_line)) in &self.source_locations {
-            if *loc_path == path && *loc_line == line {
-                let diff = addr.abs_diff(hw_pc);
-                if best_addr.is_none() || diff < min_diff {
-                    min_diff = diff;
-                    best_addr = Some(*addr);
-                }
-            }
-        }
-        best_addr
-    }
-
-    pub(crate) fn get_hw_pc_line(&self, path: &str, hw_pc: u64) -> Option<u32> {
-        let mut best_addr = None;
-        for &addr in self.source_locations.keys() {
-            if addr <= hw_pc && (best_addr.is_none() || addr > best_addr.unwrap()) {
-                best_addr = Some(addr);
-            }
-        }
-        if let Some(addr) = best_addr
-            && let Some((p, l)) = self.source_locations.get(&addr)
-            && *p == path
-        {
-            Some(*l)
-        } else {
-            None
-        }
     }
 
     pub(crate) fn set_error(&mut self, msg: impl Into<String>) {

@@ -10,8 +10,9 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
-mod input;
 mod command;
+mod debug_symbols;
+mod input;
 mod stack;
 mod state;
 pub use stack::*;

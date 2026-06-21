@@ -265,8 +265,12 @@ impl Debugger {
             }
         }
 
-        for entry in &mut entries {
-            entry.symbol = self.symbols.get(&entry.addr).cloned();
+        if let Some(ds) = self.debug_symbols.as_ref() {
+            for entry in &mut entries {
+                if let Some(symbol) = ds.symbols.get(&entry.addr) {
+                    entry.symbol = Some(symbol.clone());
+                }
+            }
         }
 
         for i in 0..entries.len().saturating_sub(1) {

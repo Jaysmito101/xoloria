@@ -411,8 +411,7 @@ impl Debugger {
                 } else if self.ui.panel == Panel::Symbols {
                     let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
                         let search = self.ui.search.query.to_lowercase();
-                        let filtered: Vec<_> = self
-                            .sorted_symbols
+                        let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                             .iter()
                             .filter(|(_, name)| {
                                 search.is_empty() || name.to_lowercase().contains(&search)
@@ -427,7 +426,7 @@ impl Debugger {
                                 .iter()
                                 .rev()
                                 .filter(|e| {
-                                    self.sorted_symbols
+                                    self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                                         .binary_search_by_key(&e.pc, |(a, _)| *a)
                                         .is_ok()
                                 })
@@ -561,9 +560,9 @@ impl Debugger {
                         .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
 
-                    if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+                    if let Some((path, _)) = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&entries))) {
                         let target_line = (self.ui.disasm.source_cursor + 1) as u32;
-                        if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                        if let Some(addr) = self.debug_symbols.as_ref().and_then(|ds| ds.map_source_to_addr(&path, target_line, hw_pc)) {
                             self.execute_command(crate::command::DebugCommand::Breakpoint(Some(
                                 crate::command::BreakpointTarget::Address(addr),
                             )));
@@ -629,7 +628,7 @@ impl Debugger {
                         if self.ui.disasm.tab == DisasmTab::Source {
                             let entries = self.disassemble_around(200);
                             if let Some((_, target_line)) =
-                                self.map_addr_to_source(pc, Some(&entries))
+                                self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(pc, Some(&entries)))
                             {
                                 self.ui.disasm.source_cursor =
                                     target_line.saturating_sub(1) as usize;
@@ -751,8 +750,7 @@ impl Debugger {
                     let row_idx = (mouse.row - rect.y - 1) as usize;
                     let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
                         let search = self.ui.search.query.to_lowercase();
-                        let filtered: Vec<_> = self
-                            .sorted_symbols
+                        let filtered: Vec<_> = self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                             .iter()
                             .filter(|(_, name)| {
                                 search.is_empty() || name.to_lowercase().contains(&search)
@@ -774,7 +772,7 @@ impl Debugger {
                                 .iter()
                                 .rev()
                                 .filter(|e| {
-                                    self.sorted_symbols
+                                    self.debug_symbols.as_ref().map(|ds| ds.sorted_symbols.as_slice()).unwrap_or(&[])
                                         .binary_search_by_key(&e.pc, |(a, _)| *a)
                                         .is_ok()
                                 })
@@ -854,12 +852,12 @@ impl Debugger {
 
         if self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source {
             let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+            if let Some((path, _)) = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&entries))) {
                 let start_cursor = self.ui.disasm.source_cursor;
                 let mut nearest_cursor = None;
                 let mut min_distance = usize::MAX;
 
-                if let Some(lines) = self.get_source_file(&path) {
+                if let Some(lines) = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)) {
                     for (idx, line) in lines.iter().enumerate() {
                         let line_text: String = line.iter().map(|(t, _)| t.as_str()).collect();
                         if is_match(&line_text) {
@@ -895,10 +893,10 @@ impl Debugger {
 
         if self.ui.panel == Panel::Disassembly && self.ui.disasm.tab == DisasmTab::Source {
             let (target_addr, _target_entry, entries) = self.resolve_cursor_target();
-            if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
+            if let Some((path, _)) = self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&entries))) {
                 let start_cursor = self.ui.disasm.source_cursor;
                 let mut next_cursor = None;
-                if let Some(lines) = self.get_source_file(&path) {
+                if let Some(lines) = self.debug_symbols.as_mut().and_then(|ds| ds.get_source_file(&path)) {
                     let mut curr = start_cursor;
                     let mut found = false;
 
@@ -949,13 +947,13 @@ impl Debugger {
                             .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
                         if let Some((_, target_line)) =
-                            self.map_addr_to_source(target_addr, Some(&entries))
+                            self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&entries)))
                         {
                             self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
                             self.ui.disasm.last_target_addr = Some(target_addr);
                             DisasmTab::Source
                         } else if let Some((_, target_line)) =
-                            self.map_addr_to_source(hw_pc, Some(&entries))
+                            self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(hw_pc, Some(&entries)))
                         {
                             self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
                             self.ui.disasm.last_target_addr = Some(hw_pc);
@@ -976,10 +974,10 @@ impl Debugger {
                             .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
                         if let Some((path, _)) =
-                            self.map_addr_to_source(target_addr, Some(&entries))
+                            self.debug_symbols.as_ref().and_then(|ds| ds.map_addr_to_source(target_addr, Some(&entries)))
                         {
                             let target_line = (self.ui.disasm.source_cursor + 1) as u32;
-                            if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
+                            if let Some(addr) = self.debug_symbols.as_ref().and_then(|ds| ds.map_source_to_addr(&path, target_line, hw_pc)) {
                                 self.ui.disasm.view_center_addr = Some(addr);
                             } else {
                                 self.ui.disasm.view_center_addr = Some(hw_pc);

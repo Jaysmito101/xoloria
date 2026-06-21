@@ -226,11 +226,14 @@ impl Debugger {
                 }
                 Some(BreakpointTarget::Symbol(name)) => {
                     let mut found = None;
-                    for (a, n) in &self.sorted_symbols {
-                        if n == &name {
-                            found = Some(*a);
-                            break;
-                        }
+                    if let Some(ds) = self.debug_symbols.as_ref()
+                        && let Some(addr) = ds
+                            .symbols
+                            .iter()
+                            .find(|(_, n)| *n == &name)
+                            .map(|(a, _)| *a)
+                    {
+                        found = Some(addr);
                     }
                     if let Some(addr) = found {
                         self.toggle_breakpoint_at(addr);
