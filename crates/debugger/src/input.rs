@@ -885,11 +885,13 @@ impl Debugger {
                             self.map_addr_to_source(target_addr, Some(&entries))
                         {
                             self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                            self.ui.disasm.last_target_addr = Some(target_addr);
                             DisasmTab::Source
                         } else if let Some((_, target_line)) =
                             self.map_addr_to_source(hw_pc, Some(&entries))
                         {
                             self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                            self.ui.disasm.last_target_addr = Some(hw_pc);
                             self.set_info(
                                 "Selected instruction has no source, jumped to PC instead.",
                             );

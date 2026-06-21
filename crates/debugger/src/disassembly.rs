@@ -9,6 +9,37 @@ pub enum JumpTarget {
     Unknown,
 }
 
+#[derive(Debug, Clone)]
+pub struct DisasmbledInstruction {
+    pub text: String,
+    pub instruction: Option<Instruction>,
+    pub is_compressed: bool,
+}
+
+impl DisasmbledInstruction {
+    #[inline(always)]
+    pub fn from_raw(raw: u32) -> Self {
+        let is_compressed = raw & 0b11 != 0b11;
+        match Instruction::try_from(raw) {
+            Ok(instr) => Self {
+                text: format!("{}", instr),
+                instruction: Some(instr),
+                is_compressed,
+            },
+            Err(_) if is_compressed => Self {
+                text: format!(".half {:#06x}", raw & 0xFFFF),
+                instruction: None,
+                is_compressed,
+            },
+            Err(_) => Self {
+                text: format!(".word {:#010x}", raw),
+                instruction: None,
+                is_compressed,
+            },
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct DisasmEntry {
     pub addr: u64,
@@ -17,84 +48,36 @@ pub struct DisasmEntry {
     pub is_bp: bool,
     pub jump_target: Option<JumpTarget>,
     pub symbol: Option<String>,
+    pub instruction: Option<Instruction>,
     pub is_compressed: bool,
 }
 
-pub(crate) struct DisasmCache {
-    pub hart: usize,
-    pub pc: u64,
-    pub breakpoint_gen: u64,
-    pub cursor: i32,
-    pub entries: Vec<DisasmEntry>,
-}
-
-pub struct Disassembler<'a> {
-    pub bus: &'a emulator::Bus,
-    pub breakpoints: &'a HashSet<u64>,
-}
-
-impl<'a> Disassembler<'a> {
-    pub fn new(bus: &'a emulator::Bus, breakpoints: &'a HashSet<u64>) -> Self {
-        Self { bus, breakpoints }
-    }
-
-    fn read_raw(&self, addr: u64) -> Option<(u32, bool)> {
-        let raw: u32 = self.bus.read(addr).ok()?;
-        let is_compressed = raw & 0b11 != 0b11;
-        Some((raw, is_compressed))
-    }
-
-    fn raw_to_text(raw: u32, is_compressed: bool) -> String {
-        match Instruction::try_from(raw) {
-            Ok(instr) => format!("{}", instr),
-            Err(_) if is_compressed => format!(".half {:#06x}", raw & 0xFFFF),
-            Err(_) => format!(".word {:#010x}", raw),
+impl DisasmEntry {
+    #[inline(always)]
+    fn unknown(addr: u64, pc: u64) -> Self {
+        Self {
+            addr,
+            text: "???".into(),
+            is_pc: addr == pc,
+            is_bp: false,
+            jump_target: None,
+            symbol: None,
+            instruction: None,
+            is_compressed: false,
         }
     }
 
-    pub fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
-        let (raw, is_compressed) = self.read_raw(addr)?;
-        Some(Self::raw_to_text(raw, is_compressed))
-    }
-
-    pub fn decode_at(&self, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<(DisasmEntry, u64)> {
-        let (raw, is_compressed) = self.read_raw(addr)?;
-        let step = if is_compressed { 2 } else { 4 };
-        let text = Self::raw_to_text(raw, is_compressed);
-
-        let instr = Instruction::try_from(raw).ok();
-        let jump_target = instr
-            .as_ref()
-            .and_then(|i| self.extract_jump_target(i, addr, pc, x_regs));
-
-        Some((
-            DisasmEntry {
-                addr,
-                text,
-                is_pc: addr == pc,
-                is_bp: self.breakpoints.contains(&addr),
-                jump_target,
-                symbol: None,
-                is_compressed,
-            },
-            step,
-        ))
-    }
-
-    pub fn extract_jump_target(
-        &self,
-        instr: &Instruction,
-        addr: u64,
-        pc: u64,
-        x_regs: &[u64; 32],
-    ) -> Option<JumpTarget> {
-        match instr {
+    pub fn with_jump_target(mut self, x_regs: &[u64; 32], pc: u64) -> Self {
+        let Some(instr) = &self.instruction else {
+            self.jump_target = None;
+            return self;
+        };
+        self.jump_target = match instr {
             Instruction::Jal { imm, .. } => {
-                let target = (addr as i64 + *imm as i64) as u64;
-                Some(JumpTarget::Known(target))
+                Some(JumpTarget::Known((self.addr as i64 + *imm as i64) as u64))
             }
             Instruction::Jalr { rs1, imm, .. } => {
-                if addr == pc {
+                if self.addr == pc {
                     let target = ((x_regs[*rs1 as u8 as usize] as i64 + *imm as i64) & !1) as u64;
                     Some(JumpTarget::Known(target))
                 } else {
@@ -107,11 +90,88 @@ impl<'a> Disassembler<'a> {
             | Instruction::Bge { imm, .. }
             | Instruction::Bltu { imm, .. }
             | Instruction::Bgeu { imm, .. } => {
-                let target = (addr as i64 + *imm as i64) as u64;
-                Some(JumpTarget::Known(target))
+                Some(JumpTarget::Known((self.addr as i64 + *imm as i64) as u64))
             }
             _ => None,
+        };
+        self
+    }
+
+    #[inline(always)]
+    pub fn from_raw(raw: u32, addr: u64, pc: u64, breakpoints: &HashSet<u64>) -> Self {
+        let DisasmbledInstruction {
+            text,
+            instruction,
+            is_compressed,
+        } = DisasmbledInstruction::from_raw(raw);
+        Self {
+            addr,
+            text,
+            is_pc: addr == pc,
+            is_bp: breakpoints.contains(&addr),
+            jump_target: None,
+            symbol: None,
+            instruction,
+            is_compressed,
         }
+    }
+}
+
+pub(crate) struct DisasmCache {
+    pub hart: usize,
+    pub pc: u64,
+    pub breakpoint_gen: u64,
+    pub cursor: i32,
+    pub entries: Vec<DisasmEntry>,
+}
+
+impl DisasmCache {
+    fn matches(&self, hart: usize, pc: u64, bp_gen: u64, cursor: i32) -> bool {
+        self.hart == hart && self.pc == pc && self.breakpoint_gen == bp_gen && self.cursor == cursor
+    }
+}
+
+pub struct Disassembler<'a> {
+    pub bus: &'a emulator::Bus,
+    pub breakpoints: &'a HashSet<u64>,
+}
+
+impl<'a> Disassembler<'a> {
+    pub fn new(bus: &'a emulator::Bus, breakpoints: &'a HashSet<u64>) -> Self {
+        Self { bus, breakpoints }
+    }
+
+    #[inline(always)]
+    fn read_raw(&self, addr: u64) -> Option<(u32, bool)> {
+        let raw: u32 = self.bus.read(addr).ok()?;
+        let is_compressed = raw & 0b11 != 0b11;
+        Some((raw, is_compressed))
+    }
+
+    #[inline(always)]
+    pub fn disassemble_instruction_at(&self, addr: u64) -> Option<String> {
+        Some(DisasmbledInstruction::from_raw(self.read_raw(addr)?.0).text)
+    }
+
+    pub fn decode_at(&self, addr: u64, pc: u64, x_regs: &[u64; 32]) -> Option<(DisasmEntry, u64)> {
+        let raw = self.read_raw(addr)?;
+        Some((
+            DisasmEntry::from_raw(raw.0, addr, pc, self.breakpoints).with_jump_target(x_regs, pc),
+            if raw.1 { 2 } else { 4 },
+        ))
+    }
+
+    pub fn scan_forward(
+        &'a self,
+        start: u64,
+        pc: u64,
+        x_regs: &'a [u64; 32],
+    ) -> impl Iterator<Item = (DisasmEntry, u64)> + 'a {
+        std::iter::successors(Some(start), move |&addr| {
+            self.read_raw(addr)
+                .map(|(_raw, is_compressed)| addr + if is_compressed { 2 } else { 4 })
+        })
+        .filter_map(move |addr| self.decode_at(addr, pc, x_regs))
     }
 }
 
@@ -133,8 +193,9 @@ impl Debugger {
             .iter()
             .position(|e| e.addr == center_addr)
             .unwrap_or(0) as i32;
-        let abs = (center_idx + self.ui.disasm.cursor).max(0) as usize;
-        let abs = abs.min(entries.len().saturating_sub(1));
+        let abs = (center_idx + self.ui.disasm.cursor)
+            .max(0)
+            .min(entries.len().saturating_sub(1) as i32) as usize;
 
         let target_entry = entries.get(abs).cloned();
         let target_addr = target_entry.as_ref().map(|e| e.addr).unwrap_or(center_addr);
@@ -150,64 +211,42 @@ impl Debugger {
         let hw_pc = hart.registers().pc();
         let bp_gen = self.breakpoints.len() as u64;
         let pc = self.ui.disasm.view_center_addr.unwrap_or(hw_pc);
+        let cursor = self.ui.disasm.cursor;
 
         if let Some(ref cache) = self.disasm_cache
-            && cache.hart == self.ui.selected_hart
-            && cache.pc == pc
-            && cache.breakpoint_gen == bp_gen
-            && cache.cursor == self.ui.disasm.cursor
+            && cache.matches(self.ui.selected_hart, pc, bp_gen, cursor)
         {
             return cache.entries.clone();
         }
 
         let x_regs = hart.registers().x();
-        let cursor = self.ui.disasm.cursor;
 
-        let before = if cursor < 0 {
-            count / 3 + (-cursor) as usize + 50
-        } else {
-            count / 3
-        };
-        let after = if cursor > 0 {
-            count - count / 3 + cursor as usize + 50
-        } else {
-            count - count / 3
-        };
+        let before = count / 3 + cursor.min(0).unsigned_abs() as usize + 50;
+        let after = count - count / 3 + cursor.max(0) as usize + 50;
 
         let disassembler = Disassembler::new(&machine.bus, &self.breakpoints);
-        let mut entries: Vec<DisasmEntry> = Vec::new();
 
-        if before > 0 {
-            let scan_start = pc.saturating_sub(before as u64 * 4);
-            let mut addr = scan_start;
-            while addr < pc {
-                if let Some((entry, step)) = disassembler.decode_at(addr, hw_pc, x_regs) {
-                    entries.push(entry);
-                    addr += step;
-                } else {
-                    addr += 2;
-                }
-            }
-            let skip = entries.len().saturating_sub(before);
-            entries = entries.into_iter().skip(skip).collect();
-        }
+        let scan_start = pc.saturating_sub(before as u64 * 4);
+        let mut entries: Vec<DisasmEntry> = disassembler
+            .scan_forward(scan_start, hw_pc, x_regs)
+            .take_while(|(e, _)| e.addr < pc)
+            .map(|(e, _)| e)
+            .collect();
+
+        let excess = entries.len().saturating_sub(before);
+        entries.drain(..excess);
 
         let mut addr = pc;
         for _ in 0..after {
-            if let Some((entry, step)) = disassembler.decode_at(addr, hw_pc, x_regs) {
-                entries.push(entry);
-                addr += step;
-            } else {
-                entries.push(DisasmEntry {
-                    addr,
-                    text: "???".into(),
-                    is_pc: addr == pc,
-                    is_bp: false,
-                    jump_target: None,
-                    symbol: None,
-                    is_compressed: false,
-                });
-                addr += 2;
+            match disassembler.decode_at(addr, hw_pc, x_regs) {
+                Some((entry, step)) => {
+                    addr += step;
+                    entries.push(entry);
+                }
+                None => {
+                    entries.push(DisasmEntry::unknown(addr, pc));
+                    addr += 2;
+                }
             }
         }
 
@@ -219,7 +258,7 @@ impl Debugger {
             hart: self.ui.selected_hart,
             pc,
             breakpoint_gen: bp_gen,
-            cursor: self.ui.disasm.cursor,
+            cursor,
             entries: entries.clone(),
         });
 
