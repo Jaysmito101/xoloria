@@ -276,29 +276,25 @@ impl Debugger {
             KeyCode::Char('e') => {
                 if self.ui.panel == Panel::Csr
                     && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch
+                    && !self.watches.is_empty()
                 {
-                    if !self.watches.is_empty() {
-                        let cursor = self
-                            .ui
-                            .watch_cursor
-                            .min(self.watches.len().saturating_sub(1));
-                        self.ui.set_input_mode(InputMode::EditWatch(cursor));
-                    }
+                    let cursor = self
+                        .ui
+                        .watch_cursor
+                        .min(self.watches.len().saturating_sub(1));
+                    self.ui.set_input_mode(InputMode::EditWatch(cursor));
                 }
             }
             KeyCode::Delete | KeyCode::Char('d') => {
                 if self.ui.panel == Panel::Csr
                     && self.ui.registers_tab == crate::ui_state::RegistersTab::Watch
+                    && !self.watches.is_empty()
                 {
-                    if !self.watches.is_empty() {
-                        let cursor = self
-                            .ui
-                            .watch_cursor
-                            .min(self.watches.len().saturating_sub(1));
-                        self.execute_command(crate::command::DebugCommand::DeleteWatchIndex(
-                            cursor,
-                        ));
-                    }
+                    let cursor = self
+                        .ui
+                        .watch_cursor
+                        .min(self.watches.len().saturating_sub(1));
+                    self.execute_command(crate::command::DebugCommand::DeleteWatchIndex(cursor));
                 }
             }
 
@@ -375,70 +371,67 @@ impl Debugger {
             KeyCode::Char('g') | KeyCode::Enter => {
                 if key.code == KeyCode::Enter && !self.ui.panel_focused {
                     self.ui.panel_focused = true;
-                } else {
-                    if self.ui.panel == Panel::Disassembly {
+                } else if self.ui.panel == Panel::Disassembly {
+                    let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                    let _hw_pc = self
+                        .machine
+                        .as_ref()
+                        .map(|m| m.harts[self.ui.selected_hart].registers().pc())
+                        .unwrap_or(0);
+                    if let Some(entry) = target_entry.as_ref()
+                        && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
+                    {
+                        self.ui.disasm.view_history.push(entry.addr);
+                        self.ui.disasm.view_center_addr = Some(target_addr);
+                        self.ui.disasm.cursor = 0;
+                        self.disasm_cache = None;
+                    }
+                } else if self.ui.panel == Panel::Symbols {
+                    let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
+                        let search = self.ui.search.query.to_lowercase();
+                        let filtered: Vec<_> = self
+                            .sorted_symbols
+                            .iter()
+                            .filter(|(_, name)| {
+                                search.is_empty() || name.to_lowercase().contains(&search)
+                            })
+                            .collect();
+                        filtered.get(self.ui.symbols.cursor).map(|t| t.0)
+                    } else {
+                        let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                            self.ui
+                                .trace
+                                .stack
+                                .iter()
+                                .rev()
+                                .filter(|e| {
+                                    self.sorted_symbols
+                                        .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                        .is_ok()
+                                })
+                                .collect()
+                        } else {
+                            self.ui.trace.stack.iter().rev().collect()
+                        };
+                        filtered_trace.get(self.ui.trace.cursor).map(|e| e.pc)
+                    };
+
+                    if let Some(t_addr) = target_addr {
                         let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
                         let _hw_pc = self
                             .machine
                             .as_ref()
                             .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                             .unwrap_or(0);
-                        if let Some(entry) = target_entry.as_ref()
-                            && let Some(JumpTarget::Known(target_addr)) = entry.jump_target
-                        {
-                            self.ui.disasm.view_history.push(entry.addr);
-                            self.ui.disasm.view_center_addr = Some(target_addr);
+                        if self.ui.disasm.view_center_addr == Some(t_addr) {
+                            self.ui.panel = Panel::Disassembly;
+                        } else {
+                            if let Some(entry) = target_entry.as_ref() {
+                                self.ui.disasm.view_history.push(entry.addr);
+                            }
+                            self.ui.disasm.view_center_addr = Some(t_addr);
                             self.ui.disasm.cursor = 0;
                             self.disasm_cache = None;
-                        }
-                    } else if self.ui.panel == Panel::Symbols {
-                        let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
-                            let search = self.ui.search.query.to_lowercase();
-                            let filtered: Vec<_> = self
-                                .sorted_symbols
-                                .iter()
-                                .filter(|(_, name)| {
-                                    search.is_empty() || name.to_lowercase().contains(&search)
-                                })
-                                .collect();
-                            filtered.get(self.ui.symbols.cursor).map(|t| t.0)
-                        } else {
-                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
-                                self.ui
-                                    .trace
-                                    .stack
-                                    .iter()
-                                    .rev()
-                                    .filter(|e| {
-                                        self.sorted_symbols
-                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
-                                            .is_ok()
-                                    })
-                                    .collect()
-                            } else {
-                                self.ui.trace.stack.iter().rev().collect()
-                            };
-                            filtered_trace.get(self.ui.trace.cursor).map(|e| e.pc)
-                        };
-
-                        if let Some(t_addr) = target_addr {
-                            let (_target_addr, target_entry, _entries) =
-                                self.resolve_cursor_target();
-                            let _hw_pc = self
-                                .machine
-                                .as_ref()
-                                .map(|m| m.harts[self.ui.selected_hart].registers().pc())
-                                .unwrap_or(0);
-                            if self.ui.disasm.view_center_addr == Some(t_addr) {
-                                self.ui.panel = Panel::Disassembly;
-                            } else {
-                                if let Some(entry) = target_entry.as_ref() {
-                                    self.ui.disasm.view_history.push(entry.addr);
-                                }
-                                self.ui.disasm.view_center_addr = Some(t_addr);
-                                self.ui.disasm.cursor = 0;
-                                self.disasm_cache = None;
-                            }
                         }
                     }
                 }
@@ -527,7 +520,6 @@ impl Debugger {
                         .map(|m| m.harts[self.ui.selected_hart].registers().pc())
                         .unwrap_or(0);
 
-                    let target_addr = target_addr;
                     if let Some((path, _)) = self.map_addr_to_source(target_addr, Some(&entries)) {
                         let target_line = (self.ui.disasm.source_cursor + 1) as u32;
                         if let Some(addr) = self.map_source_to_addr(&path, target_line, hw_pc) {
@@ -710,67 +702,67 @@ impl Debugger {
 
                 if delta != 0 {
                     self.scroll(delta);
-                } else if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-                    if *panel == Panel::Symbols && mouse.row > rect.y {
-                        let row_idx = (mouse.row - rect.y - 1) as usize;
-                        let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
-                            let search = self.ui.search.query.to_lowercase();
-                            let filtered: Vec<_> = self
-                                .sorted_symbols
-                                .iter()
-                                .filter(|(_, name)| {
-                                    search.is_empty() || name.to_lowercase().contains(&search)
-                                })
-                                .collect();
+                } else if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+                    && *panel == Panel::Symbols
+                    && mouse.row > rect.y
+                {
+                    let row_idx = (mouse.row - rect.y - 1) as usize;
+                    let target_addr = if self.ui.symbols.tab == SymbolsTab::Symbols {
+                        let search = self.ui.search.query.to_lowercase();
+                        let filtered: Vec<_> = self
+                            .sorted_symbols
+                            .iter()
+                            .filter(|(_, name)| {
+                                search.is_empty() || name.to_lowercase().contains(&search)
+                            })
+                            .collect();
 
-                            let symbol_idx = self.ui.symbols.scroll + row_idx;
-                            if symbol_idx < filtered.len() {
-                                self.ui.symbols.cursor = symbol_idx;
-                                filtered.get(symbol_idx).map(|t| t.0)
-                            } else {
-                                None
-                            }
+                        let symbol_idx = self.ui.symbols.scroll + row_idx;
+                        if symbol_idx < filtered.len() {
+                            self.ui.symbols.cursor = symbol_idx;
+                            filtered.get(symbol_idx).map(|t| t.0)
                         } else {
-                            let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
-                                self.ui
-                                    .trace
-                                    .stack
-                                    .iter()
-                                    .rev()
-                                    .filter(|e| {
-                                        self.sorted_symbols
-                                            .binary_search_by_key(&e.pc, |(a, _)| *a)
-                                            .is_ok()
-                                    })
-                                    .collect()
-                            } else {
-                                self.ui.trace.stack.iter().rev().collect()
-                            };
-                            let trace_idx = self.ui.trace.scroll + row_idx;
-                            if trace_idx < filtered_trace.len() {
-                                self.ui.trace.cursor = trace_idx;
-                                filtered_trace.get(trace_idx).map(|e| e.pc)
-                            } else {
-                                None
-                            }
-                        };
-
-                        if let Some(t_addr) = target_addr {
-                            let (_target_addr, target_entry, _entries) =
-                                self.resolve_cursor_target();
-                            let _hw_pc = self
-                                .machine
-                                .as_ref()
-                                .map(|m| m.harts[self.ui.selected_hart].registers().pc())
-                                .unwrap_or(0);
-                            if let Some(entry) = target_entry.as_ref() {
-                                self.ui.disasm.view_history.push(entry.addr);
-                            }
-                            self.ui.disasm.view_center_addr = Some(t_addr);
-                            self.ui.disasm.cursor = 0;
-                            self.disasm_cache = None;
-                            self.ui.panel = Panel::Disassembly;
+                            None
                         }
+                    } else {
+                        let filtered_trace: Vec<_> = if self.ui.trace.hide_non_symbols {
+                            self.ui
+                                .trace
+                                .stack
+                                .iter()
+                                .rev()
+                                .filter(|e| {
+                                    self.sorted_symbols
+                                        .binary_search_by_key(&e.pc, |(a, _)| *a)
+                                        .is_ok()
+                                })
+                                .collect()
+                        } else {
+                            self.ui.trace.stack.iter().rev().collect()
+                        };
+                        let trace_idx = self.ui.trace.scroll + row_idx;
+                        if trace_idx < filtered_trace.len() {
+                            self.ui.trace.cursor = trace_idx;
+                            filtered_trace.get(trace_idx).map(|e| e.pc)
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(t_addr) = target_addr {
+                        let (_target_addr, target_entry, _entries) = self.resolve_cursor_target();
+                        let _hw_pc = self
+                            .machine
+                            .as_ref()
+                            .map(|m| m.harts[self.ui.selected_hart].registers().pc())
+                            .unwrap_or(0);
+                        if let Some(entry) = target_entry.as_ref() {
+                            self.ui.disasm.view_history.push(entry.addr);
+                        }
+                        self.ui.disasm.view_center_addr = Some(t_addr);
+                        self.ui.disasm.cursor = 0;
+                        self.disasm_cache = None;
+                        self.ui.panel = Panel::Disassembly;
                     }
                 }
                 break;
@@ -804,7 +796,7 @@ impl Debugger {
                     for (idx, line) in lines.iter().enumerate() {
                         let line_text: String = line.iter().map(|(t, _)| t.as_str()).collect();
                         if is_match(&line_text) {
-                            let distance = (idx as isize - start_cursor as isize).abs() as usize;
+                            let distance = (idx as isize - start_cursor as isize).unsigned_abs();
                             if distance < min_distance {
                                 min_distance = distance;
                                 nearest_cursor = Some(idx);
@@ -843,13 +835,11 @@ impl Debugger {
                     let mut curr = start_cursor;
                     let mut found = false;
 
-                    if inclusive {
-                        if curr < lines.len() {
-                            let line_text: String =
-                                lines[curr].iter().map(|(t, _)| t.as_str()).collect();
-                            if is_match(&line_text) {
-                                found = true;
-                            }
+                    if inclusive && curr < lines.len() {
+                        let line_text: String =
+                            lines[curr].iter().map(|(t, _)| t.as_str()).collect();
+                        if is_match(&line_text) {
+                            found = true;
                         }
                     }
 
@@ -896,20 +886,17 @@ impl Debugger {
                         {
                             self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
                             DisasmTab::Source
+                        } else if let Some((_, target_line)) =
+                            self.map_addr_to_source(hw_pc, Some(&entries))
+                        {
+                            self.ui.disasm.source_cursor = target_line.saturating_sub(1) as usize;
+                            self.set_info(
+                                "Selected instruction has no source, jumped to PC instead.",
+                            );
+                            DisasmTab::Source
                         } else {
-                            if let Some((_, target_line)) =
-                                self.map_addr_to_source(hw_pc, Some(&entries))
-                            {
-                                self.ui.disasm.source_cursor =
-                                    target_line.saturating_sub(1) as usize;
-                                self.set_info(
-                                    "Selected instruction has no source, jumped to PC instead.",
-                                );
-                                DisasmTab::Source
-                            } else {
-                                self.set_info("No source mapped to this instruction or the PC.");
-                                DisasmTab::Assembly
-                            }
+                            self.set_info("No source mapped to this instruction or the PC.");
+                            DisasmTab::Assembly
                         }
                     }
                     DisasmTab::Source => {

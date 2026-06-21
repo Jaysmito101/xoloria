@@ -1,7 +1,7 @@
 use num_traits::Signed;
 
 use crate::instructions::Instruction;
-use std::fmt::{self, Display, Formatter, LowerHex, UpperHex};
+use std::fmt::{self, Display, Formatter, LowerHex};
 
 struct SignedHexView<'a, T: PartialOrd + Signed + LowerHex>(&'a T);
 

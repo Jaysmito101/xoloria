@@ -86,7 +86,7 @@ impl DebugCommand {
             "watch" => {
                 if parts.len() >= 3 && parts[1] == "del" {
                     let name = parts[2..].join(" ");
-                    return Ok(Self::Watch(WatchCommand::Del { name }));
+                    Ok(Self::Watch(WatchCommand::Del { name }))
                 } else if parts.len() >= 3 {
                     let name = parts[1].to_string();
                     let dt_str = parts.last().unwrap();
@@ -94,16 +94,16 @@ impl DebugCommand {
                         let addr_expr = parts[2..parts.len() - 1].join(" ");
                         let addr =
                             parse_addr(&addr_expr).map_err(|_| "Invalid address".to_string())?;
-                        return Ok(Self::Watch(WatchCommand::Add {
+                        Ok(Self::Watch(WatchCommand::Add {
                             name,
                             address: addr,
                             data_type: dt,
-                        }));
+                        }))
                     } else {
-                        return Err("Invalid data type".into());
+                        Err("Invalid data type".into())
                     }
                 } else {
-                    return Err("Usage: watch <name> <addr_expr> <type> | watch del <name>".into());
+                    Err("Usage: watch <name> <addr_expr> <type> | watch del <name>".into())
                 }
             }
             "clear" => Ok(Self::ClearTrace),

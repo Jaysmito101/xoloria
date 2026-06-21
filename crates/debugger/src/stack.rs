@@ -38,12 +38,12 @@ impl StackAnalyzer {
                         size: -imm,
                         pushes: Vec::new(),
                     });
-                } else if *imm > 0 {
-                    if let Some(frame) = &mut self.current_frame {
-                        frame.size -= *imm;
-                        if frame.size <= 0 {
-                            self.current_frame = None;
-                        }
+                } else if *imm > 0
+                    && let Some(frame) = &mut self.current_frame
+                {
+                    frame.size -= *imm;
+                    if frame.size <= 0 {
+                        self.current_frame = None;
                     }
                 }
             }
