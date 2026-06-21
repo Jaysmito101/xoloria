@@ -210,8 +210,10 @@ impl Hart {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
             Instruction::Lui { rd, imm } => vm::load::execute_lui(rd, imm, self),
             Instruction::Auipc { rd, imm } => vm::load::execute_auipc(rd, imm, self),
-            Instruction::Jal { rd, imm } => vm::jump::execute_jal(rd, imm, self),
-            Instruction::Jalr { rd, rs1, imm } => vm::jump::execute_jalr(rd, rs1, imm, self),
+            Instruction::Jal { rd, imm } => vm::jump::execute_jal(is_compressed, rd, imm, self),
+            Instruction::Jalr { rd, rs1, imm } => {
+                vm::jump::execute_jalr(is_compressed, rd, rs1, imm, self)
+            }
             Instruction::Lb { rd, rs1, imm } => vm::load::execute_lb(rd, rs1, imm, self, bus),
             Instruction::Lh { rd, rs1, imm } => vm::load::execute_lh(rd, rs1, imm, self, bus),
             Instruction::Lw { rd, rs1, imm } => vm::load::execute_lw(rd, rs1, imm, self, bus),
