@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::app::{Debugger, JumpTarget};
+use crate::app::Debugger;
+use crate::disassembly::JumpTarget;
 use crate::state::*;
 use crate::ui_state::{DisasmTab, SymbolsTab};
 

@@ -1,4 +1,4 @@
-use crate::app::DisasmEntry;
+use crate::disassembly::{DisasmEntry, JumpTarget};
 use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 use ratatui::{
     Frame,
@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Tabs, Wrap},
 };
 
-use crate::app::{Debugger, JumpTarget};
+use crate::app::Debugger;
 use crate::state::*;
 use crate::ui_state::{DisasmTab, SymbolsTab};
 

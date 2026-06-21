@@ -15,6 +15,7 @@ mod command;
 mod stack;
 mod state;
 pub use stack::*;
+mod disassembly;
 
 mod ui;
 mod ui_state;
