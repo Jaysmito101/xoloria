@@ -2210,8 +2210,8 @@ impl Debugger {
             Style::default().fg(self.theme.dim),
         ));
 
-        let bar =
-            Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::Rgb(30, 30, 40)));
+        let bar = Paragraph::new(Line::from(spans))
+            .style(Style::default().bg(Color::Rgb(30, 30, 40)).fg(Color::White));
         frame.render_widget(bar, area);
     }
 
@@ -2230,6 +2230,7 @@ impl Debugger {
         let mut block = Block::default()
             .borders(Borders::ALL)
             .border_style(border_style)
+            .style(Style::default().fg(self.theme.fg))
             .title(format!(" {} ", title))
             .title_style(Style::default().fg(if focused {
                 if self.ui.panel_focused {
