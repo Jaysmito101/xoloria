@@ -25,7 +25,8 @@ impl DebugSymbols {
     }
 
     pub fn new(elf_path: &str) -> Self {
-        let (source_lines, source_locations, symbols, function_params) = Self::load_elf_symbols(elf_path);
+        let (source_lines, source_locations, symbols, function_params) =
+            Self::load_elf_symbols(elf_path);
 
         let sorted_symbols = {
             let mut s: Vec<_> = symbols.clone().into_iter().collect();
@@ -123,23 +124,22 @@ impl DebugSymbols {
                 while let Ok(Some((delta_depth, entry))) = entries.next_dfs() {
                     depth += delta_depth;
                     if entry.tag() == gimli::DW_TAG_subprogram {
-                        if let Ok(Some(gimli::AttributeValue::Addr(addr))) = entry.attr_value(gimli::DW_AT_low_pc) {
+                        if let Ok(Some(gimli::AttributeValue::Addr(addr))) =
+                            entry.attr_value(gimli::DW_AT_low_pc)
+                        {
                             current_subprogram_addr = Some(addr);
                             function_params.insert(addr, Vec::new());
                         } else {
                             current_subprogram_addr = None;
                         }
                     } else if entry.tag() == gimli::DW_TAG_formal_parameter {
-                        if let Some(addr) = current_subprogram_addr {
-                            if let Ok(Some(attr)) = entry.attr_value(gimli::DW_AT_name) {
-                                if let Ok(s) = dwarf.attr_string(&unit, attr) {
-                                    if let Ok(name) = s.to_string() {
-                                        if let Some(params) = function_params.get_mut(&addr) {
-                                            params.push(name.to_string());
-                                        }
-                                    }
-                                }
-                            }
+                        if let Some(addr) = current_subprogram_addr
+                            && let Ok(Some(attr)) = entry.attr_value(gimli::DW_AT_name)
+                            && let Ok(s) = dwarf.attr_string(&unit, attr)
+                            && let Ok(name) = s.to_string()
+                            && let Some(params) = function_params.get_mut(&addr)
+                        {
+                            params.push(name.to_string());
                         }
                     } else if delta_depth <= 0 && depth <= 1 {
                         current_subprogram_addr = None;

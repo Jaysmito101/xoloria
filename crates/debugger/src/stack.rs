@@ -57,7 +57,15 @@ impl StackAnalyzer {
         self.call_stack.last().and_then(|f| f.stack_frame.as_ref())
     }
 
-    pub fn on_instruction_executed(&mut self, inst: &Instruction, _pc: u64, return_pc: u64, next_pc: u64, current_sp: u64, args: [u64; 8]) -> Option<String> {
+    pub fn on_instruction_executed(
+        &mut self,
+        inst: &Instruction,
+        _pc: u64,
+        return_pc: u64,
+        next_pc: u64,
+        current_sp: u64,
+        args: [u64; 8],
+    ) -> Option<String> {
         match inst {
             Instruction::Jal { rd, .. } if *rd == GeneralRegisterName::Ra => {
                 self.call_stack.push(CallFrame {
@@ -77,17 +85,18 @@ impl StackAnalyzer {
                         entry_sp: current_sp,
                         args,
                     });
-                } else if *rs1 == GeneralRegisterName::Ra && *rd == GeneralRegisterName::Zero {
-                    if let Some(last) = self.call_stack.last() {
-                        if last.return_pc == next_pc && self.call_stack.len() > 1 {
-                            let popped = self.call_stack.pop().unwrap();
-                            if popped.entry_sp != current_sp {
-                                return Some(format!(
-                                    "Stack pointer mismatch on return from {:#x}: expected {:#x}, got {:#x}",
-                                    popped.target_pc, popped.entry_sp, current_sp
-                                ));
-                            }
-                        }
+                } else if *rs1 == GeneralRegisterName::Ra
+                    && *rd == GeneralRegisterName::Zero
+                    && let Some(last) = self.call_stack.last()
+                    && last.return_pc == next_pc
+                    && self.call_stack.len() > 1
+                {
+                    let popped = self.call_stack.pop().unwrap();
+                    if popped.entry_sp != current_sp {
+                        return Some(format!(
+                            "Stack pointer mismatch on return from {:#x}: expected {:#x}, got {:#x}",
+                            popped.target_pc, popped.entry_sp, current_sp
+                        ));
                     }
                 }
             }
@@ -101,14 +110,14 @@ impl StackAnalyzer {
                             pushes: Vec::new(),
                         });
                     }
-                } else if *imm > 0 {
-                    if let Some(Some(frame)) = self.current_frame_mut() {
-                        frame.size -= *imm;
-                        if frame.size <= 0 {
-                            if let Some(f) = self.current_frame_mut() {
-                                *f = None;
-                            }
-                        }
+                } else if *imm > 0
+                    && let Some(Some(frame)) = self.current_frame_mut()
+                {
+                    frame.size -= *imm;
+                    if frame.size <= 0
+                        && let Some(f) = self.current_frame_mut()
+                    {
+                        *f = None;
                     }
                 }
             }
