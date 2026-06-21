@@ -163,18 +163,7 @@ impl<'a> Disassembler<'a> {
         ))
     }
 
-    pub fn scan_forward(
-        &'a self,
-        start: u64,
-        pc: u64,
-        x_regs: &'a [u64; 32],
-    ) -> impl Iterator<Item = (DisasmEntry, u64)> + 'a {
-        std::iter::successors(Some(start), move |&addr| {
-            self.read_raw(addr)
-                .map(|(_raw, is_compressed)| addr + if is_compressed { 2 } else { 4 })
-        })
-        .filter_map(move |addr| self.decode_at(addr, pc, x_regs))
-    }
+
 }
 
 impl Debugger {
@@ -223,20 +212,36 @@ impl Debugger {
 
         let x_regs = hart.registers().x();
 
-        let before = count / 3 + cursor.min(0).unsigned_abs() as usize + 50;
-        let after = count - count / 3 + cursor.max(0) as usize + 50;
+        let before = if cursor < 0 {
+            count / 3 + (-cursor) as usize + 50
+        } else {
+            count / 3
+        };
+
+        let after = if cursor > 0 {
+            count - count / 3 + cursor as usize + 50
+        } else {
+            count - count / 3
+        };
 
         let disassembler = Disassembler::new(&machine.bus, &self.breakpoints);
 
-        let scan_start = pc.saturating_sub(before as u64 * 4);
-        let mut entries: Vec<DisasmEntry> = disassembler
-            .scan_forward(scan_start, hw_pc, x_regs)
-            .take_while(|(e, _)| e.addr < pc)
-            .map(|(e, _)| e)
-            .collect();
+        let mut entries: Vec<DisasmEntry> = Vec::new();
 
-        let excess = entries.len().saturating_sub(before);
-        entries.drain(..excess);
+        if before > 0 {
+            let scan_start = pc.saturating_sub(before as u64 * 4);
+            let mut addr = scan_start;
+            while addr < pc {
+                if let Some((entry, step)) = disassembler.decode_at(addr, hw_pc, x_regs) {
+                    entries.push(entry);
+                    addr += step;
+                } else {
+                    addr += 2;
+                }
+            }
+            let skip = entries.len().saturating_sub(before);
+            entries = entries.into_iter().skip(skip).collect();
+        }
 
         let mut addr = pc;
         for _ in 0..after {
