@@ -4,6 +4,7 @@ mod build;
 mod clean;
 mod lints;
 mod opts;
+mod tools;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
