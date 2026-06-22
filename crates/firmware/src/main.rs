@@ -40,7 +40,7 @@ pub unsafe extern "C" fn runtime_init() -> ! {
             .lock()
             .init(&raw mut HEAP_MEMORY as usize, HEAP_SIZE);
     }
-    main().expect("Failed to run main function");
+    main(); //.expect("Failed to run main function");
     loop {}
 }
 
@@ -72,6 +72,22 @@ pub fn fibo_iterative(n: u32) -> u32 {
 }
 
 fn main() -> anyhow::Result<u32> {
+    for j in 0..100000 {
+        unsafe {
+            core::arch::asm!("mv t0, {0}", in(reg) j);
+        }
+        for i in 0..12 {
+            let fibo = fibo_recursive(i);
+            let fact = factorial_recursive(i);
+            let fibo_iter = fibo_iterative(i);
+            unsafe {
+                // leak the values to prevent optimization
+                core::ptr::read_volatile(&fibo);
+                core::ptr::read_volatile(&fact);
+                core::ptr::read_volatile(&fibo_iter);
+            };
+        }
+    }
     Err(anyhow::anyhow!("This is a test error"))?;
     Ok(42)
 }

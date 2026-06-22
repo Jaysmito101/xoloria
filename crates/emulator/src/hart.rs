@@ -204,7 +204,7 @@ impl Hart {
         let instruction_value: u32 = bus.read(self.registers.pc)?;
         let is_compressed = instruction_value & 0b11 != 0b11;
         let instruction = Instruction::try_from(instruction_value)?;
-        tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
+        // tracing::warn!("[{:#x}] {}", self.registers.pc, instruction);
         self.registers.x[0] = 0; // enforce zero being zero
         let vm_result = match instruction {
             Instruction::Noop => Ok(VmOutput::NextInstruction),
@@ -374,7 +374,10 @@ impl Hart {
                 Ok(VmOutput::NextInstruction)
             }
 
-            Instruction::Ebreak => todo!(),
+            Instruction::Ebreak => {
+                tracing::warn!("EBREAK at {:#x}", self.registers.pc);
+                Ok(VmOutput::NextInstruction)
+            }
             Instruction::Sret => todo!(),
             Instruction::Mret => todo!(),
             Instruction::Wfi => todo!(),
