@@ -30,3 +30,4 @@ evalexpr = "13.1.0"
 syntect = "5.2.0"
 regex = "1.10"
 emulator = { path = "crates/emulator" }
+xtask = { path = "crates/xtask" }

@@ -13,3 +13,4 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+xtask.workspace = true
