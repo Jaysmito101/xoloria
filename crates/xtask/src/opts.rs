@@ -2,7 +2,7 @@
 #[command(author, version, about, long_about = None)]
 pub struct Opts {
     #[clap(subcommand)]
-    pub(crate) command: Command,
+    pub command: Command,
 }
 
 #[derive(clap::Subcommand, Debug, Clone)]

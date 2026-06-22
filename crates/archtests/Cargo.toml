@@ -2,8 +2,14 @@
 name = "archtests"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

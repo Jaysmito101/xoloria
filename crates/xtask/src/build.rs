@@ -1,4 +1,4 @@
-pub fn run_cli(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
+pub fn run_cli(debug: bool, args: &[String]) -> anyhow::Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("run").arg("--package").arg("cli");
     if !debug {
@@ -17,7 +17,7 @@ pub fn run_cli(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn run_debugger(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
+pub fn run_debugger(debug: bool, args: &[String]) -> anyhow::Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("run").arg("--package").arg("debugger");
     if !debug {
