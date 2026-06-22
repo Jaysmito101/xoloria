@@ -94,7 +94,7 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn ensure_tool_installed(tool: &str) -> anyhow::Result<()> {
+pub fn ensure_tool_installed(tool: &str) -> anyhow::Result<()> {
     tracing::info!("Checking if {} is installed...", tool);
     let status = std::process::Command::new(tool).arg("--version").status()?;
 
@@ -106,7 +106,7 @@ fn ensure_tool_installed(tool: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn clone_repo(repo_url: &str, shallow: bool, dest_dir: &std::path::Path) -> anyhow::Result<()> {
+pub fn clone_repo(repo_url: &str, shallow: bool, dest_dir: &std::path::Path) -> anyhow::Result<()> {
     ensure_tool_installed("git")?;
 
     if dest_dir.exists() {
