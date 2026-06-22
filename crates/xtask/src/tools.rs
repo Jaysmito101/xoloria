@@ -112,10 +112,7 @@ fn clone_repo(repo_url: &str, shallow: bool, dest_dir: &std::path::Path) -> anyh
     ensure_tool_installed("git")?;
 
     if dest_dir.exists() {
-        anyhow::bail!(
-            "Destination directory {} already exists",
-            dest_dir.display()
-        );
+        std::fs::remove_dir_all(dest_dir)?;
     }
 
     tracing::info!(
