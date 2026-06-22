@@ -1,5 +1,3 @@
-use crate::tools::setup_riscv_tools;
-
 pub fn run_cli(debug: bool, args: Vec<String>) -> anyhow::Result<()> {
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("run").arg("--package").arg("cli");
@@ -91,7 +89,7 @@ pub fn dump_firmware() -> anyhow::Result<()> {
 }
 
 pub fn run_arch_tests() -> anyhow::Result<()> {
-    setup_riscv_tools()?;
+    crate::tools::ensure_riscv_tools()?;
 
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("run")

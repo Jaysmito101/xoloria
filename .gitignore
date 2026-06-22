@@ -3,5 +3,6 @@
 # for test binaries
 /binmake
 /programs/artifacts
+/tools
 
 firmware.bin

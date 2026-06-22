@@ -11,6 +11,7 @@ pub enum Command {
     Clippy,
     Clean,
     RunArchTests,
+    SetupRiscvTools,
     BuildFirmware {
         #[clap(short, long, default_value_t = false)]
         debug: bool,

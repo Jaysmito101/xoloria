@@ -18,6 +18,7 @@ fn main() -> anyhow::Result<()> {
         opts::Command::BuildFirmware { debug } => build::build_firmware(!debug)?,
         opts::Command::DumpFirmware => build::dump_firmware()?,
         opts::Command::RunArchTests => build::run_arch_tests()?,
+        opts::Command::SetupRiscvTools => tools::setup_riscv_tools()?,
         opts::Command::BuildOs { debug } => {
             let _ = debug;
             unimplemented!("BuildOs command is not implemented yet")
