@@ -5,6 +5,7 @@ members = [
     "crates/firmware",
     "crates/cli",
     "crates/debugger",
+    "crates/archtests",
     "crates/xtask",
 ]
 

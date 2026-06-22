@@ -5,7 +5,7 @@ emu = ["xtask", "cli", "--"]
 dbg = ["xtask", "debugger", "--"]
 firmware = ["xtask", "build-firmware"]
 dump = ["xtask", "dump-firmware", "--"]
-
+archtests = ["xtask", "run-arch-tests", "--"]
 
 [target.riscv64imac-unknown-none-elf]
 rustflags = [

@@ -10,6 +10,7 @@ pub enum Command {
     Check,
     Clippy,
     Clean,
+    RunArchTests,
     BuildFirmware {
         #[clap(short, long, default_value_t = false)]
         debug: bool,
