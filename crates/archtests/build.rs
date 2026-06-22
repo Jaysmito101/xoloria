@@ -28,12 +28,27 @@ fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn rerun_on_config_change() -> anyhow::Result<()> {
+    println!("cargo:rerun-if-changed=config");
+    for entry in std::fs::read_dir("config")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     tracing::info!("Preparing to setup RISC-V architecture tests...");
     let hash = get_config_hash()?;
-    let target_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target");
+    let target_dir = std::env::var("OUT_DIR")
+        .map(std::path::PathBuf::from)
+        .expect("OUT_DIR environment variable is not set, cannot determine target directory for architecture tests");
+
     let test_dir = target_dir.join(format!("riscv-arch-tests-{}", hash));
 
     if !test_dir.join("bin").exists() {
@@ -48,6 +63,8 @@ fn main() -> anyhow::Result<()> {
         "RISC-V architecture tests are ready at: {}",
         test_dir.display()
     );
+
+    rerun_on_config_change()?;
 
     Ok(())
 }
