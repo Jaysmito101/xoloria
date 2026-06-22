@@ -77,16 +77,20 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
         }
     }
 
+    std::fs::remove_dir_all("tools/llvm-project")?;
+
     Ok(())
 }
 
 fn ensure_tool_installed(tool: &str) -> anyhow::Result<()> {
+    tracing::info!("Checking if {} is installed...", tool);
     let status = std::process::Command::new(tool).arg("--version").status()?;
 
     if !status.success() {
         anyhow::bail!("{} is not installed or not found in PATH", tool);
     }
 
+    tracing::info!("Found {} installed.", tool);
     Ok(())
 }
 
