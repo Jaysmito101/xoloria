@@ -35,7 +35,7 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
         std::path::Path::new("tools/llvm-project"),
     )?;
 
-    tracing::info!("Building RISC-V toolchain...");
+    tracing::info!("Preparing to build the LLVM RISC-V toolchain...");
     let llvm_source_dir = std::path::Path::new("tools/llvm-project/llvm");
     let llvm_build_dir = std::path::Path::new("tools/llvm-project/build");
     let cmake_cmd = std::process::Command::new("cmake")
@@ -55,6 +55,20 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
 
     if !llvm_build_dir.exists() {
         std::fs::create_dir_all(llvm_build_dir)?;
+    }
+
+    tracing::info!("Building the LLVM RISC-V toolchain...");
+    let num_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let build_cmd = std::process::Command::new("cmake")
+        .arg("--build")
+        .arg(llvm_build_dir)
+        .arg("-j")
+        .arg(num_cpus.to_string())
+        .status()?;
+    if !build_cmd.success() {
+        anyhow::bail!("Build failed with status: {}", build_cmd);
     }
 
     tracing::info!("Checking if RISC-V toolchain is properly built...");
