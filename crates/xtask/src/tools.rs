@@ -10,7 +10,6 @@ pub fn ensure_riscv_tools() -> anyhow::Result<()> {
     if let Ok(riscv_toolchain_path) = std::env::var("RISCV_TOOLCHAIN_PATH") {
         if std::path::Path::new(&riscv_toolchain_path).exists() {
             ensure_tool_installed(format!("{}/bin/clang", riscv_toolchain_path).as_str())?;
-            ensure_tool_installed(format!("{}/bin/ld", riscv_toolchain_path).as_str())?;
             return Ok(());
         } else {
             anyhow::bail!(
@@ -73,7 +72,6 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
 
     tracing::info!("Checking if RISC-V toolchain is properly built...");
     ensure_tool_installed("tools/llvm-project/build/bin/clang")?;
-    ensure_tool_installed("tools/llvm-project/build/bin/ld")?;
 
     tracing::info!("Copying RISC-V toolchain to tools/riscv-toolchain...");
     let build_bin_dir = std::path::Path::new("tools/llvm-project/build/bin");
