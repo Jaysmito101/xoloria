@@ -150,7 +150,7 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
     if !clang_path.exists() {
         setup_riscv_llvm_toolchain()?;
     } else {
-        tracing::info!("RISC-V LLVM toolchain already setup, skipping...");
+        tracing::info!("RISC-V LLVM toolchain already setup, skipping");
     }
 
     let sail_path = std::path::Path::new("tools/sail-riscv")
@@ -219,7 +219,7 @@ pub fn is_git_repo(path: &std::path::Path) -> bool {
 }
 
 pub fn download_to_temp(url: &str) -> anyhow::Result<std::path::PathBuf> {
-    tracing::info!("Downloading {} to temporary directory...", url);
+    tracing::info!("Downloading {} to temporary directory", url);
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join("sail-riscv.tar.gz");
     let response = reqwest::blocking::get(url)?;
@@ -256,6 +256,16 @@ pub fn recursively_move_contents(
         } else {
             std::fs::rename(&path, &dest_path)?;
         }
+    }
+    Ok(())
+}
+
+pub fn add_to_path_env_var(dir: &std::path::Path) -> anyhow::Result<()> {
+    tracing::info!("Adding {} to PATH", dir.display());
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let new_path = format!("{};{}", dir.display(), current_path);
+    unsafe {
+        std::env::set_var("PATH", new_path);
     }
     Ok(())
 }

@@ -53,6 +53,18 @@ fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
         anyhow::bail!("Failed to trust the mise configuration.");
     }
 
+    xtask::add_to_path_env_var(
+        std::path::Path::new(&std::env::var("SAIL_RISCV_PATH")?)
+            .join("bin")
+            .as_path(),
+    )?;
+
+    xtask::add_to_path_env_var(
+        std::path::Path::new(&std::env::var("RISCV_TOOLCHAIN_PATH")?)
+            .join("bin")
+            .as_path(),
+    )?;
+
     tracing::info!("Building RISC-V architecture tests...");
     let config_file = base_dir
         .join("sources")
