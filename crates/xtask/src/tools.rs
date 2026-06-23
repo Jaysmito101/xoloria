@@ -1,5 +1,6 @@
 pub fn ensure_riscv_tools() -> anyhow::Result<()> {
-    let toolchain_dir = std::path::PathBuf::from("tools/riscv-toolchain");
+    let toolchain_dir =
+        std::path::PathBuf::from(format!("tools/riscv-toolchain/{}", std::env::consts::OS));
 
     if toolchain_dir.exists() {
         unsafe {
@@ -75,7 +76,8 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
 
     tracing::info!("Copying RISC-V toolchain to tools/riscv-toolchain...");
     let build_bin_dir = std::path::Path::new("tools/llvm-project/build/bin");
-    let riscv_toolchain_dir = std::path::Path::new("tools/riscv-toolchain/bin");
+    let riscv_toolchain_dir = format!("tools/riscv-toolchain/{}/bin", std::env::consts::OS);
+    let riscv_toolchain_dir = std::path::Path::new(&riscv_toolchain_dir);
     if riscv_toolchain_dir.exists() {
         std::fs::remove_dir_all(riscv_toolchain_dir)?;
     }
@@ -95,15 +97,19 @@ pub fn setup_riscv_tools() -> anyhow::Result<()> {
 }
 
 pub fn ensure_tool_installed(tool: &str) -> anyhow::Result<()> {
-    tracing::info!("Checking if {} is installed...", tool);
-    let status = std::process::Command::new(tool).arg("--version").status()?;
-
-    if !status.success() {
-        anyhow::bail!("{} is not installed or not found in PATH", tool);
+    match std::process::Command::new(tool)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .arg("--version")
+        .status()
+    {
+        Ok(status) if status.success() => {
+            tracing::info!("Found {} installed.", tool);
+            Ok(())
+        }
+        Ok(_) => anyhow::bail!("{} is not installed or not found in PATH", tool),
+        Err(_) => anyhow::bail!("{} is not installed or not found in PATH", tool),
     }
-
-    tracing::info!("Found {} installed.", tool);
-    Ok(())
 }
 
 pub fn clone_repo(repo_url: &str, shallow: bool, dest_dir: &std::path::Path) -> anyhow::Result<()> {
@@ -132,4 +138,9 @@ pub fn clone_repo(repo_url: &str, shallow: bool, dest_dir: &std::path::Path) -> 
     }
 
     Ok(())
+}
+
+pub fn is_git_repo(path: &std::path::Path) -> bool {
+    let git_dir = path.join(".git");
+    git_dir.exists() && git_dir.is_dir()
 }
