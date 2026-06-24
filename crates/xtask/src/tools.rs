@@ -4,7 +4,7 @@ pub fn ensure_riscv_tools() -> anyhow::Result<()> {
     if toolchain_dir.exists() {
         ensure_tool_installed(format!("{}/bin/clang", toolchain_dir.display()).as_str())?;
         unsafe {
-            std::env::set_var("RISCV_TOOLCHAIN_PATH", &toolchain_dir);
+            std::env::set_var("RISCV_TOOLCHAIN_PATH", &toolchain_dir.canonicalize()?);
         }
     } else {
         anyhow::bail!(
@@ -18,7 +18,7 @@ pub fn ensure_riscv_tools() -> anyhow::Result<()> {
         if sail_dir.exists() {
             ensure_tool_installed(format!("{}/bin/sail_riscv_sim", sail_dir.display()).as_str())?;
             unsafe {
-                std::env::set_var("SAIL_RISCV_PATH", &sail_dir);
+                std::env::set_var("SAIL_RISCV_PATH", &sail_dir.canonicalize()?);
             }
         } else {
             anyhow::bail!(
@@ -261,9 +261,19 @@ pub fn recursively_move_contents(
 }
 
 pub fn add_to_path_env_var(dir: &std::path::Path) -> anyhow::Result<()> {
+    let dir = dir.canonicalize()?;
     tracing::info!("Adding {} to PATH", dir.display());
     let current_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{};{}", dir.display(), current_path);
+    let new_path = format!(
+        "{}{}{}",
+        dir.display(),
+        if cfg!(target_os = "windows") {
+            ";"
+        } else {
+            ":"
+        },
+        current_path
+    );
     unsafe {
         std::env::set_var("PATH", new_path);
     }
