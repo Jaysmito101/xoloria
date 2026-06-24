@@ -66,12 +66,8 @@ fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
     )?;
 
     tracing::info!("Building RISC-V architecture tests...");
-    let config_file = base_dir
-        .join("sources")
+    let config_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("config")
-        .join("cores")
-        .join("cvw")
-        .join("cvw-rv64gc")
         .join("test_config.yaml");
     tracing::info!("Using config file: {}", config_file.display());
     let num_cores = std::thread::available_parallelism()
@@ -81,6 +77,7 @@ fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
         .arg("--jobs")
         .arg(num_cores.to_string())
         .env("CONFIG_FILES", config_file)
+        .env("MISE_VERBOSE", "1")
         .current_dir(base_dir.join("sources"))
         .status()?;
     if !command.success() {
