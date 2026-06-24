@@ -1,0 +1,27 @@
+---
+$schema: config_schema.json#
+kind: architecture configuration
+type: fully configured
+name: xoloria-rv64imac
+description: The rv64imac configuration of Xoloria VM Core
+implemented_extensions:
+  - { name: I, version: "= 2.1" }
+  - { name: A, version: "= 2.1.0" }
+  - { name: M, version: "= 2.0" }
+  - { name: F, version: "= 2.2.0" }
+  - { name: C, version: "= 2.0" }
+  - { name: Zicsr, version: "= 2.0" }
+  - { name: Zifencei, version: "= 2.0.0" }
+
+params:
+  # A params
+  MISALIGNED_AMO: false
+  LRSC_RESERVATION_STRATEGY: "reserve exactly enough to cover the access" # XLEN size reservation
+  LRSC_FAIL_ON_VA_SYNONYM: false
+  LRSC_MISALIGNED_BEHAVIOR: "always raise access fault"
+  LRSC_FAIL_ON_NON_EXACT_LRSC: false
+  MUTABLE_MISA_A: false
+  # M params
+  MUTABLE_MISA_M: false
+  # C params
+  MUTABLE_MISA_C: false
