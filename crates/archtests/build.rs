@@ -1,4 +1,18 @@
-use std::hash::Hasher;
+use std::{collections::HashMap, hash::Hasher};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct RegistryEntry {
+    bin: String,
+    elf: String,
+    elf_hash: String,
+    bin_hash: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct RegistryFile {
+    config_hash: String,
+    registry: HashMap<String, RegistryEntry>,
+}
 
 fn get_config_hash() -> anyhow::Result<String> {
     let config_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
@@ -26,8 +40,8 @@ fn get_arch_tests_dir() -> anyhow::Result<std::path::PathBuf> {
 }
 
 fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
-    let mut registry = serde_json::Map::new();
-    for entry in walkdir::WalkDir::new(base_dir.join("xoloria-rva23S64").join("bin"))
+    let mut registry = HashMap::new();
+    for entry in walkdir::WalkDir::new(base_dir.join("bin"))
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -71,21 +85,21 @@ fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
         };
         registry.insert(
             elf_path.to_string_lossy().to_string(),
-            serde_json::json!({
-                "bin": bin_path.to_string_lossy().to_string(),
-                "elf": elf_path.to_string_lossy().to_string(),
-                "elf_hash": elf_hash,
-                "bin_hash": bin_hash,
-            }),
+            RegistryEntry {
+                bin: bin_path.to_string_lossy().to_string(),
+                elf: elf_path.to_string_lossy().to_string(),
+                elf_hash,
+                bin_hash,
+            },
         );
     }
     let registry_file = base_dir.join("registry.json");
     std::fs::write(
         &registry_file,
-        serde_json::to_string_pretty(&serde_json::json!({
-            "config_hash": get_config_hash()?,
-            "registry": registry,
-        }))
+        serde_json::to_string_pretty(&RegistryFile {
+            config_hash: get_config_hash()?,
+            registry,
+        })
         .unwrap_or_else(|_| "{}".into()),
     )?;
     Ok(())
