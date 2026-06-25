@@ -1,14 +1,10 @@
 OUTPUT_ARCH( "riscv" )
 ENTRY(rvtest_entry_point)
 
-
-MEMORY
-{
-    RAM (rwx) : ORIGIN = 0x80000000
-}
-
 SECTIONS
 {
+  . = 0x80000000;
+
   .text.init    : 
   {
     *(.text.init) 

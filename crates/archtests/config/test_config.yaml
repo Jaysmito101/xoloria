@@ -1,7 +1,7 @@
-name: xoloria-rv64imac
+name: xoloria-rva23S64
 compiler_exe: clang 
 objdump_exe: llvm-objdump
 ref_model_exe: sail_riscv_sim
-udb_config: xoloria-rv64imac.yaml
+udb_config: xoloria-rva23S64.yaml
 linker_script: linker.ld
 dut_include_dir: .
