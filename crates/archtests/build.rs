@@ -164,6 +164,8 @@ fn build_arch_tests(base_dir: &std::path::Path) -> anyhow::Result<()> {
     }
     std::fs::create_dir_all(&target_dir)?;
     xtask::recursively_move_contents(&build_dir, &target_dir)?;
+    // remove the build dir as it uses a lot of space
+    std::fs::remove_dir_all(base_dir.join("bin").join("build"))?;
     create_arch_tests_bins(base_dir.to_path_buf())?;
     Ok(())
 }
