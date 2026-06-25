@@ -22,11 +22,80 @@ fn get_arch_tests_dir() -> anyhow::Result<std::path::PathBuf> {
         .parent()
         .and_then(|p| p.parent())
         .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory of OUT_DIR"))?;
-    let hash = get_config_hash().expect("Failed to compute config hash");
-    Ok(target_dir.join(format!("riscv-arch-tests-{}", hash)))
+    Ok(target_dir.join("riscv-arch-tests-latest"))
 }
 
-fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
+fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
+    let mut registry = serde_json::Map::new();
+    for entry in walkdir::WalkDir::new(base_dir.join("xoloria-rva23S64").join("bin"))
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "elf")
+                .unwrap_or(false)
+        })
+    {
+        let elf_path = entry.path();
+        let bin_path = elf_path.with_extension("bin");
+        tracing::info!(
+            "Creating bin file {} from elf file {}",
+            bin_path.display(),
+            elf_path.display()
+        );
+        let status = std::process::Command::new("llvm-objcopy")
+            .arg("-O")
+            .arg("binary")
+            .arg(elf_path)
+            .arg(&bin_path)
+            .status()?;
+        if !status.success() {
+            anyhow::bail!(
+                "Failed to create bin file {} from elf file {}",
+                bin_path.display(),
+                elf_path.display()
+            );
+        }
+        let elf_hash = {
+            let content = std::fs::read(elf_path)?;
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            hasher.write(&content);
+            format!("{:x}", hasher.finish())
+        };
+        let bin_hash = {
+            let content = std::fs::read(&bin_path)?;
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            hasher.write(&content);
+            format!("{:x}", hasher.finish())
+        };
+        registry.insert(
+            elf_path.to_string_lossy().to_string(),
+            serde_json::json!({
+                "bin": bin_path.to_string_lossy().to_string(),
+                "elf": elf_path.to_string_lossy().to_string(),
+                "elf_hash": elf_hash,
+                "bin_hash": bin_hash,
+            }),
+        );
+    }
+    let registry_file = base_dir.join("registry.json");
+    std::fs::write(
+        &registry_file,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "config_hash": get_config_hash()?,
+            "registry": registry,
+        }))
+        .unwrap_or_else(|_| "{}".into()),
+    )?;
+    Ok(())
+}
+
+fn build_arch_tests(base_dir: &std::path::Path) -> anyhow::Result<()> {
+    if cfg!(target_os = "windows") {
+        anyhow::bail!("Building RISC-V architecture tests are not supported on Windows yet.");
+    }
+
     if !xtask::is_git_repo(&base_dir.join("sources")) {
         tracing::info!("Cloning RISC-V architecture tests repository...");
         xtask::clone_repo(
@@ -83,9 +152,19 @@ fn build_arch_tests(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
     if !command.success() {
         anyhow::bail!("Build failed with status: {}", command);
     }
-    panic!(
-        "RISC-V architecture tests build completed. Please run the tests using the generated binaries in the 'bin' directory."
-    );
+
+    let build_dir = base_dir
+        .join("sources")
+        .join("work")
+        .join("xoloria-rva23S64");
+    // move it to the base_dir
+    let target_dir = base_dir.join("bin");
+    if target_dir.exists() {
+        std::fs::remove_dir_all(&target_dir)?;
+    }
+    std::fs::create_dir_all(&target_dir)?;
+    xtask::recursively_move_contents(&build_dir, &target_dir)?;
+    create_arch_tests_bins(base_dir.to_path_buf())?;
     Ok(())
 }
 
@@ -101,23 +180,39 @@ fn rerun_on_config_change() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn require_tests_build() -> anyhow::Result<bool> {
+    let registry = get_arch_tests_dir()?.join("registry.json");
+    let config_hash = get_config_hash()?;
+    if !registry.exists() {
+        return Ok(true);
+    }
+    let registry_content = std::fs::read_to_string(&registry)?;
+    let registry_json: serde_json::Value = serde_json::from_str(&registry_content)?;
+    if let Some(registry_config_hash) = registry_json.get("config_hash")
+        && registry_config_hash != &serde_json::Value::String(config_hash)
+    {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    if cfg!(target_os = "windows") {
-        anyhow::bail!(
-            "RISC-V architecture tests are not supported on Windows (atleast not without selling my soul)."
-        );
-    }
-
     tracing::info!("Preparing to setup RISC-V architecture tests...");
+
     let test_dir = get_arch_tests_dir()?;
-    if !test_dir.join("bin").exists() {
+    if require_tests_build()? {
         tracing::info!(
-            "RISC-V architecture tests not found, building at: {}",
+            "RISC-V architecture tests not found/outdated, building at: {}",
             test_dir.display()
         );
-        build_arch_tests(test_dir.clone())?;
+        build_arch_tests(&test_dir)?;
+    } else {
+        tracing::info!(
+            "RISC-V architecture tests are up to date at: {}",
+            test_dir.display()
+        );
     }
 
     tracing::info!(
