@@ -196,17 +196,15 @@ fn rerun_on_config_change() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn require_tests_build() -> anyhow::Result<bool> {
-    let registry = get_arch_tests_dir()?.join("registry.json");
+fn require_tests_build(base_dir: &std::path::Path) -> anyhow::Result<bool> {
+    let registry = base_dir.join("registry.json");
     let config_hash = get_config_hash()?;
     if !registry.exists() {
         return Ok(true);
     }
     let registry_content = std::fs::read_to_string(&registry)?;
-    let registry_json: serde_json::Value = serde_json::from_str(&registry_content)?;
-    if let Some(registry_config_hash) = registry_json.get("config_hash")
-        && registry_config_hash != &serde_json::Value::String(config_hash)
-    {
+    let registry_file: RegistryFile = serde_json::from_str(&registry_content)?;
+    if registry_file.config_hash != config_hash {
         return Ok(true);
     }
     Ok(false)
@@ -218,7 +216,7 @@ fn main() -> anyhow::Result<()> {
     tracing::info!("Preparing to setup RISC-V architecture tests...");
 
     let test_dir = get_arch_tests_dir()?;
-    if require_tests_build()? {
+    if require_tests_build(&test_dir)? {
         tracing::info!(
             "RISC-V architecture tests not found/outdated, building at: {}",
             test_dir.display()
