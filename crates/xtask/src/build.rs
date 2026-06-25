@@ -92,7 +92,7 @@ pub fn run_arch_tests() -> anyhow::Result<()> {
     crate::tools::ensure_riscv_tools()?;
 
     let mut cmd = std::process::Command::new("cargo");
-    cmd.arg("run")
+    cmd.arg("test")
         .arg("--package")
         .arg("archtests")
         .arg("--release");

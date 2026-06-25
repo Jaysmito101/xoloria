@@ -51,7 +51,7 @@ fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
                 .unwrap_or(false)
         })
     {
-        let elf_path = entry.path();
+        let elf_path = entry.path().strip_prefix(&base_dir)?.to_path_buf();
         let bin_path = elf_path.with_extension("bin");
         tracing::info!(
             "Creating bin file {} from elf file {}",
@@ -61,7 +61,7 @@ fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
         let status = std::process::Command::new("llvm-objcopy")
             .arg("-O")
             .arg("binary")
-            .arg(elf_path)
+            .arg(&elf_path)
             .arg(&bin_path)
             .status()?;
         if !status.success() {
@@ -72,7 +72,7 @@ fn create_arch_tests_bins(base_dir: std::path::PathBuf) -> anyhow::Result<()> {
             );
         }
         let elf_hash = {
-            let content = std::fs::read(elf_path)?;
+            let content = std::fs::read(&elf_path)?;
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             hasher.write(&content);
             format!("{:x}", hasher.finish())
@@ -210,6 +210,59 @@ fn require_tests_build(base_dir: &std::path::Path) -> anyhow::Result<bool> {
     Ok(false)
 }
 
+fn normalize_test_name(name: &str) -> String {
+    let name = name.split("bin/build/").last().unwrap_or(name);
+    let name = name.replace("/", "_").replace(".", "_").replace("-", "_");
+    format!("test_{}", name).to_lowercase()
+}
+
+fn generate_tests(base_dir: &std::path::Path) -> anyhow::Result<()> {
+    let registry = base_dir.join("registry.json");
+    if !registry.exists() {
+        anyhow::bail!("Registry file not found at: {}", registry.display());
+    }
+    let registry = std::fs::read_to_string(&registry)?;
+    let registry: RegistryFile = serde_json::from_str(&registry)?;
+
+    let mut tests = String::new();
+
+    for (key, entry) in registry.registry.iter() {
+        let test_name = normalize_test_name(key);
+        let elf_path = base_dir
+            .join(&entry.elf)
+            .display()
+            .to_string()
+            .replace("\\", "\\\\");
+        let bin_path = base_dir
+            .join(&entry.bin)
+            .display()
+            .to_string()
+            .replace("\\", "\\\\");
+        tests += format!(
+            r#"
+#[test]
+fn {test_name}() {{
+    let elf_path = std::path::Path::new("{elf_path}");
+    let bin_path = std::path::Path::new("{bin_path}");
+    assert!(elf_path.exists(), "ELF file does not exist: {{}}", elf_path.display());
+    assert!(bin_path.exists(), "BIN file does not exist: {{}}", bin_path.display());
+    // Here you can add the logic to run the test using the ELF and BIN files.
+    unimplemented!("Test logic for {{}} is not implemented yet.", elf_path.display());
+}} 
+"#,
+            test_name = test_name,
+            elf_path = elf_path,
+            bin_path = bin_path
+        )
+        .as_str();
+    }
+
+    let out_dir = std::env::var("OUT_DIR")?;
+    let out_path = std::path::Path::new(&out_dir).join("archtests.rs");
+    std::fs::write(&out_path, tests)?;
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -229,10 +282,7 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    tracing::info!(
-        "RISC-V architecture tests are ready at: {}",
-        test_dir.display()
-    );
+    generate_tests(&test_dir)?;
 
     rerun_on_config_change()?;
 
