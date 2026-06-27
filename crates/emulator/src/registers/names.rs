@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+use strum::EnumIter;
+
+#[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GeneralRegisterName {
     Zero = 0,
     Ra = 1,
@@ -36,7 +38,7 @@ pub enum GeneralRegisterName {
     T6 = 31,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ControlRegisterName {
     Mhartid = 0xF14,
 
@@ -118,6 +120,9 @@ impl TryFrom<u16> for ControlRegisterName {
     type Error = ();
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
+        if value > 4096 {
+            return Err(());
+        }
         match value {
             0xF14 => Ok(Self::Mhartid),
             0x300 => Ok(Self::Mstatus),

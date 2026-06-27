@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use strum::IntoEnumIterator;
+
 use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
@@ -25,34 +27,54 @@ impl std::fmt::Display for PrivilageMode {
 }
 
 #[derive(Debug)]
+pub struct ControlStatusRegisters {
+    regs: [Register; 4096],
+}
+
+impl ControlStatusRegisters {
+    pub fn new() -> Self {
+        Self { regs: [0; 4096] }
+    }
+
+    pub fn with(mut self, name: ControlRegisterName, value: Register) -> Self {
+        self.regs[name as usize] = value;
+        self
+    }
+
+    pub fn get(&self, name: ControlRegisterName, pric) -> Register {
+        self.regs[name as usize]
+    }
+}
+
+#[derive(Debug)]
 pub struct HartRegisters {
     pub(crate) pc: Register,
     pub(crate) x: [Register; 32],
+    pub(crate) csr: ControlStatusRegisters,
 
     pub(crate) load_reservation_valid: bool,
     pub(crate) load_reservation_address: Register,
+    // pub(crate) mhartid: Register, // hardware thread id
 
-    pub(crate) mhartid: Register, // hardware thread id
+    // pub(crate) misa: Register, // machine ISA and extensions
 
-    pub(crate) misa: Register, // machine ISA and extensions
+    // pub(crate) mstatus: Register, // machine status (interrupt enables, previous privilage mode)
+    // pub(crate) medeleg: Register, // machine exception delegation
+    // pub(crate) mideleg: Register, // machine interrupt deligation
+    // pub(crate) mie: Register,     // machine interrupt enable mask
+    // pub(crate) mtvec: Register,   // machine trap vector base address
+    // pub(crate) mscratch: Register, // machine scratch register
+    // pub(crate) mepc: Register,    // maching exception program counter
+    // pub(crate) mcause: Register,  // machine trap cause
+    // pub(crate) mtval: Register,   // machine bad address or instruction
+    // pub(crate) mip: Register,     // machine interrupt pending
 
-    pub(crate) mstatus: Register, // machine status (interrupt enables, previous privilage mode)
-    pub(crate) medeleg: Register, // machine exception delegation
-    pub(crate) mideleg: Register, // machine interrupt deligation
-    pub(crate) mie: Register,     // machine interrupt enable mask
-    pub(crate) mtvec: Register,   // machine trap vector base address
-    pub(crate) mscratch: Register, // machine scratch register
-    pub(crate) mepc: Register,    // maching exception program counter
-    pub(crate) mcause: Register,  // machine trap cause
-    pub(crate) mtval: Register,   // machine bad address or instruction
-    pub(crate) mip: Register,     // machine interrupt pending
-
-    pub(crate) stvec: Register,    // supervisor trap vector base address
-    pub(crate) sscratch: Register, // supervisor scratch register
-    pub(crate) sepc: Register,     // supervisor exception program counter
-    pub(crate) scause: Register,   // supervisor trap cause
-    pub(crate) stval: Register,    // supervisor bad address or instruction
-    pub(crate) satp: Register,     // supervisor address translation and protection
+    // pub(crate) stvec: Register,    // supervisor trap vector base address
+    // pub(crate) sscratch: Register, // supervisor scratch register
+    // pub(crate) sepc: Register,     // supervisor exception program counter
+    // pub(crate) scause: Register,   // supervisor trap cause
+    // pub(crate) stval: Register,    // supervisor bad address or instruction
+    // pub(crate) satp: Register,     // supervisor address translation and protection
 }
 
 impl Display for HartRegisters {
@@ -70,30 +92,18 @@ impl Display for HartRegisters {
                 if i != self.x.len() - 1 { ", " } else { "" }
             )?;
         }
-        writeln!(f, " }}")?;
-        write!(
-            f,
-            "System Registers: {{ mhartid: {:#x} ({}), ",
-            self.mhartid, self.mhartid
-        )?;
-        write!(f, "misa: {:#x} ({}), ", self.misa, self.misa)?;
-        write!(f, "mstatus: {:#x} ({}), ", self.mstatus, self.mstatus)?;
-        write!(f, "medeleg: {:#x} ({}), ", self.medeleg, self.medeleg)?;
-        write!(f, "mideleg: {:#x} ({}), ", self.mideleg, self.mideleg)?;
-        write!(f, "mie: {:#x} ({}), ", self.mie, self.mie)?;
-        write!(f, "mtvec: {:#x} ({}), ", self.mtvec, self.mtvec)?;
-        write!(f, "mscratch: {:#x} ({}), ", self.mscratch, self.mscratch)?;
-        write!(f, "mepc: {:#x} ({}), ", self.mepc, self.mepc)?;
-        write!(f, "mcause: {:#x} ({}), ", self.mcause, self.mcause)?;
-        write!(f, "mtval: {:#x} ({}), ", self.mtval, self.mtval)?;
-        write!(f, "mip: {:#x} ({}), ", self.mip, self.mip)?;
-        write!(f, "stvec: {:#x} ({}), ", self.stvec, self.stvec)?;
-        write!(f, "sscratch: {:#x} ({}), ", self.sscratch, self.sscratch)?;
-        write!(f, "sepc: {:#x} ({}), ", self.sepc, self.sepc)?;
-        write!(f, "scause: {:#x} ({}), ", self.scause, self.scause)?;
-        write!(f, "stval: {:#x} ({}), ", self.stval, self.stval)?;
-        write!(f, "satp: {:#x} ({}) }}", self.satp, self.satp)?;
-        write!(f, "}}")?;
+
+        writeln!(f, "System Registers: {{")?;
+        for name in ControlRegisterName::iter() {
+            writeln!(
+                f,
+                "    {}: {:#x} ({})",
+                name,
+                self.csr.get(name),
+                self.csr.get(name)
+            )?;
+        }
+        writeln!(f, "}}")?;
 
         Ok(())
     }
@@ -114,27 +124,9 @@ impl HartRegisters {
     }
 
     pub fn csrs(&self) -> Vec<(ControlRegisterName, Register)> {
-        use ControlRegisterName::*;
-        vec![
-            (Mhartid, self.mhartid),
-            (Misa, self.misa),
-            (Mstatus, self.mstatus),
-            (Medeleg, self.medeleg),
-            (Mideleg, self.mideleg),
-            (Mie, self.mie),
-            (Mtvec, self.mtvec),
-            (Mscratch, self.mscratch),
-            (Mepc, self.mepc),
-            (Mcause, self.mcause),
-            (Mtval, self.mtval),
-            (Mip, self.mip),
-            (Stvec, self.stvec),
-            (Sscratch, self.sscratch),
-            (Sepc, self.sepc),
-            (Scause, self.scause),
-            (Stval, self.stval),
-            (Satp, self.satp),
-        ]
+        ControlRegisterName::iter()
+            .map(|name| (name, self.csr.get(name)))
+            .collect()
     }
 }
 
@@ -165,39 +157,24 @@ impl Hart {
                 load_reservation_valid: false,
                 load_reservation_address: 0,
 
-                mhartid: id,
-
-                misa: Misa::default()
-                    .with_xlen(64)
-                    .with_extension(ISAExtensions::I)
-                    .with_extension(ISAExtensions::M)
-                    .with_extension(ISAExtensions::A)
-                    .with_extension(ISAExtensions::C)
-                    .register(),
-
-                mstatus: 0,
-                medeleg: 0,
-                mideleg: 0,
-                mie: 0,
-                mtvec: 0,
-                mscratch: 0,
-                mepc: 0,
-                mcause: 0,
-                mtval: 0,
-                mip: 0,
-
-                stvec: 0,
-                sscratch: 0,
-                sepc: 0,
-                scause: 0,
-                stval: 0,
-                satp: 0,
+                csr: ControlStatusRegisters::new()
+                    .with(ControlRegisterName::Mhartid, id)
+                    .with(
+                        ControlRegisterName::Misa,
+                        Misa::default()
+                            .with_xlen(64)
+                            .with_extension(ISAExtensions::I)
+                            .with_extension(ISAExtensions::M)
+                            .with_extension(ISAExtensions::A)
+                            .with_extension(ISAExtensions::C)
+                            .register(),
+                    ),
             },
         })
     }
 
     pub fn id(&self) -> u64 {
-        self.registers.mhartid
+        self.registers.csr.get(ControlRegisterName::Mhartid)
     }
 
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {

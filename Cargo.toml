@@ -33,5 +33,6 @@ reqwest = { version = "0.13.4", features = ["blocking"] }
 flate2 = "1.1.9"
 tar = "0.4.45"
 walkdir = "2.5.0"
+strum = { version = "0.28", features = ["derive"] }
 emulator = { path = "crates/emulator" }
 xtask = { path = "crates/xtask" }
