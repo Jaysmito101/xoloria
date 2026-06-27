@@ -41,7 +41,7 @@ impl ControlStatusRegisters {
         self
     }
 
-    pub fn get(&self, name: ControlRegisterName, pric) -> Register {
+    pub fn get(&self, name: ControlRegisterName, privilage: PrivilageMode) -> Register {
         self.regs[name as usize]
     }
 }
@@ -99,8 +99,8 @@ impl Display for HartRegisters {
                 f,
                 "    {}: {:#x} ({})",
                 name,
-                self.csr.get(name),
-                self.csr.get(name)
+                self.csr.get(name, PrivilageMode::Machine),
+                self.csr.get(name, PrivilageMode::Machine)
             )?;
         }
         writeln!(f, "}}")?;
@@ -123,9 +123,9 @@ impl HartRegisters {
         &self.x
     }
 
-    pub fn csrs(&self) -> Vec<(ControlRegisterName, Register)> {
+    pub fn csrs(&self, privilage_mode: PrivilageMode) -> Vec<(ControlRegisterName, Register)> {
         ControlRegisterName::iter()
-            .map(|name| (name, self.csr.get(name)))
+            .map(|name| (name, self.csr.get(name, privilage_mode)))
             .collect()
     }
 }
@@ -174,7 +174,9 @@ impl Hart {
     }
 
     pub fn id(&self) -> u64 {
-        self.registers.csr.get(ControlRegisterName::Mhartid)
+        self.registers
+            .csr
+            .get(ControlRegisterName::Mhartid, self.privilage_mode)
     }
 
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {

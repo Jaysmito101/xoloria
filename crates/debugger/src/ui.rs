@@ -1,5 +1,8 @@
 use crate::disassembly::{DisasmEntry, JumpTarget};
-use emulator::registers::{ControlRegisterName, GeneralRegisterName};
+use emulator::{
+    PrivilageMode,
+    registers::{ControlRegisterName, GeneralRegisterName},
+};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -15,7 +18,10 @@ use crate::ui_state::DisasmTab;
 impl Debugger {
     pub fn render(&mut self, frame: &mut Frame) {
         if let Some(bg) = self.theme.bg {
-            frame.render_widget(ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(bg)), frame.area());
+            frame.render_widget(
+                ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(bg)),
+                frame.area(),
+            );
         }
         match self.screen {
             Screen::Setup => self.render_setup(frame),
@@ -459,7 +465,7 @@ impl Debugger {
         let regs = machine.harts[self.ui.selected_hart].registers();
         let panel_width = area.width.saturating_sub(2) as usize;
 
-        let all_csrs: Vec<(ControlRegisterName, u64)> = regs.csrs();
+        let all_csrs: Vec<(ControlRegisterName, u64)> = regs.csrs(PrivilageMode::Machine);
 
         let name_col = 10usize;
         let hex_col = 20usize;
@@ -1120,7 +1126,11 @@ impl Debugger {
                 Style::default().fg(self.theme.dim)
             };
 
-            let bg_style = if let Some(c) = if is_cursor { self.theme.selection_bg } else { None } {
+            let bg_style = if let Some(c) = if is_cursor {
+                self.theme.selection_bg
+            } else {
+                None
+            } {
                 Style::default().bg(c)
             } else {
                 Style::default()
@@ -1163,7 +1173,10 @@ impl Debugger {
             } else {
                 self.theme.fg
             };
-            let arrow_span = Span::styled(arrow_prefix, Style::default().fg(arrow_color).patch(bg_style));
+            let arrow_span = Span::styled(
+                arrow_prefix,
+                Style::default().fg(arrow_color).patch(bg_style),
+            );
 
             let mut spans = vec![
                 marker,
@@ -1240,7 +1253,9 @@ impl Debugger {
             {
                 spans.push(Span::styled(
                     format!(" @ {}", loc),
-                    Style::default().fg(Color::Rgb(130, 130, 180)).patch(bg_style),
+                    Style::default()
+                        .fg(Color::Rgb(130, 130, 180))
+                        .patch(bg_style),
                 ));
             }
 
@@ -2241,11 +2256,11 @@ impl Debugger {
             } else {
                 self.theme.fg
             }));
-            
+
         if let Some(bg) = self.theme.panel_bg {
             block = block.bg(bg);
         }
-        
+
         block
     }
 
