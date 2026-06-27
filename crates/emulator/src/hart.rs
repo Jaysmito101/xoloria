@@ -44,6 +44,10 @@ impl ControlStatusRegisters {
     pub fn get(&self, name: ControlRegisterName, privilage: PrivilageMode) -> Register {
         self.regs[name as usize]
     }
+
+    pub fn write(&mut self, name: ControlRegisterName, value: Register, privilage: PrivilageMode) {
+        self.regs[name as usize] = value;
+    }
 }
 
 #[derive(Debug)]
