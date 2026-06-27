@@ -54,27 +54,6 @@ pub struct HartRegisters {
 
     pub(crate) load_reservation_valid: bool,
     pub(crate) load_reservation_address: Register,
-    // pub(crate) mhartid: Register, // hardware thread id
-
-    // pub(crate) misa: Register, // machine ISA and extensions
-
-    // pub(crate) mstatus: Register, // machine status (interrupt enables, previous privilage mode)
-    // pub(crate) medeleg: Register, // machine exception delegation
-    // pub(crate) mideleg: Register, // machine interrupt deligation
-    // pub(crate) mie: Register,     // machine interrupt enable mask
-    // pub(crate) mtvec: Register,   // machine trap vector base address
-    // pub(crate) mscratch: Register, // machine scratch register
-    // pub(crate) mepc: Register,    // maching exception program counter
-    // pub(crate) mcause: Register,  // machine trap cause
-    // pub(crate) mtval: Register,   // machine bad address or instruction
-    // pub(crate) mip: Register,     // machine interrupt pending
-
-    // pub(crate) stvec: Register,    // supervisor trap vector base address
-    // pub(crate) sscratch: Register, // supervisor scratch register
-    // pub(crate) sepc: Register,     // supervisor exception program counter
-    // pub(crate) scause: Register,   // supervisor trap cause
-    // pub(crate) stval: Register,    // supervisor bad address or instruction
-    // pub(crate) satp: Register,     // supervisor address translation and protection
 }
 
 impl Display for HartRegisters {
