@@ -23,10 +23,16 @@ impl ControlStatusRegisters {
         name: ControlRegisterName,
         privilage: PrivilageMode,
     ) -> RegisterResult<Register> {
+        use ControlRegisterName::*;
+
+        if privilage < name.privilage_level() {
+            return Err(RegisterError::UnprivilegedAccess(name, privilage));
+        }
+
         match name {
+            Mie => Ok(self.regs[name as usize]),
             _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
         }
-        // Ok(self.regs[name as usize])
     }
 
     pub fn write(
@@ -35,10 +41,23 @@ impl ControlStatusRegisters {
         value: Register,
         privilage: PrivilageMode,
     ) -> RegisterResult<()> {
+        use ControlRegisterName::*;
+
+        if privilage < name.privilage_level() {
+            return Err(RegisterError::UnprivilegedAccess(name, privilage));
+        }
+
+        if name.is_read_only() {
+            return Err(RegisterError::InvalidCSRWrite(name, value, privilage));
+        }
+
         match name {
+            Mie => {
+                self.regs[name as usize] = value;
+                Ok(())
+            }
             _ => Err(RegisterError::InvalidCSRWrite(name, value, privilage)),
         }
-        // self.regs[name as usize] = value;
     }
 }
 
