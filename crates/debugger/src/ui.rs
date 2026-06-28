@@ -217,9 +217,18 @@ impl Debugger {
             "",
             "=== Execution ===",
             " c : Continue (Running mode)",
-            " p : Pause (Debug mode)",
-            " F11 / Space : Step Instruction",
+            " p : Pause (Debug mode) / Pin register (Registers panel)",
+            " F11 / Space : Step Instruction / Toggle reg watchpoint (Registers)",
             " x : Stalled mode",
+            "",
+            "=== Registers ===",
+            " / : Search/filter registers by name or value",
+            " p : Pin/unpin register at cursor (stays at top)",
+            " Space : Toggle break-on-change for register at cursor",
+            " j / k : Navigate register list",
+            " Tab : Switch GPR / CSR tab",
+            " :pin <reg> : Pin/unpin register by name",
+            " :regwatch <reg> : Toggle register watchpoint by name",
             "",
             "=== Disassembly ===",
             " b : Toggle breakpoint at cursor",
@@ -298,57 +307,274 @@ impl Debugger {
         frame.render_widget(tabs, area);
     }
 
-    fn render_registers(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
+    fn render_register_list(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        _focused: bool,
+        is_csr_tab: bool,
+    ) {
+        use crate::state::RegisterIdentifier;
+        use emulator::registers::{ControlRegisterName, GeneralRegisterName};
+        use strum::IntoEnumIterator;
+
         let Some(machine) = self.machine.as_ref() else {
             return;
         };
         let regs = machine.harts[self.ui.selected_hart].registers();
+        let search = if self.ui.input_mode == InputMode::SearchRegisters {
+            self.ui.input_buffer().to_lowercase()
+        } else {
+            self.ui.registers.search_query.to_lowercase()
+        };
+        let pinned_set: Vec<RegisterIdentifier> = self.ui.registers.pinned.clone();
+        let watch_set: Vec<RegisterIdentifier> = self.ui.registers.break_on_change.clone();
 
-        let mut all_rows: Vec<Row> = Vec::with_capacity(33);
+        let (inner, is_searching) = if self.ui.input_mode == InputMode::SearchRegisters {
+            let splits = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(3), Constraint::Length(1)])
+                .split(area);
 
-        all_rows.push(Row::new(vec![
-            Cell::from(Span::styled(
-                "pc",
-                Style::default().fg(self.theme.highlight),
-            )),
-            Cell::from(Span::styled(
-                format!("{:#018x}", regs.pc()),
-                Style::default().fg(Color::White),
-            )),
-            Cell::from(Span::styled(
-                format!("{}", regs.pc()),
-                Style::default().fg(self.theme.dim),
-            )),
-        ]));
-
-        for (i, &val) in regs.x().iter().enumerate() {
-            let name = GeneralRegisterName::try_from(i as u8)
-                .map(|n| format!("{}", n))
-                .unwrap_or_else(|_| format!("x{}", i));
-            let nz = val != 0;
-            all_rows.push(Row::new(vec![
-                Cell::from(Span::styled(
-                    name,
-                    Style::default().fg(if nz {
-                        self.theme.accent
-                    } else {
-                        self.theme.dim
-                    }),
-                )),
-                Cell::from(Span::styled(
-                    format!("{:#018x}", val),
-                    Style::default().fg(if nz { Color::White } else { self.theme.dim }),
-                )),
-                Cell::from(Span::styled(
-                    format!("{}", val as i64),
+            let mut spans = vec![Span::styled(
+                " Search: ",
+                Style::default().fg(self.theme.accent),
+            )];
+            spans.extend(
+                self.render_input_spans(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                    self.theme.accent,
+                ),
+            );
+            if !self.ui.registers.search_query.is_empty() {
+                spans.push(Span::styled(
+                    format!(" (active: \"{}\")", self.ui.registers.search_query),
                     Style::default().fg(self.theme.dim),
-                )),
-            ]));
+                ));
+            }
+            let input_line = Line::from(spans);
+            frame.render_widget(
+                Paragraph::new(input_line).style(Style::default().bg(Color::Rgb(40, 40, 60))),
+                splits[1],
+            );
+            (splits[0], true)
+        } else if !self.ui.registers.search_query.is_empty() {
+            let splits = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(3), Constraint::Length(1)])
+                .split(area);
+
+            let indicator = Line::from(vec![
+                Span::styled(" 🔍 ", Style::default().fg(self.theme.accent)),
+                Span::styled(
+                    format!("\"{}\"", self.ui.registers.search_query),
+                    Style::default().fg(self.theme.dim),
+                ),
+                Span::styled(
+                    " (/ to change, Esc to clear)",
+                    Style::default().fg(self.theme.dim),
+                ),
+            ]);
+            frame.render_widget(Paragraph::new(indicator), splits[1]);
+            (splits[0], false)
+        } else {
+            (area, false)
+        };
+
+        struct RegEntry {
+            ident: RegisterIdentifier,
+            val: u64,
+            is_pinned: bool,
+            is_watched: bool,
         }
 
-        let visible_height = area.height.saturating_sub(3) as usize;
+        let is_pinned = |ident: &RegisterIdentifier| -> bool { pinned_set.contains(ident) };
+        let is_watched = |ident: &RegisterIdentifier| -> bool { watch_set.contains(ident) };
+
+        let matches_search = |ident: &RegisterIdentifier, val: u64| -> bool {
+            if search.is_empty() {
+                return true;
+            }
+            let name_lower = ident.to_string();
+            let hex_val = format!("{:#018x}", val);
+            name_lower.contains(&search) || hex_val.contains(&search)
+        };
+
+        let mut entries: Vec<RegEntry> = Vec::with_capacity(33);
+
+        for pinned_ident in &pinned_set {
+            let is_csr = matches!(pinned_ident, RegisterIdentifier::Csr(_));
+            if is_csr != is_csr_tab {
+                continue;
+            }
+            let val = match pinned_ident {
+                RegisterIdentifier::Pc => regs.pc(),
+                RegisterIdentifier::Gpr(g) => regs.x()[*g as usize],
+                RegisterIdentifier::Csr(c) => regs.csr().read(*c, emulator::PrivilageMode::Machine),
+            };
+            entries.push(RegEntry {
+                ident: pinned_ident.clone(),
+                val,
+                is_pinned: true,
+                is_watched: is_watched(pinned_ident),
+            });
+        }
+
+        let had_pinned = !entries.is_empty();
+
+        if !is_csr_tab {
+            let pc_ident = RegisterIdentifier::Pc;
+            if !is_pinned(&pc_ident) {
+                entries.push(RegEntry {
+                    ident: pc_ident.clone(),
+                    val: regs.pc(),
+                    is_pinned: false,
+                    is_watched: is_watched(&pc_ident),
+                });
+            }
+
+            for gpr in GeneralRegisterName::iter() {
+                let ident = RegisterIdentifier::Gpr(gpr);
+                let val = regs.x()[gpr as usize];
+                if is_pinned(&ident) {
+                    continue;
+                }
+                entries.push(RegEntry {
+                    ident: ident.clone(),
+                    val,
+                    is_pinned: false,
+                    is_watched: is_watched(&ident),
+                });
+            }
+        } else {
+            for csr in ControlRegisterName::iter() {
+                let ident = RegisterIdentifier::Csr(csr);
+                let val = regs.csr().read(*c, emulator::PrivilageMode::Machine);
+                if is_pinned(&ident) {
+                    continue;
+                }
+                entries.push(RegEntry {
+                    ident: ident.clone(),
+                    val,
+                    is_pinned: false,
+                    is_watched: is_watched(&ident),
+                });
+            }
+        }
+
+        let max_cursor = entries.len().saturating_sub(1);
+        self.ui.registers.cursor = self.ui.registers.cursor.min(max_cursor);
+
+        let mut all_rows: Vec<Row> = Vec::with_capacity(entries.len() + 1);
+        let cursor = self.ui.registers.cursor;
+
+        for (idx, entry) in entries.iter().enumerate() {
+            if had_pinned && !entry.is_pinned && idx > 0 && entries[idx - 1].is_pinned {
+                all_rows.push(Row::new(vec![
+                    Cell::from(Span::styled("─", Style::default().fg(self.theme.dim))),
+                    Cell::from(Span::styled("", Style::default())),
+                    Cell::from(Span::styled("", Style::default())),
+                ]));
+            }
+
+            let is_cursor = _focused && idx == cursor && !is_searching;
+            let nz = entry.val != 0;
+
+            let bg_style = if is_cursor {
+                if let Some(c) = self.theme.selection_bg {
+                    Style::default().bg(c)
+                } else {
+                    Style::default().bg(Color::Rgb(60, 60, 80))
+                }
+            } else {
+                Style::default()
+            };
+
+            let mut markers = String::new();
+            if entry.is_watched {
+                markers.push_str("[w]");
+            }
+
+            let is_match = !search.is_empty() && matches_search(&entry.ident, entry.val);
+            let name_str = entry.ident.to_string();
+            let (name_prefix, name_color) = if is_match {
+                if entry.is_pinned {
+                    ("* ", Color::Yellow)
+                } else {
+                    ("  ", Color::Yellow)
+                }
+            } else if entry.is_pinned {
+                ("* ", self.theme.highlight)
+            } else if nz {
+                ("  ", self.theme.accent)
+            } else {
+                ("  ", self.theme.dim)
+            };
+
+            let name_display = format!("{}{}", name_prefix, name_str);
+
+            let bin_col_width = inner.width.saturating_sub(4 + 10 + 20 + 10 + 5) as usize; // Roughly remaining space
+            let bin = format_binary_grouped(entry.val);
+            let bin_display = if bin.len() > bin_col_width && bin_col_width > 3 {
+                format!("...{}", &bin[bin.len() - (bin_col_width - 1)..])
+            } else {
+                bin
+            };
+
+            all_rows.push(
+                Row::new(vec![
+                    Cell::from(Span::styled(
+                        markers,
+                        Style::default()
+                            .fg(if entry.is_watched {
+                                Color::Red
+                            } else {
+                                self.theme.accent
+                            })
+                            .patch(bg_style),
+                    )),
+                    Cell::from(Span::styled(
+                        name_display,
+                        Style::default().fg(name_color).patch(bg_style),
+                    )),
+                    Cell::from(Span::styled(
+                        format!("{:#018x}", entry.val),
+                        Style::default()
+                            .fg(if nz { Color::White } else { self.theme.dim })
+                            .patch(bg_style),
+                    )),
+                    Cell::from(Span::styled(
+                        format!("{}", entry.val as i64),
+                        Style::default().fg(self.theme.dim).patch(bg_style),
+                    )),
+                    Cell::from(Span::styled(
+                        bin_display,
+                        Style::default()
+                            .fg(if nz {
+                                self.theme.accent
+                            } else {
+                                self.theme.dim
+                            })
+                            .patch(bg_style),
+                    )),
+                ])
+                .style(bg_style),
+            );
+        }
+
+        let visible_height = inner.height.saturating_sub(3) as usize;
         let max_scroll = all_rows.len().saturating_sub(visible_height);
-        let scroll = self.ui.reg_scroll.min(max_scroll);
+
+        let scroll = if is_csr_tab {
+            self.ui.csr_scroll = self.ui.csr_scroll.min(max_scroll);
+            self.ui.csr_scroll
+        } else {
+            self.ui.reg_scroll = self.ui.reg_scroll.min(max_scroll);
+            self.ui.reg_scroll
+        };
+
         let visible_rows: Vec<Row> = all_rows
             .into_iter()
             .skip(scroll)
@@ -358,19 +584,21 @@ impl Debugger {
         let table = Table::new(
             visible_rows,
             [
-                Constraint::Length(10),
+                Constraint::Length(4),
+                Constraint::Length(12),
                 Constraint::Length(20),
-                Constraint::Min(10),
+                Constraint::Length(15),
+                Constraint::Min(12),
             ],
         )
         .header(
-            Row::new(vec!["Name", "Hex", "Decimal"]).style(
+            Row::new(vec!["", "Name", "Hex", "Decimal", "Binary"]).style(
                 Style::default()
                     .fg(self.theme.dim)
                     .add_modifier(Modifier::BOLD),
             ),
         );
-        frame.render_widget(table, area);
+        frame.render_widget(table, inner);
     }
 
     fn render_tabbed_panel(
@@ -440,97 +668,32 @@ impl Debugger {
             crate::ui_state::RegistersTab::Csr => 1,
         };
 
+        let mut title = "Registers".to_string();
+        let pin_count = self.ui.registers.pinned.len();
+        let watch_count = self.ui.registers.break_on_change.len();
+        if pin_count > 0 || watch_count > 0 {
+            let mut parts = Vec::new();
+            if pin_count > 0 {
+                parts.push(format!("{} pin", pin_count));
+            }
+            if watch_count > 0 {
+                parts.push(format!("{} watch", watch_count));
+            }
+            title = format!("Registers ({})", parts.join(", "));
+        }
+
         if let Some(content_area) = self.render_tabbed_panel(
             frame,
             area,
             Panel::Registers,
-            "Registers",
+            &title,
             &["GPR", "CSR"],
             active_tab,
             focused,
         ) {
-            match self.ui.registers_tab {
-                crate::ui_state::RegistersTab::Csr => self.render_csr(frame, content_area, focused),
-                crate::ui_state::RegistersTab::Gpr => {
-                    self.render_registers(frame, content_area, focused)
-                }
-            }
+            let is_csr_tab = active_tab == 1;
+            self.render_register_list(frame, content_area, focused, is_csr_tab);
         }
-    }
-
-    fn render_csr(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {
-        let Some(machine) = self.machine.as_ref() else {
-            return;
-        };
-        let regs = machine.harts[self.ui.selected_hart].registers();
-        let panel_width = area.width.saturating_sub(2) as usize;
-
-        let all_csrs: Vec<(ControlRegisterName, u64)> = regs.csrs(PrivilageMode::Machine);
-
-        let name_col = 10usize;
-        let hex_col = 20usize;
-        let bin_max = panel_width.saturating_sub(name_col + hex_col + 6);
-
-        let all_rows: Vec<Row> = all_csrs
-            .iter()
-            .map(|(name, val)| {
-                let nz = *val != 0;
-                let bin = format_binary_grouped(*val);
-                let bin_display = if bin.len() > bin_max && bin_max > 3 {
-                    format!("...{}", &bin[bin.len() - (bin_max - 1)..])
-                } else {
-                    bin
-                };
-                Row::new(vec![
-                    Cell::from(Span::styled(
-                        format!("{}", name),
-                        Style::default().fg(if nz {
-                            self.theme.highlight
-                        } else {
-                            self.theme.dim
-                        }),
-                    )),
-                    Cell::from(Span::styled(
-                        format!("{:#018x}", val),
-                        Style::default().fg(if nz { Color::White } else { self.theme.dim }),
-                    )),
-                    Cell::from(Span::styled(
-                        bin_display,
-                        Style::default().fg(if nz {
-                            self.theme.accent
-                        } else {
-                            self.theme.dim
-                        }),
-                    )),
-                ])
-            })
-            .collect();
-
-        let visible_height = area.height.saturating_sub(3) as usize;
-        let max_scroll = all_rows.len().saturating_sub(visible_height);
-        let scroll = self.ui.csr_scroll.min(max_scroll);
-        let visible_rows: Vec<Row> = all_rows
-            .into_iter()
-            .skip(scroll)
-            .take(visible_height)
-            .collect();
-
-        let table = Table::new(
-            visible_rows,
-            [
-                Constraint::Length(name_col as u16),
-                Constraint::Length(hex_col as u16),
-                Constraint::Min(12),
-            ],
-        )
-        .header(
-            Row::new(vec!["Register", "Hex", "Binary"]).style(
-                Style::default()
-                    .fg(self.theme.dim)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        );
-        frame.render_widget(table, area);
     }
 
     fn render_watch_list(&mut self, frame: &mut Frame, area: Rect, _focused: bool) {

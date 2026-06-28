@@ -3,9 +3,11 @@ use std::sync::{Arc, Mutex};
 
 use emulator::instructions::Instruction;
 use emulator::{BusIO, Machine, MachineBuilder};
+use strum::IntoEnumIterator;
 
 use crate::debug_symbols::DebugSymbols;
 use crate::disassembly::DisasmCache;
+use crate::state::RegisterIdentifier;
 use crate::ui_state::UiState;
 use crate::{stack::StackAnalyzer, state::*};
 
@@ -14,6 +16,7 @@ pub enum TickResult {
     Error(String),
     Breakpoint(u64),
     Watchpoint(u64, String),
+    RegisterWatchpoint(u64, RegisterIdentifier),
 }
 
 pub struct Debugger {
@@ -84,10 +87,62 @@ impl WatchPointSnapshot {
     }
 }
 
+pub(crate) struct RegWatchSnapshot {
+    has_watch: bool,
+    pre_values: Vec<(RegisterIdentifier, u64)>,
+}
+
+impl RegWatchSnapshot {
+    pub(crate) fn capture(
+        watch_names: &[crate::state::RegisterIdentifier],
+        hart: &emulator::Hart,
+    ) -> Self {
+        let mut has_watch = false;
+        let mut pre_values = Vec::new();
+        let regs = hart.registers();
+        for ident in watch_names {
+            has_watch = true;
+            let val = match ident {
+                crate::state::RegisterIdentifier::Pc => regs.pc(),
+                crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
+                crate::state::RegisterIdentifier::Csr(csr) => {
+                    regs.csr().read(*csr, emulator::PrivilageMode::Machine)
+                }
+            };
+            pre_values.push((ident.clone(), val));
+        }
+        Self {
+            has_watch,
+            pre_values,
+        }
+    }
+
+    pub(crate) fn check(self, hart: &emulator::Hart) -> Option<crate::state::RegisterIdentifier> {
+        if !self.has_watch {
+            return None;
+        }
+        let regs = hart.registers();
+        for (ident, old_val) in &self.pre_values {
+            let new_val = match ident {
+                crate::state::RegisterIdentifier::Pc => regs.pc(),
+                crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
+                crate::state::RegisterIdentifier::Csr(csr) => {
+                    regs.get_csr(*csr, emulator::PrivilageMode::Machine)
+                }
+            };
+            if new_val != *old_val {
+                return Some(ident.clone());
+            }
+        }
+        None
+    }
+}
+
 pub(crate) struct TickContext<'a> {
     inst: Option<Instruction>,
     inst_size: u64,
     snapshot: WatchPointSnapshot,
+    reg_snapshot: RegWatchSnapshot,
     pub pc: u64,
     pub sp: u64,
     hart: &'a mut emulator::Hart,
@@ -101,6 +156,7 @@ impl<'a> TickContext<'a> {
     pub(crate) fn begin(
         hart: &'a mut emulator::Hart,
         watches: &'a [crate::state::WatchItem],
+        reg_watch_names: &[RegisterIdentifier],
         bus: &'a emulator::Bus,
         analyzer: &'a mut crate::stack::StackAnalyzer,
         trace: Option<&'a mut crate::ui_state::TraceState>,
@@ -111,10 +167,12 @@ impl<'a> TickContext<'a> {
         let inst_size = if (inst_val & 0b11) != 0b11 { 2 } else { 4 };
         let inst = Instruction::try_from(inst_val).ok();
         let snapshot = WatchPointSnapshot::capture(watches, bus);
+        let reg_snapshot = RegWatchSnapshot::capture(reg_watch_names, hart);
         Self {
             inst,
             inst_size,
             snapshot,
+            reg_snapshot,
             pc,
             sp,
             hart,
@@ -125,7 +183,14 @@ impl<'a> TickContext<'a> {
         }
     }
 
-    pub(crate) fn tick(self) -> (emulator::Result<()>, Option<String>, Option<String>) {
+    pub(crate) fn tick(
+        self,
+    ) -> (
+        emulator::Result<()>,
+        Option<String>,
+        Option<String>,
+        Option<crate::state::RegisterIdentifier>,
+    ) {
         let result = self.hart.tick(self.bus);
         let mut stack_warning = None;
         if result.is_ok()
@@ -147,6 +212,7 @@ impl<'a> TickContext<'a> {
             );
         }
         let watch_hit = self.snapshot.check(self.watches, self.bus);
+        let reg_watch_hit = self.reg_snapshot.check(self.hart);
 
         if let Some(trace) = self.trace
             && trace.stack.last().map(|e| e.pc) != Some(self.pc)
@@ -157,7 +223,7 @@ impl<'a> TickContext<'a> {
             trace.forward_stack.clear();
         }
 
-        (result, watch_hit, stack_warning)
+        (result, watch_hit, stack_warning, reg_watch_hit)
     }
 }
 
@@ -320,6 +386,19 @@ impl Debugger {
                 self.disasm_cache = None;
                 true
             }
+            TickResult::RegisterWatchpoint(pc, ident) => {
+                self.hart_modes[hart_idx] = HartMode::Debug;
+                self.ui.selected_hart = hart_idx;
+                self.ui.disasm.cursor = 0;
+                self.tick_count += 1;
+                self.set_info(format!(
+                    "Register watchpoint '{}' triggered at {:#x}",
+                    ident, pc
+                ));
+                self.disasm_cache = None;
+                self.ui.panel = Panel::Registers;
+                true
+            }
             TickResult::Error(msg) => {
                 self.hart_modes[hart_idx] = HartMode::Stalled;
                 self.set_error(msg);
@@ -340,22 +419,27 @@ impl Debugger {
             None
         };
 
+        let reg_watch_names = self.ui.registers.break_on_change.clone();
         let ctx = TickContext::begin(
             hart,
             &self.watches,
+            &reg_watch_names,
             &machine.bus,
             &mut self.stack_analyzers[hart_idx],
             trace_opt,
         );
         let pc = ctx.pc;
 
-        let (result, watch_hit, stack_warning) = ctx.tick();
+        let (result, watch_hit, stack_warning, reg_watch_hit) = ctx.tick();
 
         if let Some(warn) = stack_warning {
             return TickResult::Error(warn);
         }
         if let Some(name) = watch_hit {
             return TickResult::Watchpoint(pc, name);
+        }
+        if let Some(ident) = reg_watch_hit {
+            return TickResult::RegisterWatchpoint(pc, ident);
         }
 
         match result {
@@ -423,16 +507,18 @@ impl Debugger {
                     None
                 };
 
+                let reg_watch_names = self.ui.registers.break_on_change.clone();
                 let ctx = TickContext::begin(
                     hart,
                     &self.watches,
+                    &reg_watch_names,
                     &machine.bus,
                     &mut self.stack_analyzers[i],
                     trace_opt,
                 );
                 let pc = ctx.pc;
 
-                let (result, watch_hit, stack_warning) = ctx.tick();
+                let (result, watch_hit, stack_warning, reg_watch_hit) = ctx.tick();
 
                 if let Some(warn) = stack_warning {
                     tick_results.push((i, TickResult::Error(warn)));
@@ -440,6 +526,10 @@ impl Debugger {
                 }
                 if let Some(name) = watch_hit {
                     tick_results.push((i, TickResult::Watchpoint(pc, name)));
+                    continue;
+                }
+                if let Some(ident) = reg_watch_hit {
+                    tick_results.push((i, TickResult::RegisterWatchpoint(pc, ident)));
                     continue;
                 }
 
@@ -556,6 +646,8 @@ impl Debugger {
             let ws = crate::state::Workspace {
                 breakpoints: bps,
                 watches: self.watches.clone(),
+                pinned_registers: self.ui.registers.pinned.clone(),
+                register_watchpoints: self.ui.registers.break_on_change.clone(),
                 ui: Some(self.ui.clone()),
             };
             match std::fs::write(
@@ -563,9 +655,11 @@ impl Debugger {
                 serde_json::to_string_pretty(&ws).unwrap_or_default(),
             ) {
                 Ok(_) => self.set_info(format!(
-                    "Saved workspace ({} bps, {} watches)",
+                    "Saved workspace ({} bps, {} watches, {} pinned regs, {} reg watchpoints)",
                     self.breakpoints.len(),
-                    self.watches.len()
+                    self.watches.len(),
+                    self.ui.registers.pinned.len(),
+                    self.ui.registers.break_on_change.len()
                 )),
                 Err(e) => self.set_error(format!("Failed to save workspace: {}", e)),
             }
@@ -596,9 +690,11 @@ impl Debugger {
                             }
                             self.disasm_cache = None;
                             self.set_info(format!(
-                                "Loaded workspace ({} bps, {} watches)",
+                                "Loaded workspace ({} bps, {} watches, {} pinned regs, {} reg watchpoints)",
                                 self.breakpoints.len(),
-                                self.watches.len()
+                                self.watches.len(),
+                                self.ui.registers.pinned.len(),
+                                self.ui.registers.break_on_change.len()
                             ));
                         } else {
                             self.set_error("Failed to parse workspace JSON");
@@ -621,5 +717,147 @@ impl Debugger {
         (0..len)
             .map(|offset| machine.bus.read::<u8>(addr + offset as u64).unwrap_or(0xFF))
             .collect()
+    }
+
+    pub(crate) fn get_register_at_cursor(&self) -> Option<crate::state::RegisterIdentifier> {
+        use emulator::registers::{ControlRegisterName, GeneralRegisterName};
+        match self.ui.registers_tab {
+            crate::ui_state::RegistersTab::Gpr => {
+                let mut all_idents: Vec<crate::state::RegisterIdentifier> = Vec::with_capacity(33);
+
+                for pinned_ident in &self.ui.registers.pinned {
+                    if matches!(pinned_ident, crate::state::RegisterIdentifier::Csr(_)) {
+                        continue;
+                    }
+                    all_idents.push(pinned_ident.clone());
+                }
+
+                let pc_ident = crate::state::RegisterIdentifier::Pc;
+                let pc_pinned = self.ui.registers.pinned.iter().any(|n| n == &pc_ident);
+                if !pc_pinned {
+                    all_idents.push(pc_ident);
+                }
+
+                for gpr in GeneralRegisterName::iter() {
+                    let ident = crate::state::RegisterIdentifier::Gpr(gpr);
+                    let is_pinned = self.ui.registers.pinned.iter().any(|n| n == &ident);
+                    if is_pinned {
+                        continue;
+                    }
+                    all_idents.push(ident);
+                }
+
+                let cursor = self.ui.registers.cursor;
+                all_idents.get(cursor).cloned()
+            }
+            crate::ui_state::RegistersTab::Csr => {
+                let mut all_idents: Vec<crate::state::RegisterIdentifier> = Vec::new();
+
+                for pinned_ident in &self.ui.registers.pinned {
+                    if matches!(pinned_ident, crate::state::RegisterIdentifier::Csr(_)) {
+                        all_idents.push(pinned_ident.clone());
+                    }
+                }
+
+                for csr in ControlRegisterName::iter() {
+                    let ident = crate::state::RegisterIdentifier::Csr(csr);
+                    let is_pinned = self.ui.registers.pinned.iter().any(|n| n == &ident);
+                    if is_pinned {
+                        continue;
+                    }
+                    all_idents.push(ident);
+                }
+
+                let cursor = self.ui.registers.cursor;
+                all_idents.get(cursor).cloned()
+            }
+        }
+    }
+
+    pub(crate) fn find_register_index(&self, search: &str) -> Option<usize> {
+        let Some(machine) = self.machine.as_ref() else {
+            return None;
+        };
+        let search = search.to_lowercase();
+        if search.is_empty() {
+            return None;
+        }
+
+        use emulator::registers::{ControlRegisterName, GeneralRegisterName};
+        let regs = machine.harts[self.ui.selected_hart].registers();
+
+        let matches_search = |ident: &crate::state::RegisterIdentifier, val: u64| -> bool {
+            let name_lower = ident.to_string();
+            let hex_val = format!("{:#018x}", val);
+            name_lower.contains(&search) || hex_val.contains(&search)
+        };
+
+        match self.ui.registers_tab {
+            crate::ui_state::RegistersTab::Gpr => {
+                let mut idx = 0;
+                for pinned_ident in &self.ui.registers.pinned {
+                    if matches!(pinned_ident, crate::state::RegisterIdentifier::Csr(_)) {
+                        continue;
+                    }
+                    let val = match pinned_ident {
+                        crate::state::RegisterIdentifier::Pc => regs.pc(),
+                        crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
+                        _ => 0,
+                    };
+                    if matches_search(pinned_ident, val) {
+                        return Some(idx);
+                    }
+                    idx += 1;
+                }
+
+                let pc_ident = crate::state::RegisterIdentifier::Pc;
+                let pc_pinned = self.ui.registers.pinned.iter().any(|n| n == &pc_ident);
+                if !pc_pinned {
+                    if matches_search(&pc_ident, regs.pc()) {
+                        return Some(idx);
+                    }
+                    idx += 1;
+                }
+
+                for gpr in GeneralRegisterName::iter() {
+                    let ident = crate::state::RegisterIdentifier::Gpr(gpr);
+                    let is_pinned = self.ui.registers.pinned.iter().any(|n| n == &ident);
+                    if is_pinned {
+                        continue;
+                    }
+                    if matches_search(&ident, regs.x()[gpr as usize]) {
+                        return Some(idx);
+                    }
+                    idx += 1;
+                }
+                None
+            }
+            crate::ui_state::RegistersTab::Csr => {
+                let mut idx = 0;
+                for pinned_ident in &self.ui.registers.pinned {
+                    if let crate::state::RegisterIdentifier::Csr(csr) = pinned_ident {
+                        let val = regs.csr().read(*csr, emulator::PrivilageMode::Machine);
+                        if matches_search(pinned_ident, val) {
+                            return Some(idx);
+                        }
+                        idx += 1;
+                    }
+                }
+
+                use strum::IntoEnumIterator;
+                for csr in ControlRegisterName::iter() {
+                    let ident = crate::state::RegisterIdentifier::Csr(csr);
+                    let is_pinned = self.ui.registers.pinned.iter().any(|n| n == &ident);
+                    if is_pinned {
+                        continue;
+                    }
+                    if matches_search(&ident, regs.get_csr(csr, emulator::PrivilageMode::Machine)) {
+                        return Some(idx);
+                    }
+                    idx += 1;
+                }
+                None
+            }
+        }
     }
 }
