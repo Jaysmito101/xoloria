@@ -54,37 +54,36 @@ impl MachineBuilder {
 pub struct Devices {
     pub memory: Arc<Memory>,
     pub aclint: Arc<Aclint>,
+    pub mmu: Arc<MemoryManagementUnit>,
 }
 
 pub struct Machine {
     pub bus: Arc<Bus>,
-    pub _mmu: Arc<MemoryManagementUnit>,
     pub harts: Vec<Hart>,
     pub cycle_count: u64,
     pub devices: Devices,
 }
 
-impl Machine {
-    fn setup_devices(parmas: &MachineParams, mut bus: Bus) -> Result<(Bus, Devices)> {
-        let devices = Devices {
-            memory: Arc::new(Memory::new(parmas.memory)?),
-            aclint: Arc::new(Aclint::new(parmas.harts)),
-        };
-
-        bus.map(
-            0x80000000,
-            0x80000000 + parmas.memory as Address,
-            devices.memory.clone(),
-        )?;
-        bus.map(0x02000000, 0x02000000 + 0xC0000, devices.aclint.clone())?;
-
-        Ok((bus, devices))
+impl Devices {
+    fn new(params: &MachineParams) -> Result<Self> {
+        Ok(Self {
+            memory: Arc::new(Memory::new(params.memory)?),
+            aclint: Arc::new(Aclint::new(params.harts)),
+            mmu: Arc::new(MemoryManagementUnit::new()?),
+        })
     }
 
-    fn new(params: MachineParams) -> Result<Self> {
-        let mmu = Arc::new(MemoryManagementUnit::new()?);
+    fn map_to(&self, mut bus: Bus) -> Result<Bus> {
+        bus.map(0x80000000, self.memory.size() as u64, self.memory.clone())?;
+        bus.map(0x02000000, 0xC0000, self.aclint.clone())?;
+        Ok(bus)
+    }
+}
 
-        let (bus, devices) = Self::setup_devices(&params, Bus::new()?)?;
+impl Machine {
+    fn new(params: MachineParams) -> Result<Self> {
+        let devices = Devices::new(&params)?;
+        let bus = devices.map_to(Bus::new()?)?;
 
         let harts = (0..params.harts)
             .map(|id| Hart::new(id as u64))
@@ -92,7 +91,6 @@ impl Machine {
 
         Ok(Self {
             bus: Arc::new(bus),
-            _mmu: mmu,
             harts,
             cycle_count: 0,
             devices,

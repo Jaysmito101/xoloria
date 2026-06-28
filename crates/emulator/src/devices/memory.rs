@@ -5,6 +5,7 @@ use crate::bus::{BusError, BusIO, BusResult};
 
 pub struct Memory {
     data: RwLock<Vec<u8>>,
+    size: usize,
 }
 
 impl Memory {
@@ -15,7 +16,14 @@ impl Memory {
         data.resize(size, 0);
         Ok(Self {
             data: RwLock::new(data),
+            size,
         })
+    }
+}
+
+impl Memory {
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
 

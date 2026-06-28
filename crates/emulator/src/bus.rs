@@ -110,10 +110,11 @@ impl Bus {
         self.mapping_index(location).is_some()
     }
 
-    pub fn map<D>(&mut self, start: Address, end: Address, device: D) -> Result<()>
+    pub fn map<D>(&mut self, start: Address, size: u64, device: D) -> Result<()>
     where
         D: Into<BusDevice>,
     {
+        let end = start + size;
         if start >= end {
             return crate::err!(crate::Error::InvalidParameter(format!(
                 "Invalid mapping range: {start} to {end}"
