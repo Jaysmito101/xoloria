@@ -1,13 +1,9 @@
-use std::{fmt::Display, sync::atomic::Ordering};
-
-use strum::IntoEnumIterator;
+use std::fmt::Display;
 
 use crate::{
     Bus, BusIO, Result,
-    instructions::{Instruction, InstructionResult},
-    registers::{
-        AtomicRegister, ControlRegisterName, GeneralRegisterName, ISAExtensions, Misa, Register,
-    },
+    instructions::Instruction,
+    registers::{ControlRegisterName, ControlStatusRegisters, ISAExtensions, Misa, RegisterSet},
     vm::{self, VmError, VmOutput},
 };
 
@@ -29,128 +25,9 @@ impl std::fmt::Display for PrivilageMode {
 }
 
 #[derive(Debug)]
-pub struct ControlStatusRegisters {
-    regs: [AtomicRegister; 4096],
-}
-
-impl ControlStatusRegisters {
-    pub fn new() -> Self {
-        Self {
-            regs: [const { AtomicRegister::new(0) }; 4096],
-        }
-    }
-
-    pub fn with(self, name: ControlRegisterName, value: Register) -> Self {
-        self.regs[name as usize].store(value, std::sync::atomic::Ordering::SeqCst);
-        self
-    }
-
-    pub fn read(
-        &self,
-        name: ControlRegisterName,
-        privilage: PrivilageMode,
-    ) -> InstructionResult<Register> {
-        self.rmw(name, privilage, |value| value)
-    }
-
-    pub fn write(
-        &self,
-        name: ControlRegisterName,
-        value: Register,
-        privilage: PrivilageMode,
-    ) -> InstructionResult<()> {
-        self.rmw(name, privilage, |_| value).map(|_| ())
-    }
-
-    fn rmw<Op>(
-        &self,
-        name: ControlRegisterName,
-        privilage: PrivilageMode,
-        op: Op,
-    ) -> InstructionResult<Register>
-    where
-        Op: Fn(Register) -> Register,
-    {
-        let mut old_value = self.regs[name as usize].load(Ordering::Acquire);
-        loop {
-            let new_value = op(old_value);
-            match self.regs[name as usize].compare_exchange(
-                old_value,
-                new_value,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(current) => old_value = current,
-            }
-        }
-        Ok(old_value)
-    }
-}
-
-#[derive(Debug)]
-pub struct HartRegisters {
-    pub(crate) pc: Register,
-    pub(crate) x: [Register; 32],
-    pub(crate) csr: ControlStatusRegisters,
-
-    pub(crate) load_reservation_valid: bool,
-    pub(crate) load_reservation_address: Register,
-}
-
-impl Display for HartRegisters {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Program Counter: {:#x}", self.pc)?;
-        write!(f, "General Registers: {{ ")?;
-        for (i, &value) in self.x.iter().enumerate() {
-            write!(
-                f,
-                "{}: {:#x} ({}){}",
-                GeneralRegisterName::try_from(i as u8).unwrap_or(GeneralRegisterName::Zero),
-                // i,
-                value,
-                value,
-                if i != self.x.len() - 1 { ", " } else { "" }
-            )?;
-        }
-
-        writeln!(f, "System Registers: {{")?;
-        for name in ControlRegisterName::iter() {
-            writeln!(
-                f,
-                "    {}: {:#x} ({})",
-                name,
-                self.csr
-                    .read(name, PrivilageMode::Machine)
-                    .expect("Machine mode should always be able to read CSRs"),
-                self.csr
-                    .read(name, PrivilageMode::Machine)
-                    .expect("Machine mode should always be able to read CSRs")
-            )?;
-        }
-        writeln!(f, "}}")?;
-
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
 pub struct Hart {
     pub(crate) privilage_mode: PrivilageMode,
-    pub(crate) registers: HartRegisters,
-}
-
-impl HartRegisters {
-    pub fn pc(&self) -> Register {
-        self.pc
-    }
-    pub fn x(&self) -> &[Register; 32] {
-        &self.x
-    }
-
-    pub fn csr(&self) -> &ControlStatusRegisters {
-        &self.csr
-    }
+    pub(crate) registers: RegisterSet,
 }
 
 impl Display for Hart {
@@ -162,7 +39,7 @@ impl Display for Hart {
 }
 
 impl Hart {
-    pub fn registers(&self) -> &HartRegisters {
+    pub fn registers(&self) -> &RegisterSet {
         &self.registers
     }
     pub fn privilage_mode(&self) -> PrivilageMode {
@@ -173,7 +50,7 @@ impl Hart {
         Ok(Self {
             privilage_mode: PrivilageMode::Machine,
 
-            registers: HartRegisters {
+            registers: RegisterSet {
                 pc: 0x80000000,
                 x: [0; 32],
 
