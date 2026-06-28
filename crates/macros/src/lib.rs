@@ -49,7 +49,7 @@ pub fn derive_register_bits(input: proc_macro::TokenStream) -> proc_macro::Token
     }
 
     quote::quote! {
-        impl RegisterBits for #ident {
+        impl crate::registers::RegisterBits for #ident {
             #[inline(always)]
             fn bit(&self, bit: u8) -> bool {
                 (self.0 & (1 << bit)) != 0
@@ -77,6 +77,52 @@ pub fn derive_register_bits(input: proc_macro::TokenStream) -> proc_macro::Token
             #[inline(always)]
             fn from(value: #ident) -> Self {
                 value.0
+            }
+        }
+
+        impl std::fmt::Display for #ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:#x} ({})", self.0, self.0)
+            }
+        }
+
+        impl std::fmt::Debug for #ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:#x} ({})", self.0, self.0)
+            }
+        }
+
+        impl Copy for #ident {}
+
+        impl Clone for #ident {
+            fn clone(&self) -> Self {
+                *self
+            }
+        }
+
+        impl PartialEq for #ident {
+            fn eq(&self, other: &Self) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl Eq for #ident {}
+
+        impl PartialOrd for #ident {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                self.0.partial_cmp(&other.0)
+            }
+        }
+
+        impl Ord for #ident {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.0.cmp(&other.0)
+            }
+        }
+
+        impl std::hash::Hash for #ident {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.0.hash(state);
             }
         }
     }
