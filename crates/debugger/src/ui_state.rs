@@ -68,6 +68,14 @@ pub struct HelpState {
     pub scroll: usize,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct RegistersState {
+    pub search_query: String,
+    pub pinned: Vec<RegisterIdentifier>,
+    pub break_on_change: Vec<RegisterIdentifier>,
+    pub cursor: usize,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UiState {
     pub input_mode: InputMode,
@@ -82,6 +90,7 @@ pub struct UiState {
     pub trace: TraceState,
     pub help: HelpState,
     pub search: SearchState,
+    pub registers: RegistersState,
 
     pub reg_scroll: usize,
     pub registers_tab: RegistersTab,
@@ -146,6 +155,7 @@ impl UiState {
             trace: TraceState::default(),
             help: HelpState::default(),
             search: SearchState::default(),
+            registers: RegistersState::default(),
 
             reg_scroll: 0,
             registers_tab: RegistersTab::default(),
