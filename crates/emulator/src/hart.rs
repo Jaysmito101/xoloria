@@ -41,7 +41,7 @@ impl ControlStatusRegisters {
         self
     }
 
-    pub fn get(&self, name: ControlRegisterName, privilage: PrivilageMode) -> Register {
+    pub fn read(&self, name: ControlRegisterName, privilage: PrivilageMode) -> Register {
         self.regs[name as usize]
     }
 
