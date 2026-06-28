@@ -433,6 +433,7 @@ dependencies = [
  "rustc-demangle",
  "serde",
  "serde_json",
+ "strum 0.28.0",
  "syntect",
  "tracing",
  "tracing-subscriber",
