@@ -4,6 +4,9 @@ pub use misa::{ISAExtensions, Misa};
 mod mie;
 pub use mie::Mie;
 
+mod mip;
+pub use mip::Mip;
+
 use std::sync::atomic::AtomicU64;
 
 mod names;
