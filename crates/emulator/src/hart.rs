@@ -1,11 +1,13 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::atomic::Ordering};
 
 use strum::IntoEnumIterator;
 
 use crate::{
     Bus, BusIO, Result,
-    instructions::Instruction,
-    registers::{ControlRegisterName, GeneralRegisterName, ISAExtensions, Misa, Register},
+    instructions::{Instruction, InstructionResult},
+    registers::{
+        AtomicRegister, ControlRegisterName, GeneralRegisterName, ISAExtensions, Misa, Register,
+    },
     vm::{self, VmError, VmOutput},
 };
 
@@ -28,25 +30,61 @@ impl std::fmt::Display for PrivilageMode {
 
 #[derive(Debug)]
 pub struct ControlStatusRegisters {
-    regs: [Register; 4096],
+    regs: [AtomicRegister; 4096],
 }
 
 impl ControlStatusRegisters {
     pub fn new() -> Self {
-        Self { regs: [0; 4096] }
+        Self {
+            regs: [const { AtomicRegister::new(0) }; 4096],
+        }
     }
 
-    pub fn with(mut self, name: ControlRegisterName, value: Register) -> Self {
-        self.regs[name as usize] = value;
+    pub fn with(self, name: ControlRegisterName, value: Register) -> Self {
+        self.regs[name as usize].store(value, std::sync::atomic::Ordering::SeqCst);
         self
     }
 
-    pub fn read(&self, name: ControlRegisterName, privilage: PrivilageMode) -> Register {
-        self.regs[name as usize]
+    pub fn read(
+        &self,
+        name: ControlRegisterName,
+        privilage: PrivilageMode,
+    ) -> InstructionResult<Register> {
+        self.rmw(name, privilage, |value| value)
     }
 
-    pub fn write(&mut self, name: ControlRegisterName, value: Register, privilage: PrivilageMode) {
-        self.regs[name as usize] = value;
+    pub fn write(
+        &self,
+        name: ControlRegisterName,
+        value: Register,
+        privilage: PrivilageMode,
+    ) -> InstructionResult<()> {
+        self.rmw(name, privilage, |_| value).map(|_| ())
+    }
+
+    fn rmw<Op>(
+        &self,
+        name: ControlRegisterName,
+        privilage: PrivilageMode,
+        op: Op,
+    ) -> InstructionResult<Register>
+    where
+        Op: Fn(Register) -> Register,
+    {
+        let mut old_value = self.regs[name as usize].load(Ordering::Acquire);
+        loop {
+            let new_value = op(old_value);
+            match self.regs[name as usize].compare_exchange(
+                old_value,
+                new_value,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(current) => old_value = current,
+            }
+        }
+        Ok(old_value)
     }
 }
 
@@ -82,8 +120,12 @@ impl Display for HartRegisters {
                 f,
                 "    {}: {:#x} ({})",
                 name,
-                self.csr.read(name, PrivilageMode::Machine),
-                self.csr.read(name, PrivilageMode::Machine)
+                self.csr
+                    .read(name, PrivilageMode::Machine)
+                    .expect("Machine mode should always be able to read CSRs"),
+                self.csr
+                    .read(name, PrivilageMode::Machine)
+                    .expect("Machine mode should always be able to read CSRs")
             )?;
         }
         writeln!(f, "}}")?;
@@ -158,6 +200,7 @@ impl Hart {
         self.registers
             .csr
             .read(ControlRegisterName::Mhartid, self.privilage_mode)
+            .expect("Hart ID register should always be readable")
     }
 
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
