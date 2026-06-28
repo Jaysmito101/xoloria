@@ -52,8 +52,8 @@ impl MachineBuilder {
 }
 
 pub struct Devices {
-    memory: Arc<Memory>,
-    aclint: Arc<Aclint>,
+    pub memory: Arc<Memory>,
+    pub aclint: Arc<Aclint>,
 }
 
 pub struct Machine {
