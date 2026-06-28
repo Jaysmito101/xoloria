@@ -7,6 +7,7 @@ members = [
     "crates/debugger",
     "crates/archtests",
     "crates/xtask",
+    "crates/macros",
 ]
 
 [workspace.dependencies]
@@ -34,5 +35,10 @@ flate2 = "1.1.9"
 tar = "0.4.45"
 walkdir = "2.5.0"
 strum = { version = "0.28", features = ["derive"] }
+syn = "2.0.118"
+quote = "1.0.46"
+proc-macro2 = "1.0.106"
+
 emulator = { path = "crates/emulator" }
 xtask = { path = "crates/xtask" }
+macros = { path = "crates/macros" }
