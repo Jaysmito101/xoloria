@@ -1,6 +1,9 @@
-use std::fmt::Display;
-
+use emulator::registers::{ControlRegisterName, GeneralRegisterName};
 use serde::{Deserialize, Serialize};
+use serde::{Deserializer, Serializer};
+use std::fmt::Display;
+use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HartMode {
@@ -112,6 +115,7 @@ pub enum InputMode {
     GotoAddress,
     Command,
     Search,
+    SearchRegisters,
     EditWatch(usize),
 }
 
@@ -229,10 +233,73 @@ impl WatchItem {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum RegisterIdentifier {
+    Gpr(GeneralRegisterName),
+    Csr(ControlRegisterName),
+    Pc,
+}
+
+impl Display for RegisterIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gpr(g) => write!(f, "{}", g),
+            Self::Csr(c) => write!(f, "{}", c),
+            Self::Pc => write!(f, "pc"),
+        }
+    }
+}
+
+impl FromStr for RegisterIdentifier {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.to_lowercase();
+        if lower == "pc" {
+            return Ok(Self::Pc);
+        }
+
+        for gpr in GeneralRegisterName::iter() {
+            if format!("{}", gpr).to_lowercase() == lower {
+                return Ok(Self::Gpr(gpr));
+            }
+        }
+
+        for csr in ControlRegisterName::iter() {
+            if format!("{}", csr).to_lowercase() == lower {
+                return Ok(Self::Csr(csr));
+            }
+        }
+
+        Err(format!("Unknown register: {}", s))
+    }
+}
+
+impl Serialize for RegisterIdentifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for RegisterIdentifier {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse::<RegisterIdentifier>()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Workspace {
     pub breakpoints: Vec<u64>,
     pub watches: Vec<WatchItem>,
-    #[serde(default)]
+    pub pinned_registers: Vec<RegisterIdentifier>,
+    pub register_watchpoints: Vec<RegisterIdentifier>,
     pub ui: Option<crate::ui_state::UiState>,
 }
