@@ -30,7 +30,7 @@ impl ControlStatusRegisters {
         }
 
         match name {
-            Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 => {
+            Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch => {
                 Ok(self.regs[name as usize])
             }
             _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
@@ -54,7 +54,7 @@ impl ControlStatusRegisters {
         }
 
         match name {
-            Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 => {
+            Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch => {
                 self.regs[name as usize] = value;
                 Ok(())
             }
