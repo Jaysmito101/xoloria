@@ -7,11 +7,12 @@ use crate::{
     vm::{self, VmError, VmOutput},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrivilageMode {
-    Machine = 0,
+    User = 0,
     Supervisor = 1,
-    User = 2,
+    Hypervisor = 2,
+    Machine = 3,
 }
 
 impl std::fmt::Display for PrivilageMode {
@@ -20,6 +21,7 @@ impl std::fmt::Display for PrivilageMode {
             Self::Machine => write!(f, "M"),
             Self::Supervisor => write!(f, "S"),
             Self::User => write!(f, "U"),
+            Self::Hypervisor => write!(f, "H"),
         }
     }
 }
