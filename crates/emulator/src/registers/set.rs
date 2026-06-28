@@ -13,8 +13,8 @@ pub struct RegisterSet {
     pub(crate) x: [Register; 32],
     pub(crate) csr: ControlStatusRegisters,
 
-    pub(crate) load_reservation_valid: bool,
-    pub(crate) load_reservation_address: Register,
+    pub(crate) _load_reservation_valid: bool,
+    pub(crate) _load_reservation_address: Register,
 }
 
 impl Display for RegisterSet {

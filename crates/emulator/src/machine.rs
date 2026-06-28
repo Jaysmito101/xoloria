@@ -56,8 +56,6 @@ pub struct Machine {
 }
 
 impl Machine {
-    const RTC_DIVISOR: u64 = 100;
-
     fn new(params: MachineParams) -> Result<Self> {
         let mmu = Arc::new(MemoryManagementUnit::new()?);
         let mut bus = Bus::new()?;
