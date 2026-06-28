@@ -31,3 +31,9 @@ impl BusIO for Aclint {
         todo!()
     }
 }
+
+impl From<Aclint> for crate::bus::BusDevice {
+    fn from(aclint: Aclint) -> Self {
+        Self::Aclint(aclint)
+    }
+}

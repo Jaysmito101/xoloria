@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{Address, Bus, BusIO, Hart, MemoryManagementUnit, Result, devices::Memory};
+use crate::{
+    Address, Bus, BusIO, Hart, MemoryManagementUnit, Result,
+    devices::{Aclint, Memory},
+};
 
 struct MachineParams {
     harts: usize,
@@ -62,6 +65,7 @@ impl Machine {
             0x80000000 + parmas.memory as Address,
             Memory::new(parmas.memory)?,
         )?;
+        bus.map(0x02000000, 0x02000000 + 0xC0000, Aclint::new(parmas.harts))?;
 
         Ok(bus)
     }
