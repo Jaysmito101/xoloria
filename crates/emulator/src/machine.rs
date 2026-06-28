@@ -56,15 +56,20 @@ pub struct Machine {
 }
 
 impl Machine {
-    fn new(params: MachineParams) -> Result<Self> {
-        let mmu = Arc::new(MemoryManagementUnit::new()?);
-        let mut bus = Bus::new()?;
-
+    fn setup_devices(parmas: &MachineParams, mut bus: Bus) -> Result<Bus> {
         bus.map(
             0x80000000,
-            0x80000000 + params.memory as Address,
-            Memory::new(params.memory)?,
+            0x80000000 + parmas.memory as Address,
+            Memory::new(parmas.memory)?,
         )?;
+
+        Ok(bus)
+    }
+
+    fn new(params: MachineParams) -> Result<Self> {
+        let mmu = Arc::new(MemoryManagementUnit::new()?);
+
+        let bus = Self::setup_devices(&params, Bus::new()?)?;
 
         let harts = (0..params.harts)
             .map(|id| Hart::new(id as u64))

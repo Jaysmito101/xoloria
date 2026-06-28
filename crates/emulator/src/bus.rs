@@ -1,11 +1,15 @@
 use std::ops::Range;
 
-use crate::{Result, devices::Memory};
+use crate::{
+    Result,
+    devices::{Aclint, Memory},
+};
 
 pub type Address = u64;
 
 pub enum BusDevice {
     Memory(Memory),
+    Aclint(Aclint),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -54,6 +58,7 @@ impl BusIO for BusDevice {
     {
         match self {
             BusDevice::Memory(mem) => mem.read(offset),
+            BusDevice::Aclint(aclint) => aclint.read(offset),
         }
     }
 
@@ -63,6 +68,7 @@ impl BusIO for BusDevice {
     {
         match self {
             BusDevice::Memory(mem) => mem.write(offset, data),
+            BusDevice::Aclint(aclint) => aclint.write(offset, data),
         }
     }
 
@@ -73,6 +79,7 @@ impl BusIO for BusDevice {
     {
         match self {
             BusDevice::Memory(mem) => mem.rmw(offset, f),
+            BusDevice::Aclint(aclint) => aclint.rmw(offset, f),
         }
     }
 }
