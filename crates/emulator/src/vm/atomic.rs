@@ -6,25 +6,25 @@ use crate::{
 
 #[inline]
 pub fn execute_lr(
-    rd: GeneralRegisterName,
-    rs1: GeneralRegisterName,
-    aq_rel: (bool, bool),
-    width: bool,
-    bus: &Bus,
-    hart: &mut Hart,
+    _rd: GeneralRegisterName,
+    _rs1: GeneralRegisterName,
+    _aq_rel: (bool, bool),
+    _width: bool,
+    _bus: &Bus,
+    _hart: &mut Hart,
 ) -> VmResult {
     unimplemented!();
 }
 
 #[inline]
 pub fn execute_sc(
-    rd: GeneralRegisterName,
-    rs1: GeneralRegisterName,
-    rs2: GeneralRegisterName,
-    aq_rel: (bool, bool),
-    width: bool,
-    bus: &Bus,
-    hart: &mut Hart,
+    _rd: GeneralRegisterName,
+    _rs1: GeneralRegisterName,
+    _rs2: GeneralRegisterName,
+    _aq_rel: (bool, bool),
+    _width: bool,
+    _bus: &Bus,
+    _hart: &mut Hart,
 ) -> VmResult {
     unimplemented!();
 }
