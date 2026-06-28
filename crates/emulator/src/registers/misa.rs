@@ -1,7 +1,5 @@
 use macros::RegisterBits;
 
-use crate::registers::RegisterBits;
-
 use super::Register;
 
 #[derive(RegisterBits, Default)]
