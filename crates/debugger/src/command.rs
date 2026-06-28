@@ -1,5 +1,7 @@
 use crate::app::Debugger;
-use crate::state::{DataType, HartMode, InputMode, Panel, parse_addr, parse_expr};
+use crate::state::{
+    DataType, HartMode, InputMode, Panel, RegisterIdentifier, parse_addr, parse_expr,
+};
 
 #[derive(Debug)]
 pub enum BreakpointTarget {
@@ -59,6 +61,10 @@ pub enum DebugCommand {
     GotoMemory(u64),
     DeleteWatchIndex(usize),
     ToggleWatchBreakpoint(usize),
+    PinRegister(RegisterIdentifier),
+    RegWatch(RegisterIdentifier),
+    ToggleRegisterPinAtCursor,
+    ToggleRegisterWatchAtCursor,
 }
 
 #[derive(Debug)]
@@ -196,6 +202,28 @@ impl DebugCommand {
             "reset" => Ok(Self::Reset),
             "targets" | "t" => Ok(Self::Targets),
             "help" | "?" => Ok(Self::Help),
+            "pin" => {
+                if let Some(reg) = parts.get(1) {
+                    if let Ok(ident) = reg.parse::<RegisterIdentifier>() {
+                        Ok(Self::PinRegister(ident))
+                    } else {
+                        Err(format!("Unknown register: {}", reg))
+                    }
+                } else {
+                    Err("Usage: pin <register_name>".into())
+                }
+            }
+            "regwatch" | "rw" => {
+                if let Some(reg) = parts.get(1) {
+                    if let Ok(ident) = reg.parse::<RegisterIdentifier>() {
+                        Ok(Self::RegWatch(ident))
+                    } else {
+                        Err(format!("Unknown register: {}", reg))
+                    }
+                } else {
+                    Err("Usage: regwatch <register_name>".into())
+                }
+            }
             other => Err(format!(
                 "Unknown command: {}. Type 'help' for commands",
                 other
@@ -367,7 +395,7 @@ impl Debugger {
             }
             DebugCommand::Help => {
                 self.set_info(
-                        "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | save | load | help"
+                        "bp [addr|symbol] | del <addr|all> | info bp | mem <addr> | step [n] | continue | pause | hart <n> | reset | targets | pin <reg> | regwatch <reg> | save | load | help"
                     );
             }
             DebugCommand::ReadMemory {
@@ -417,24 +445,20 @@ impl Debugger {
                 }
             },
             DebugCommand::Theme(cmd) => match cmd {
-                ThemeCommand::Reload => {
-                    match crate::theme::Theme::load() {
-                        Ok(theme) => {
-                            self.theme = theme;
-                            self.set_info("Reloaded theme");
-                        }
-                        Err(e) => self.set_error(e),
+                ThemeCommand::Reload => match crate::theme::Theme::load() {
+                    Ok(theme) => {
+                        self.theme = theme;
+                        self.set_info("Reloaded theme");
                     }
-                }
-                ThemeCommand::Set(name) => {
-                    match crate::theme::Theme::set(&name) {
-                        Ok(theme) => {
-                            self.theme = theme;
-                            self.set_info(format!("Set theme to {}", name));
-                        }
-                        Err(e) => self.set_error(e),
+                    Err(e) => self.set_error(e),
+                },
+                ThemeCommand::Set(name) => match crate::theme::Theme::set(&name) {
+                    Ok(theme) => {
+                        self.theme = theme;
+                        self.set_info(format!("Set theme to {}", name));
                     }
-                }
+                    Err(e) => self.set_error(e),
+                },
             },
             DebugCommand::SaveWorkspace => self.save_workspace(),
             DebugCommand::LoadWorkspace => self.load_workspace(),
@@ -467,6 +491,40 @@ impl Debugger {
             DebugCommand::ToggleWatchBreakpoint(idx) => {
                 if idx < self.watches.len() {
                     self.watches[idx].break_on_change = !self.watches[idx].break_on_change;
+                }
+            }
+            DebugCommand::PinRegister(ident) => {
+                if let Some(pos) = self.ui.registers.pinned.iter().position(|n| n == &ident) {
+                    self.ui.registers.pinned.remove(pos);
+                    self.set_info(format!("Unpinned register '{}'", ident));
+                } else {
+                    self.ui.registers.pinned.push(ident.clone());
+                    self.set_info(format!("Pinned register '{}'", ident));
+                }
+            }
+            DebugCommand::RegWatch(ident) => {
+                if let Some(pos) = self
+                    .ui
+                    .registers
+                    .break_on_change
+                    .iter()
+                    .position(|n| n == &ident)
+                {
+                    self.ui.registers.break_on_change.remove(pos);
+                    self.set_info(format!("Removed register watchpoint '{}'", ident));
+                } else {
+                    self.ui.registers.break_on_change.push(ident.clone());
+                    self.set_info(format!("Added register watchpoint '{}'", ident));
+                }
+            }
+            DebugCommand::ToggleRegisterPinAtCursor => {
+                if let Some(name) = self.get_register_at_cursor() {
+                    self.execute_command(DebugCommand::PinRegister(name.clone()));
+                }
+            }
+            DebugCommand::ToggleRegisterWatchAtCursor => {
+                if let Some(name) = self.get_register_at_cursor() {
+                    self.execute_command(DebugCommand::RegWatch(name));
                 }
             }
         }
