@@ -82,8 +82,8 @@ impl Display for HartRegisters {
                 f,
                 "    {}: {:#x} ({})",
                 name,
-                self.csr.get(name, PrivilageMode::Machine),
-                self.csr.get(name, PrivilageMode::Machine)
+                self.csr.read(name, PrivilageMode::Machine),
+                self.csr.read(name, PrivilageMode::Machine)
             )?;
         }
         writeln!(f, "}}")?;
@@ -157,7 +157,7 @@ impl Hart {
     pub fn id(&self) -> u64 {
         self.registers
             .csr
-            .get(ControlRegisterName::Mhartid, self.privilage_mode)
+            .read(ControlRegisterName::Mhartid, self.privilage_mode)
     }
 
     pub fn tick(&mut self, bus: &Bus) -> Result<()> {
