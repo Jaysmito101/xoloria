@@ -2,7 +2,10 @@ use std::fmt::Display;
 
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::registers::{RegisterError, RegisterResult};
+use crate::{
+    PrivilageMode,
+    registers::{RegisterError, RegisterResult},
+};
 
 #[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GeneralRegisterName {
@@ -244,5 +247,31 @@ impl TryFrom<u16> for ControlRegisterName {
             }
         }
         Err(RegisterError::UnknownControlRegister(value))
+    }
+}
+
+impl ControlRegisterName {
+    #[inline(always)]
+    pub fn privilage_level(&self) -> PrivilageMode {
+        let value = *self as u16;
+        let level = (value >> 8) & 0b11;
+        match level {
+            0b00 => PrivilageMode::User,
+            0b01 => PrivilageMode::Supervisor,
+            0b10 => PrivilageMode::Hypervisor,
+            0b11 => PrivilageMode::Machine,
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_read_only(&self) -> bool {
+        let value = *self as u16;
+        (value >> 10) & 0b11 == 0b11
+    }
+
+    #[inline(always)]
+    pub fn is_read_write(&self) -> bool {
+        !self.is_read_only()
     }
 }
