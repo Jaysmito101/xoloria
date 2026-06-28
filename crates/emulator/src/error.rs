@@ -1,6 +1,7 @@
 use crate::{
     bus::{Address, BusError},
     instructions::InstructionError,
+    registers::RegisterError,
     vm::VmError,
 };
 
@@ -12,6 +13,8 @@ pub enum Error {
     BusError(BusError),
     #[error("VM Error {0:?}")]
     VmError(VmError),
+    #[error("Register Error {0:?}")]
+    RegisterError(RegisterError),
     #[error("Allocation Failed: {0}")]
     AllocationFailed(#[from] std::collections::TryReserveError),
     #[error("Invalid Mapping for Address {0}")]
@@ -63,6 +66,15 @@ impl From<VmError> for ErrorReport {
     fn from(value: VmError) -> Self {
         Self {
             inner: Error::VmError(value),
+            trace: std::backtrace::Backtrace::capture(),
+        }
+    }
+}
+
+impl From<RegisterError> for ErrorReport {
+    fn from(value: RegisterError) -> Self {
+        Self {
+            inner: Error::RegisterError(value),
             trace: std::backtrace::Backtrace::capture(),
         }
     }
