@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::{Memory, Result};
+use crate::{Result, devices::Memory};
 
 pub type Address = u64;
 

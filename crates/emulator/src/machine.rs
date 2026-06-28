@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{Address, Bus, BusIO, Hart, Memory, MemoryManagementUnit, Result};
+use crate::{Address, Bus, BusIO, Hart, MemoryManagementUnit, Result, devices::Memory};
 
 struct MachineParams {
     harts: usize,
