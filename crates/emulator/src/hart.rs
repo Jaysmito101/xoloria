@@ -106,10 +106,8 @@ impl HartRegisters {
         &self.x
     }
 
-    pub fn csrs(&self, privilage_mode: PrivilageMode) -> Vec<(ControlRegisterName, Register)> {
-        ControlRegisterName::iter()
-            .map(|name| (name, self.csr.get(name, privilage_mode)))
-            .collect()
+    pub fn csr(&self) -> &ControlStatusRegisters {
+        &self.csr
     }
 }
 
