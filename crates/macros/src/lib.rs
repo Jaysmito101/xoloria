@@ -49,7 +49,7 @@ pub fn derive_register_bits(input: proc_macro::TokenStream) -> proc_macro::Token
     }
 
     quote::quote! {
-        impl crate::registers::RegisterBits for #ident {
+        impl #ident {
             #[inline(always)]
             fn bit(&self, bit: u8) -> bool {
                 (self.0 & (1 << bit)) != 0

@@ -30,9 +30,3 @@ pub enum RegisterError {
 }
 
 pub type RegisterResult<T> = std::result::Result<T, RegisterError>;
-
-pub trait RegisterBits {
-    fn bit(&self, bit: u8) -> bool;
-    fn bitset(&mut self, bit: u8);
-    fn bitclear(&mut self, bit: u8);
-}
