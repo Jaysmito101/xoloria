@@ -408,7 +408,10 @@ impl Debugger {
             let val = match pinned_ident {
                 RegisterIdentifier::Pc => regs.pc(),
                 RegisterIdentifier::Gpr(g) => regs.x()[*g as usize],
-                RegisterIdentifier::Csr(c) => regs.csr().read(*c, emulator::PrivilageMode::Machine),
+                RegisterIdentifier::Csr(c) => regs
+                    .csr()
+                    .read(*c, emulator::PrivilageMode::Machine)
+                    .unwrap_or_default(),
             };
             entries.push(RegEntry {
                 ident: pinned_ident.clone(),
@@ -447,7 +450,10 @@ impl Debugger {
         } else {
             for csr in ControlRegisterName::iter() {
                 let ident = RegisterIdentifier::Csr(csr);
-                let val = regs.csr().read(csr, emulator::PrivilageMode::Machine);
+                let val = regs
+                    .csr()
+                    .read(csr, emulator::PrivilageMode::Machine)
+                    .unwrap_or_default();
                 if is_pinned(&ident) {
                     continue;
                 }

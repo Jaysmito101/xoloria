@@ -105,9 +105,10 @@ impl RegWatchSnapshot {
             let val = match ident {
                 crate::state::RegisterIdentifier::Pc => regs.pc(),
                 crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
-                crate::state::RegisterIdentifier::Csr(csr) => {
-                    regs.csr().read(*csr, emulator::PrivilageMode::Machine)
-                }
+                crate::state::RegisterIdentifier::Csr(csr) => regs
+                    .csr()
+                    .read(*csr, emulator::PrivilageMode::Machine)
+                    .unwrap_or_default(),
             };
             pre_values.push((ident.clone(), val));
         }
@@ -126,9 +127,10 @@ impl RegWatchSnapshot {
             let new_val = match ident {
                 crate::state::RegisterIdentifier::Pc => regs.pc(),
                 crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
-                crate::state::RegisterIdentifier::Csr(csr) => {
-                    regs.csr().read(*csr, emulator::PrivilageMode::Machine)
-                }
+                crate::state::RegisterIdentifier::Csr(csr) => regs
+                    .csr()
+                    .read(*csr, emulator::PrivilageMode::Machine)
+                    .unwrap_or_default(),
             };
             if new_val != *old_val {
                 return Some(ident.clone());
@@ -836,7 +838,10 @@ impl Debugger {
                 let mut idx = 0;
                 for pinned_ident in &self.ui.registers.pinned {
                     if let crate::state::RegisterIdentifier::Csr(csr) = pinned_ident {
-                        let val = regs.csr().read(*csr, emulator::PrivilageMode::Machine);
+                        let val = regs
+                            .csr()
+                            .read(*csr, emulator::PrivilageMode::Machine)
+                            .unwrap_or_default();
                         if matches_search(pinned_ident, val) {
                             return Some(idx);
                         }
@@ -853,7 +858,9 @@ impl Debugger {
                     }
                     if matches_search(
                         &ident,
-                        regs.csr().read(csr, emulator::PrivilageMode::Machine),
+                        regs.csr()
+                            .read(csr, emulator::PrivilageMode::Machine)
+                            .unwrap_or_default(),
                     ) {
                         return Some(idx);
                     }
