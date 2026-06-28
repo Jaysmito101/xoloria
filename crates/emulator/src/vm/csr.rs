@@ -16,12 +16,12 @@ pub fn execute_csrrw(
             .registers
             .csr
             .read(csr, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?,
+            .map_err(VmError::RegisterError)?,
     };
     hart.registers
         .csr
         .write(csr, hart.registers.x[rs1 as usize], hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     hart.registers.x[rd as usize] = old;
     Ok(VmOutput::NextInstruction)
 }
@@ -36,14 +36,14 @@ pub fn execute_csrrs(
         .registers
         .csr
         .read(csr, hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     let new = old | hart.registers.x[rs1 as usize];
     hart.registers.x[rd as usize] = old;
     if rs1 != GeneralRegisterName::Zero {
         hart.registers
             .csr
             .write(csr, new, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?;
+            .map_err(VmError::RegisterError)?;
     }
     Ok(VmOutput::NextInstruction)
 }
@@ -58,14 +58,14 @@ pub fn execute_csrrc(
         .registers
         .csr
         .read(csr, hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     let new = old & !hart.registers.x[rs1 as usize];
     hart.registers.x[rd as usize] = old;
     if rs1 != GeneralRegisterName::Zero {
         hart.registers
             .csr
             .write(csr, new, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?;
+            .map_err(VmError::RegisterError)?;
     }
     Ok(VmOutput::NextInstruction)
 }
@@ -82,12 +82,12 @@ pub fn execute_csrrwi(
             .registers
             .csr
             .read(csr, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?,
+            .map_err(VmError::RegisterError)?,
     };
     hart.registers
         .csr
         .write(csr, imm as u64, hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     hart.registers.x[rd as usize] = old;
     Ok(VmOutput::NextInstruction)
 }
@@ -102,14 +102,14 @@ pub fn execute_csrrsi(
         .registers
         .csr
         .read(csr, hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     let new = old | (imm as u64);
     hart.registers.x[rd as usize] = old;
     if imm != 0 {
         hart.registers
             .csr
             .write(csr, new, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?;
+            .map_err(VmError::RegisterError)?;
     }
     Ok(VmOutput::NextInstruction)
 }
@@ -124,14 +124,14 @@ pub fn execute_csrrci(
         .registers
         .csr
         .read(csr, hart.privilage_mode)
-        .map_err(|e| VmError::RegisterError(e))?;
+        .map_err(VmError::RegisterError)?;
     let new = old & !imm as u64;
     hart.registers.x[rd as usize] = old;
     if imm != 0 {
         hart.registers
             .csr
             .write(csr, new, hart.privilage_mode)
-            .map_err(|e| VmError::RegisterError(e))?;
+            .map_err(VmError::RegisterError)?;
     }
     Ok(VmOutput::NextInstruction)
 }
