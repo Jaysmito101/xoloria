@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use strum::{EnumIter, IntoEnumIterator};
 
+use crate::registers::{RegisterError, RegisterResult};
+
 #[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GeneralRegisterName {
     Zero = 0,
@@ -217,30 +219,30 @@ impl Display for ControlRegisterName {
 }
 
 impl TryFrom<u8> for GeneralRegisterName {
-    type Error = ();
+    type Error = RegisterError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> RegisterResult<Self> {
         for name in GeneralRegisterName::iter() {
             if name as u8 == value {
                 return Ok(name);
             }
         }
-        Err(())
+        Err(RegisterError::UnknownGeneralRegister(value))
     }
 }
 
 impl TryFrom<u16> for ControlRegisterName {
-    type Error = ();
+    type Error = RegisterError;
 
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
+    fn try_from(value: u16) -> RegisterResult<Self> {
         if value > 4096 {
-            return Err(());
+            return Err(RegisterError::InvalidControlRegister(value));
         }
         for name in ControlRegisterName::iter() {
             if name as u16 == value {
                 return Ok(name);
             }
         }
-        Err(())
+        Err(RegisterError::UnknownControlRegister(value))
     }
 }

@@ -57,6 +57,7 @@ impl RegisterSet {
     pub fn pc(&self) -> Register {
         self.pc
     }
+
     pub fn x(&self) -> &[Register; 32] {
         &self.x
     }

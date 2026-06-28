@@ -1,7 +1,7 @@
 use crate::{
     PrivilageMode,
     instructions::InstructionResult,
-    registers::{ControlRegisterName, Register},
+    registers::{ControlRegisterName, Register, RegisterResult},
 };
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ impl ControlStatusRegisters {
         &self,
         name: ControlRegisterName,
         privilage: PrivilageMode,
-    ) -> InstructionResult<Register> {
+    ) -> RegisterResult<Register> {
         Ok(self.regs[name as usize])
     }
 
@@ -32,7 +32,7 @@ impl ControlStatusRegisters {
         name: ControlRegisterName,
         value: Register,
         privilage: PrivilageMode,
-    ) -> InstructionResult<()> {
+    ) -> RegisterResult<()> {
         self.regs[name as usize] = value;
         Ok(())
     }
