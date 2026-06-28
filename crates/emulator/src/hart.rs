@@ -67,7 +67,7 @@ impl Hart {
                             .with_extension(ISAExtensions::M)
                             .with_extension(ISAExtensions::A)
                             .with_extension(ISAExtensions::C)
-                            .register(),
+                            .into(),
                     ),
             },
         })

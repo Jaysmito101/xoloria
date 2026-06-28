@@ -1,6 +1,8 @@
+use macros::RegisterBits;
+
 use super::Register;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(RegisterBits, Default)]
 pub struct Misa(Register);
 
 pub enum ISAExtensions {
@@ -23,10 +25,6 @@ pub enum ISAExtensions {
 }
 
 impl Misa {
-    pub fn register(&self) -> Register {
-        self.0
-    }
-
     pub fn with_xlen(mut self, xlen: u8) -> Self {
         self.0 &= !(0b11 << 30);
         match xlen {
