@@ -44,8 +44,14 @@ impl Hart {
     pub fn registers(&self) -> &RegisterSet {
         &self.registers
     }
+
     pub fn privilage_mode(&self) -> PrivilageMode {
         self.privilage_mode
+    }
+
+    pub fn supervisor_ext_interrupt_pending(&self) -> bool {
+        // TODO: correctly hook this up with the PLIC
+        false
     }
 
     pub fn new(id: u64) -> Result<Self> {
