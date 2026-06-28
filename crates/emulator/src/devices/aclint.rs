@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::BusIO;
 
 pub struct Aclint {}
@@ -32,8 +34,8 @@ impl BusIO for Aclint {
     }
 }
 
-impl From<Aclint> for crate::bus::BusDevice {
-    fn from(aclint: Aclint) -> Self {
+impl From<Arc<Aclint>> for crate::bus::BusDevice {
+    fn from(aclint: Arc<Aclint>) -> Self {
         Self::Aclint(aclint)
     }
 }

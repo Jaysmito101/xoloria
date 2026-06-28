@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use crate::{
     Result,
@@ -8,8 +8,8 @@ use crate::{
 pub type Address = u64;
 
 pub enum BusDevice {
-    Memory(Memory),
-    Aclint(Aclint),
+    Memory(Arc<Memory>),
+    Aclint(Arc<Aclint>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::Result;
 use crate::bus::{BusError, BusIO, BusResult};
@@ -76,8 +76,8 @@ impl BusIO for Memory {
     }
 }
 
-impl From<Memory> for crate::bus::BusDevice {
-    fn from(val: Memory) -> Self {
+impl From<Arc<Memory>> for crate::bus::BusDevice {
+    fn from(val: Arc<Memory>) -> Self {
         crate::bus::BusDevice::Memory(val)
     }
 }
