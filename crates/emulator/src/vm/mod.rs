@@ -1,8 +1,9 @@
-use crate::{Address, bus::BusError};
+use crate::{Address, bus::BusError, registers::RegisterError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VmError {
     BusError(BusError),
+    RegisterError(RegisterError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
