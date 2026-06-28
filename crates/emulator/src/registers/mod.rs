@@ -27,6 +27,7 @@ pub enum RegisterError {
     UnknownGeneralRegister(u8),
     InvalidCSRWrite(ControlRegisterName, Register, PrivilageMode),
     InvalidCSRRead(ControlRegisterName, PrivilageMode),
+    UnprivilegedAccess(ControlRegisterName, PrivilageMode),
 }
 
 pub type RegisterResult<T> = std::result::Result<T, RegisterError>;
