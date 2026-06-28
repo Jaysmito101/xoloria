@@ -279,6 +279,10 @@ impl Hart {
                     tracing::error!("Bus error at address {:?}", bus_err);
                     return crate::err!(bus_err);
                 }
+                VmError::RegisterError(reg_err) => {
+                    tracing::error!("Register error: {:?}", reg_err);
+                    return crate::err!(reg_err);
+                }
             },
         }
 

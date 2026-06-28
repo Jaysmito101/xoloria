@@ -1,7 +1,6 @@
 use crate::{
     PrivilageMode,
-    instructions::InstructionResult,
-    registers::{ControlRegisterName, Register, RegisterResult},
+    registers::{ControlRegisterName, Register, RegisterError, RegisterResult},
 };
 
 #[derive(Debug)]
@@ -24,7 +23,10 @@ impl ControlStatusRegisters {
         name: ControlRegisterName,
         privilage: PrivilageMode,
     ) -> RegisterResult<Register> {
-        Ok(self.regs[name as usize])
+        match name {
+            _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
+        }
+        // Ok(self.regs[name as usize])
     }
 
     pub fn write(
@@ -33,8 +35,10 @@ impl ControlStatusRegisters {
         value: Register,
         privilage: PrivilageMode,
     ) -> RegisterResult<()> {
-        self.regs[name as usize] = value;
-        Ok(())
+        match name {
+            _ => Err(RegisterError::InvalidCSRWrite(name, value, privilage)),
+        }
+        // self.regs[name as usize] = value;
     }
 }
 

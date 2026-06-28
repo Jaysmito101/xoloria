@@ -12,6 +12,8 @@ pub use set::RegisterSet;
 mod csr;
 pub use csr::ControlStatusRegisters;
 
+use crate::PrivilageMode;
+
 pub type Register = u64;
 pub type AtomicRegister = AtomicU64;
 
@@ -20,6 +22,8 @@ pub enum RegisterError {
     UnknownControlRegister(u16),
     InvalidControlRegister(u16),
     UnknownGeneralRegister(u8),
+    InvalidCSRWrite(ControlRegisterName, Register, PrivilageMode),
+    InvalidCSRRead(ControlRegisterName, PrivilageMode),
 }
 
 pub type RegisterResult<T> = std::result::Result<T, RegisterError>;
