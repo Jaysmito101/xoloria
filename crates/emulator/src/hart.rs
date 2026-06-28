@@ -54,8 +54,8 @@ impl Hart {
                 pc: 0x80000000,
                 x: [0; 32],
 
-                load_reservation_valid: false,
-                load_reservation_address: 0,
+                _load_reservation_valid: false,
+                _load_reservation_address: 0,
 
                 csr: ControlStatusRegisters::new()
                     .with(ControlRegisterName::Mhartid, id)
