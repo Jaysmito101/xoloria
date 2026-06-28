@@ -30,7 +30,7 @@ impl ControlStatusRegisters {
         }
 
         match name {
-            Mie | Mip | Mideleg | Medeleg => Ok(self.regs[name as usize]),
+            Mie | Mip | Mideleg | Medeleg | Mepc => Ok(self.regs[name as usize]),
             _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
         }
     }
@@ -52,7 +52,7 @@ impl ControlStatusRegisters {
         }
 
         match name {
-            Mie | Mip | Mideleg | Medeleg => {
+            Mie | Mip | Mideleg | Medeleg | Mepc => {
                 self.regs[name as usize] = value;
                 Ok(())
             }
