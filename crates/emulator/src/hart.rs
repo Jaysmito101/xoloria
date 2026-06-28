@@ -261,12 +261,12 @@ impl Hart {
             Instruction::Sret => todo!(),
             Instruction::Mret => todo!(),
             Instruction::Wfi => todo!(),
-            Instruction::Csrrw { rd, rs1, csr } => todo!(),
-            Instruction::Csrrs { rd, rs1, csr } => todo!(),
-            Instruction::Csrrc { rd, rs1, csr } => todo!(),
-            Instruction::Csrrwi { rd, csr, imm } => todo!(),
-            Instruction::Csrrsi { rd, csr, imm } => todo!(),
-            Instruction::Csrrci { rd, csr, imm } => todo!(),
+            Instruction::Csrrw { rd, rs1, csr } => vm::csr::execute_csrrw(rd, rs1, csr, self),
+            Instruction::Csrrs { rd, rs1, csr } => vm::csr::execute_csrrs(rd, rs1, csr, self),
+            Instruction::Csrrc { rd, rs1, csr } => vm::csr::execute_csrrc(rd, rs1, csr, self),
+            Instruction::Csrrwi { rd, csr, imm } => vm::csr::execute_csrrwi(rd, csr, imm, self),
+            Instruction::Csrrsi { rd, csr, imm } => vm::csr::execute_csrrsi(rd, csr, imm, self),
+            Instruction::Csrrci { rd, csr, imm } => vm::csr::execute_csrrci(rd, csr, imm, self),
         };
 
         match vm_result {
