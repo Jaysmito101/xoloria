@@ -1,8 +1,4 @@
 use crate::disassembly::{DisasmEntry, JumpTarget};
-use emulator::{
-    PrivilageMode,
-    registers::{ControlRegisterName, GeneralRegisterName},
-};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -451,7 +447,7 @@ impl Debugger {
         } else {
             for csr in ControlRegisterName::iter() {
                 let ident = RegisterIdentifier::Csr(csr);
-                let val = regs.csr().read(*c, emulator::PrivilageMode::Machine);
+                let val = regs.csr().read(csr, emulator::PrivilageMode::Machine);
                 if is_pinned(&ident) {
                     continue;
                 }

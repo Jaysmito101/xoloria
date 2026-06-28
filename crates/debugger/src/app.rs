@@ -127,7 +127,7 @@ impl RegWatchSnapshot {
                 crate::state::RegisterIdentifier::Pc => regs.pc(),
                 crate::state::RegisterIdentifier::Gpr(gpr) => regs.x()[*gpr as usize],
                 crate::state::RegisterIdentifier::Csr(csr) => {
-                    regs.get_csr(*csr, emulator::PrivilageMode::Machine)
+                    regs.csr().read(*csr, emulator::PrivilageMode::Machine)
                 }
             };
             if new_val != *old_val {
@@ -851,7 +851,10 @@ impl Debugger {
                     if is_pinned {
                         continue;
                     }
-                    if matches_search(&ident, regs.get_csr(csr, emulator::PrivilageMode::Machine)) {
+                    if matches_search(
+                        &ident,
+                        regs.csr().read(csr, emulator::PrivilageMode::Machine),
+                    ) {
                         return Some(idx);
                     }
                     idx += 1;
