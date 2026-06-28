@@ -11,6 +11,7 @@ impl Debugger {
             InputMode::GotoMemory | InputMode::GotoAddress => self.handle_input_key(key),
             InputMode::Command => self.handle_command_key(key),
             InputMode::Search => self.handle_search_key(key),
+            InputMode::SearchRegisters => self.handle_search_registers_key(key),
             InputMode::EditWatch(idx) => self.handle_edit_watch_key(key, idx),
             InputMode::Normal => match self.screen {
                 Screen::Setup => self.handle_setup_key(key),
@@ -80,6 +81,11 @@ impl Debugger {
     fn handle_search_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
+                self.ui.search.query.clear();
+                self.ui.search.compiled_regex = None;
+                self.ui.search.is_regex_error = false;
+                self.ui.symbols.cursor = 0;
+                self.ui.symbols.scroll = 0;
                 self.ui.set_input_mode(InputMode::Normal);
             }
             KeyCode::Enter => {
@@ -123,6 +129,44 @@ impl Debugger {
             KeyCode::Down => self.ui.search_history_down(),
             KeyCode::Backspace => {
                 self.ui.input_buffer_pop();
+            }
+            KeyCode::Left => self.ui.input_cursor_left(),
+            KeyCode::Right => self.ui.input_cursor_right(),
+            KeyCode::Char(c) => self.ui.input_buffer_push(c),
+            _ => {}
+        }
+    }
+
+    fn handle_search_registers_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.ui.registers.search_query.clear();
+                self.ui.registers.cursor = 0;
+                self.ui.reg_scroll = 0;
+                self.ui.csr_scroll = 0;
+                self.ui.set_input_mode(InputMode::Normal);
+            }
+            KeyCode::Enter => {
+                let query = self.ui.input_buffer_take();
+                self.ui.set_input_mode(InputMode::Normal);
+                self.ui.registers.search_query = query.clone();
+                if let Some(idx) = self.find_register_index(&query) {
+                    self.ui.registers.cursor = idx;
+                    if self.ui.registers_tab == crate::ui_state::RegistersTab::Gpr {
+                        self.ui.reg_scroll = idx;
+                    } else {
+                        self.ui.csr_scroll = idx;
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                if self.ui.input_buffer_is_empty() {
+                    self.ui.registers.search_query.clear();
+                    self.ui.registers.cursor = 0;
+                    self.ui.set_input_mode(InputMode::Normal);
+                } else {
+                    self.ui.input_buffer_pop();
+                }
             }
             KeyCode::Left => self.ui.input_cursor_left(),
             KeyCode::Right => self.ui.input_cursor_right(),
@@ -246,7 +290,9 @@ impl Debugger {
             KeyCode::Char('q') => self.execute_command(crate::command::DebugCommand::Quit),
 
             KeyCode::F(11) | KeyCode::Char(' ') => {
-                if self.ui.panel == Panel::Memory
+                if self.ui.panel == Panel::Registers {
+                    self.execute_command(crate::command::DebugCommand::ToggleRegisterWatchAtCursor);
+                } else if self.ui.panel == Panel::Memory
                     && self.ui.memory_tab == crate::ui_state::MemoryTab::Watch
                 {
                     if !self.watches.is_empty() {
@@ -271,7 +317,13 @@ impl Debugger {
             }
 
             KeyCode::Char('c') => self.execute_command(crate::command::DebugCommand::Continue),
-            KeyCode::Char('p') => self.execute_command(crate::command::DebugCommand::Pause),
+            KeyCode::Char('p') => {
+                if self.ui.panel == Panel::Registers {
+                    self.execute_command(crate::command::DebugCommand::ToggleRegisterPinAtCursor);
+                } else {
+                    self.execute_command(crate::command::DebugCommand::Pause);
+                }
+            }
             KeyCode::Char('r') => {
                 if self.ui.panel == Panel::Symbols && self.ui.symbols.tab == SymbolsTab::CallStack {
                     let hart_idx = self.ui.selected_hart;
@@ -629,7 +681,9 @@ impl Debugger {
                 }
             }
             KeyCode::Char('/') => {
-                if self.ui.panel == Panel::Symbols
+                if self.ui.panel == Panel::Registers {
+                    self.ui.set_input_mode(InputMode::SearchRegisters);
+                } else if self.ui.panel == Panel::Symbols
                     || (self.ui.panel == Panel::Disassembly
                         && self.ui.disasm.tab == DisasmTab::Source)
                 {
@@ -720,8 +774,12 @@ impl Debugger {
             Panel::Registers => {
                 if self.ui.registers_tab == crate::ui_state::RegistersTab::Gpr {
                     self.ui.reg_scroll = (self.ui.reg_scroll as i32 + delta).max(0) as usize;
+                    self.ui.registers.cursor =
+                        (self.ui.registers.cursor as i32 + delta).max(0) as usize;
                 } else {
                     self.ui.csr_scroll = (self.ui.csr_scroll as i32 + delta).max(0) as usize;
+                    self.ui.registers.cursor =
+                        (self.ui.registers.cursor as i32 + delta).max(0) as usize;
                 }
             }
             Panel::Console => {
