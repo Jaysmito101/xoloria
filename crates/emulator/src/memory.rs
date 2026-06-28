@@ -11,7 +11,7 @@ impl Memory {
     pub fn new(size: usize) -> Result<Self> {
         let mut data = Vec::new();
         data.try_reserve_exact(size)
-            .map_err(|e| crate::Error::AllocationFailed(e))?;
+            .map_err(crate::Error::AllocationFailed)?;
         data.resize(size, 0);
         Ok(Self {
             data: RwLock::new(data),
