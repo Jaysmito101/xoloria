@@ -207,8 +207,9 @@ pub(crate) fn parse_expr(s: &str) -> Result<u64, String> {
 }
 
 pub(crate) fn parse_addr(s: &str) -> Result<u64, String> {
+    let has_0x_prefix = s.trim_start().to_lowercase().starts_with("0x");
     parse_expr(s).map(|mut addr| {
-        if addr < 0x80000000 {
+        if !has_0x_prefix && addr < 0x80000000 {
             addr |= 0x80000000;
         }
         addr
