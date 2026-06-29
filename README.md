@@ -6,4 +6,6 @@ Xoloria is a nice and compact RISC-V vm. This is made mainly for me to experimen
 
 Here are some nice screen shots of it in action to fill the README till something meaningful comes in...
 
-![Debugger](./images/debugger.png)
+![Debugger](./images/debugger1.png)
+
+![Debugger](./images/debugger2.png)
