@@ -9,7 +9,7 @@ use std::{
 use crate::{Address, BusIO, bus::BusError};
 
 pub struct Aclint {
-    _harts: usize,
+    harts: usize,
     mtime: AtomicU64,
     mtimecmp: [AtomicU64; 4096],
     mswi: [AtomicBool; 4096],
@@ -24,7 +24,7 @@ impl Aclint {
 
     pub fn new(harts: usize) -> Self {
         Self {
-            _harts: harts,
+            harts,
             mtime: AtomicU64::new(0),
             mtimecmp: [const { AtomicU64::new(0) }; 4096],
             mswi: [const { AtomicBool::new(false) }; 4096],
@@ -48,6 +48,18 @@ impl Aclint {
 
     pub fn tick(&self) {
         self.mtime.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn hart_count(&self) -> usize {
+        self.harts
+    }
+
+    pub fn mtime(&self) -> u64 {
+        self.mtime.load(Ordering::SeqCst)
+    }
+
+    pub fn mtimecmp(&self, hart: usize) -> u64 {
+        self.mtimecmp[hart].load(Ordering::SeqCst)
     }
 
     pub fn mtip(&self, hart: usize) -> bool {
