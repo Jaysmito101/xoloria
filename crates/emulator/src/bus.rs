@@ -1,5 +1,7 @@
 use std::{ops::Range, sync::Arc};
 
+use num_traits::{One, Zero};
+
 use crate::{
     Result,
     devices::{Aclint, Memory},
@@ -18,11 +20,13 @@ pub enum BusError {
     IndexOutOfBounds(Address, Range<Address>),
     AddressOverflow(Address, usize),
     LockFailed,
+    InvalidSize(Address, usize),
+    InvalidAlignment(Address, usize),
 }
 
 pub type BusResult<T> = std::result::Result<T, BusError>;
 
-pub trait BusOperable: Sized + Copy + Send + Sync {}
+pub trait BusOperable: Sized + Copy + Send + Sync + Zero + One + PartialEq {}
 
 impl BusOperable for u8 {}
 impl BusOperable for u16 {}
