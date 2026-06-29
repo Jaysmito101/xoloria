@@ -18,6 +18,7 @@ pub mod state;
 pub mod theme;
 pub mod ui;
 pub mod ui_state;
+pub mod devices_panel;
 pub mod disassembly;
 
 use app::Debugger;

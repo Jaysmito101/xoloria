@@ -76,7 +76,7 @@ pub struct RegistersState {
     pub cursor: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct UiState {
     pub input_mode: InputMode,
     input_buffer: String,
@@ -91,6 +91,7 @@ pub struct UiState {
     pub help: HelpState,
     pub search: SearchState,
     pub registers: RegistersState,
+    pub devices: DevicesPanelState,
 
     pub reg_scroll: usize,
     pub registers_tab: RegistersTab,
@@ -140,6 +141,46 @@ pub enum RegistersTab {
     Csr,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum DeviceTab {
+    #[default]
+    Memory,
+    Aclint,
+    Mmu,
+}
+
+impl DeviceTab {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Memory => Self::Aclint,
+            Self::Aclint => Self::Mmu,
+            Self::Mmu => Self::Memory,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            Self::Memory => Self::Mmu,
+            Self::Aclint => Self::Memory,
+            Self::Mmu => Self::Aclint,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Memory => "Memory",
+            Self::Aclint => "ACLINT",
+            Self::Mmu => "MMU",
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct DevicesPanelState {
+    pub tab: DeviceTab,
+    pub scroll: usize,
+}
+
 impl UiState {
     pub fn new() -> Self {
         Self {
@@ -156,6 +197,7 @@ impl UiState {
             help: HelpState::default(),
             search: SearchState::default(),
             registers: RegistersState::default(),
+            devices: DevicesPanelState::default(),
 
             reg_scroll: 0,
             registers_tab: RegistersTab::default(),

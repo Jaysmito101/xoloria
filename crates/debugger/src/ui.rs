@@ -2106,6 +2106,7 @@ impl Debugger {
         let active_tab = match self.ui.console.tab {
             ConsoleTab::Debugger => 0,
             ConsoleTab::Tracing => 1,
+            ConsoleTab::Devices => 2,
         };
 
         if let Some(content_area) = self.render_tabbed_panel(
@@ -2113,35 +2114,43 @@ impl Debugger {
             area,
             Panel::Console,
             "Console",
-            &["Debugger", "Tracing"],
+            &["Debugger", "Tracing", "Devices"],
             active_tab,
             focused,
         ) {
-            let visible_height = content_area.height as usize;
-            let lines = match self.ui.console.tab {
-                ConsoleTab::Debugger => self.format_console_logs(
-                    &self.console_log,
-                    visible_height,
-                    content_area.width as usize,
-                ),
-                ConsoleTab::Tracing => {
-                    if let Ok(logs) = self.tracing_log.lock() {
-                        self.format_console_logs(&logs, visible_height, content_area.width as usize)
+            match self.ui.console.tab {
+                ConsoleTab::Devices => {
+                    self.render_devices_content(frame, content_area);
+                }
+                _ => {
+                    let visible_height = content_area.height as usize;
+                    let lines = match self.ui.console.tab {
+                        ConsoleTab::Debugger => self.format_console_logs(
+                            &self.console_log,
+                            visible_height,
+                            content_area.width as usize,
+                        ),
+                        ConsoleTab::Tracing => {
+                            if let Ok(logs) = self.tracing_log.lock() {
+                                self.format_console_logs(&logs, visible_height, content_area.width as usize)
+                            } else {
+                                Vec::new()
+                            }
+                        }
+                        ConsoleTab::Devices => unreachable!(),
+                    };
+
+                    if lines.is_empty() {
+                        let empty = Paragraph::new(Span::styled(
+                            " No messages",
+                            Style::default().fg(self.theme.dim),
+                        ));
+                        frame.render_widget(empty, content_area);
                     } else {
-                        Vec::new()
+                        let paragraph = Paragraph::new(lines);
+                        frame.render_widget(paragraph, content_area);
                     }
                 }
-            };
-
-            if lines.is_empty() {
-                let empty = Paragraph::new(Span::styled(
-                    " No messages",
-                    Style::default().fg(self.theme.dim),
-                ));
-                frame.render_widget(empty, content_area);
-            } else {
-                let paragraph = Paragraph::new(lines);
-                frame.render_widget(paragraph, content_area);
             }
         }
     }

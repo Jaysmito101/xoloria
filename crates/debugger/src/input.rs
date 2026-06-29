@@ -406,6 +406,11 @@ impl Debugger {
                     || !self.ui.panel_focused
                 {
                     self.ui.panel = self.ui.panel.nav(Direction::Left);
+                } else if self.ui.panel == Panel::Console
+                    && self.ui.console.tab == ConsoleTab::Devices
+                {
+                    self.ui.devices.tab = self.ui.devices.tab.prev();
+                    self.ui.devices.scroll = 0;
                 }
             }
             KeyCode::Right => {
@@ -415,6 +420,11 @@ impl Debugger {
                     || !self.ui.panel_focused
                 {
                     self.ui.panel = self.ui.panel.nav(Direction::Right);
+                } else if self.ui.panel == Panel::Console
+                    && self.ui.console.tab == ConsoleTab::Devices
+                {
+                    self.ui.devices.tab = self.ui.devices.tab.next();
+                    self.ui.devices.scroll = 0;
                 }
             }
             KeyCode::Up => {
@@ -783,7 +793,11 @@ impl Debugger {
                 }
             }
             Panel::Console => {
-                self.ui.console.scroll = (self.ui.console.scroll as i32 + delta).max(0) as usize;
+                if self.ui.console.tab == crate::state::ConsoleTab::Devices {
+                    self.ui.devices.scroll = (self.ui.devices.scroll as i32 + delta).max(0) as usize;
+                } else {
+                    self.ui.console.scroll = (self.ui.console.scroll as i32 + delta).max(0) as usize;
+                }
             }
             Panel::Symbols => {
                 if self.ui.symbols.tab == SymbolsTab::Symbols {
@@ -1146,7 +1160,11 @@ impl Debugger {
                 }
             }
             Panel::Console => {
-                self.ui.console.tab = self.ui.console.tab.next();
+                if forward {
+                    self.ui.console.tab = self.ui.console.tab.next();
+                } else {
+                    self.ui.console.tab = self.ui.console.tab.prev();
+                }
             }
         }
     }

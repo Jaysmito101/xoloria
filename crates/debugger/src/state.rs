@@ -54,13 +54,23 @@ pub enum ConsoleTab {
     #[default]
     Debugger,
     Tracing,
+    Devices,
 }
 
 impl ConsoleTab {
     pub fn next(self) -> Self {
         match self {
             Self::Debugger => Self::Tracing,
+            Self::Tracing => Self::Devices,
+            Self::Devices => Self::Debugger,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            Self::Debugger => Self::Devices,
             Self::Tracing => Self::Debugger,
+            Self::Devices => Self::Tracing,
         }
     }
 }
