@@ -104,6 +104,17 @@ impl Machine {
 
     pub fn simulate(self) -> Result<()> {
         let mut threads = Vec::new();
+
+        std::thread::Builder::new()
+            .name("ACLINT".into())
+            .spawn({
+                let aclint = self.devices.aclint.clone();
+                move || loop {
+                    aclint.tick();
+                }
+            })
+            .map_err(crate::Error::ThreadSpawnFailed)?;
+
         for mut hart in self.harts {
             let bus = self.bus.clone();
             let handle = std::thread::Builder::new()

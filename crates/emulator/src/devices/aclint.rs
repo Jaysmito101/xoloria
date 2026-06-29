@@ -10,6 +10,10 @@ impl Aclint {
     }
 }
 
+impl Aclint {
+    pub fn tick(&self) {}
+}
+
 impl BusIO for Aclint {
     fn read<T>(&self, offset: crate::Address) -> crate::bus::BusResult<T>
     where

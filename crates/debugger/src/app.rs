@@ -201,9 +201,7 @@ impl<'a> TickContext<'a> {
             let next_pc = self.hart.registers().pc();
             let current_sp = self.hart.registers().x()[2];
             let mut args = [0; 8];
-            for i in 0..8 {
-                args[i] = self.hart.registers().x()[10 + i];
-            }
+            args.copy_from_slice(&self.hart.registers().x()[10..18]);
             stack_warning = self.analyzer.on_instruction_executed(
                 &i,
                 self.pc,
@@ -421,6 +419,8 @@ impl Debugger {
             None
         };
 
+        machine.devices.aclint.tick();
+
         let reg_watch_names = self.ui.registers.break_on_change.clone();
         let ctx = TickContext::begin(
             hart,
@@ -497,6 +497,8 @@ impl Debugger {
                 .collect();
 
             let mut tick_results: Vec<(usize, TickResult)> = Vec::new();
+
+            machine.devices.aclint.tick();
 
             for (i, hart) in machine.harts.iter_mut().enumerate() {
                 if !running[i] {
