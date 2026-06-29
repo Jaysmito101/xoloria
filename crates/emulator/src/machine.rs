@@ -75,7 +75,7 @@ impl Devices {
 
     fn map_to(&self, mut bus: Bus) -> Result<Bus> {
         bus.map(0x80000000, self.memory.size() as u64, self.memory.clone())?;
-        bus.map(0x02000000, 0xC0000, self.aclint.clone())?;
+        bus.map(0x02000000, self.aclint.size() as u64, self.aclint.clone())?;
         Ok(bus)
     }
 }
