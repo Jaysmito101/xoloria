@@ -7,6 +7,9 @@ pub use mie::Mie;
 mod mip;
 pub use mip::Mip;
 
+mod mtvec;
+pub use mtvec::{Mtvec, MtvecMode};
+
 use std::sync::atomic::AtomicU64;
 
 mod names;
