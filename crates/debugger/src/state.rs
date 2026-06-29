@@ -40,8 +40,9 @@ impl HartMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Panel {
+    #[default]
     Disassembly,
     Registers,
     Memory,
@@ -118,8 +119,9 @@ pub enum Screen {
     Debug,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputMode {
+    #[default]
     Normal,
     GotoMemory,
     GotoAddress,
