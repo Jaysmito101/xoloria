@@ -718,9 +718,47 @@ impl Debugger {
         let Some(machine) = self.machine.as_ref() else {
             return vec![0xFF; len];
         };
-        (0..len)
-            .map(|offset| machine.bus.read::<u8>(addr + offset as u64).unwrap_or(0xFF))
-            .collect()
+        let mut buf = vec![0xFF; len];
+        let mut i = 0;
+        while i < len {
+            let current_addr = addr + i as u64;
+            
+            if current_addr % 8 == 0 {
+                if let Ok(val) = machine.bus.read::<u64>(current_addr) {
+                    let bytes = val.to_le_bytes();
+                    let copy_len = 8.min(len - i);
+                    buf[i..i + copy_len].copy_from_slice(&bytes[..copy_len]);
+                    i += 8;
+                    continue;
+                }
+            }
+            
+            if current_addr % 4 == 0 {
+                if let Ok(val) = machine.bus.read::<u32>(current_addr) {
+                    let bytes = val.to_le_bytes();
+                    let copy_len = 4.min(len - i);
+                    buf[i..i + copy_len].copy_from_slice(&bytes[..copy_len]);
+                    i += 4;
+                    continue;
+                }
+            }
+            
+            if current_addr % 2 == 0 {
+                if let Ok(val) = machine.bus.read::<u16>(current_addr) {
+                    let bytes = val.to_le_bytes();
+                    let copy_len = 2.min(len - i);
+                    buf[i..i + copy_len].copy_from_slice(&bytes[..copy_len]);
+                    i += 2;
+                    continue;
+                }
+            }
+            
+            if let Ok(val) = machine.bus.read::<u8>(current_addr) {
+                buf[i] = val;
+            }
+            i += 1;
+        }
+        buf
     }
 
     pub(crate) fn get_register_at_cursor(&self) -> Option<crate::state::RegisterIdentifier> {

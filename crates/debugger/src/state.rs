@@ -226,11 +226,24 @@ pub struct WatchItem {
 
 impl WatchItem {
     pub fn read_value(&self, bus: &impl emulator::BusIO) -> Vec<u8> {
-        let mut data = vec![0u8; self.data_type.size_bytes() as usize];
-        for (i, b) in data.iter_mut().enumerate() {
-            *b = bus.read::<u8>(self.address + i as u64).unwrap_or(0);
+        match self.data_type {
+            DataType::U8 | DataType::I8 => {
+                let val = bus.read::<u8>(self.address).unwrap_or(0);
+                vec![val]
+            }
+            DataType::U16 | DataType::I16 => {
+                let val = bus.read::<u16>(self.address).unwrap_or(0);
+                val.to_le_bytes().to_vec()
+            }
+            DataType::U32 | DataType::I32 => {
+                let val = bus.read::<u32>(self.address).unwrap_or(0);
+                val.to_le_bytes().to_vec()
+            }
+            DataType::U64 | DataType::I64 => {
+                let val = bus.read::<u64>(self.address).unwrap_or(0);
+                val.to_le_bytes().to_vec()
+            }
         }
-        data
     }
 }
 
