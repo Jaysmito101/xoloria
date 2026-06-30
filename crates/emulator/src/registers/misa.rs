@@ -5,6 +5,7 @@ use super::Register;
 #[derive(RegisterBits, Default)]
 pub struct Misa(Register);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ISAExtensions {
     A = 0,  // Atomic extension
     B = 1,  // B extension
