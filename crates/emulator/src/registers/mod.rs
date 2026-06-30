@@ -10,6 +10,9 @@ pub use mip::Mip;
 mod mtvec;
 pub use mtvec::{Mtvec, MtvecMode};
 
+mod satp;
+pub use satp::{Satp, SatpMode};
+
 use std::sync::atomic::AtomicU64;
 
 mod names;
