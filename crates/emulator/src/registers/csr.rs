@@ -1,6 +1,6 @@
 use crate::{
     PrivilageMode,
-    registers::{ControlRegisterName, Register, RegisterError, RegisterResult},
+    registers::{ControlRegisterName, Register, RegisterError, RegisterResult, SatpMode},
 };
 
 #[derive(Debug)]
@@ -61,13 +61,16 @@ impl ControlStatusRegisters {
 
         match name {
             Satp => {
-                let mode = (value >> 60) & 0xf;
-                if mode == 0 || mode == 8 {
-                    // only allow bare and sv39 modes for now
-                    // else ignore the write
-                    self.regs[name as usize] = value;
+                let mode = crate::registers::Satp::from(value).mode();
+                match mode {
+                    SatpMode::Bare | SatpMode::Sv39 => {
+                        // only allow bare and sv39 modes for now
+                        // else ignore the write
+                        self.regs[name as usize] = value;
 
-                    // maybe a tlb flush?
+                        // maybe a tlb flush?
+                    }
+                    SatpMode::Sv48 | SatpMode::Sv57 | SatpMode::Sv64 => { /* ignore the write */ }
                 }
                 Ok(())
             }
