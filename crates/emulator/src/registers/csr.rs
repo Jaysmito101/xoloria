@@ -38,7 +38,7 @@ impl ControlStatusRegisters {
                 Ok(self.regs[name as usize])
             }
             Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch | Mtvec
-            | Sscratch => Ok(self.regs[name as usize]),
+            | Sscratch | Stvec => Ok(self.regs[name as usize]),
             _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
         }
     }
@@ -72,7 +72,7 @@ impl ControlStatusRegisters {
                 Ok(())
             }
             Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch | Mtvec
-            | Sscratch => {
+            | Sscratch | Stvec => {
                 self.regs[name as usize] = value;
                 Ok(())
             }
