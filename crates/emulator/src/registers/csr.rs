@@ -30,6 +30,13 @@ impl ControlStatusRegisters {
         }
 
         match name {
+            Satp => {
+                // TODO: implement trap on tvm
+                // if privilage == PrivilageMode::Supervisor && mstatus.tvm {
+                //     trap();
+                // }
+                Ok(self.regs[name as usize])
+            }
             Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch | Mtvec
             | Sscratch => Ok(self.regs[name as usize]),
             _ => Err(RegisterError::InvalidCSRRead(name, privilage)),
@@ -53,6 +60,17 @@ impl ControlStatusRegisters {
         }
 
         match name {
+            Satp => {
+                let mode = (value >> 60) & 0xf;
+                if mode == 0 || mode == 8 {
+                    // only allow bare and sv39 modes for now
+                    // else ignore the write
+                    self.regs[name as usize] = value;
+
+                    // maybe a tlb flush?
+                }
+                Ok(())
+            }
             Mie | Mip | Mideleg | Medeleg | Mepc | Mcause | Mtval | Mtval2 | Mscratch | Mtvec
             | Sscratch => {
                 self.regs[name as usize] = value;
