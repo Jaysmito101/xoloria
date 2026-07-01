@@ -61,6 +61,12 @@ pub fn derive_register_bits(input: proc_macro::TokenStream) -> proc_macro::Token
             }
 
             #[inline(always)]
+            fn bits(&self, bits: std::ops::Range<u8>) -> u64 {
+                let mask = ((1u64 << (bits.end - bits.start)) - 1) << bits.start;
+                (self.0 & mask) >> bits.start
+            }
+
+            #[inline(always)]
             fn bitclear(&mut self, bit: u8) {
                 self.0 &= !(1 << bit);
             }
