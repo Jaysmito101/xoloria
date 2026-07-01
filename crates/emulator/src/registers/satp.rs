@@ -1,11 +1,6 @@
-use macros::RegisterBits;
+use macros::{register, RegisterField};
 
-use crate::registers::Register;
-
-#[derive(RegisterBits)]
-pub struct Satp(Register);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, RegisterField)]
 pub enum SatpMode {
     Bare = 0,
     Sv39 = 8,
@@ -14,29 +9,10 @@ pub enum SatpMode {
     Sv64 = 11,
 }
 
-impl Satp {
-    pub const MODE: u8 = 60;
-    pub const ASID: u8 = 44;
-
-    #[inline(always)]
-    pub fn mode(&self) -> SatpMode {
-        match (self.0 >> Satp::MODE) & 0xf {
-            0 => SatpMode::Bare,
-            8 => SatpMode::Sv39,
-            9 => SatpMode::Sv48,
-            10 => SatpMode::Sv57,
-            11 => SatpMode::Sv64,
-            _ => panic!("Invalid SATP mode"),
-        }
-    }
-
-    #[inline(always)]
-    pub fn asid(&self) -> u16 {
-        ((self.0 >> Satp::ASID) & 0xffff) as u16
-    }
-
-    #[inline(always)]
-    pub fn ppn(&self) -> u64 {
-        self.0 & 0x0000_ffff_ffff_ffff
+register! {
+    pub register Satp {
+        pub mode: SatpMode = range(60..=63),
+        pub asid: u16 = range(44..=59),
+        pub ppn: u64 = range(0..=43),
     }
 }
