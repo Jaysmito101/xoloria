@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     Bus, BusIO, Result,
     instructions::Instruction,
-    registers::{ControlRegisterName, ControlStatusRegisters, ISAExtensions, Misa, RegisterSet},
+    registers::{ControlRegisterName, ControlStatusRegisters, Misa, RegisterSet, Xlen},
     vm::{self, VmError, VmOutput},
 };
 
@@ -70,11 +70,11 @@ impl Hart {
                     .with(
                         ControlRegisterName::Misa,
                         Misa::default()
-                            .with_xlen(64)
-                            .with_extension(ISAExtensions::I)
-                            .with_extension(ISAExtensions::M)
-                            .with_extension(ISAExtensions::A)
-                            .with_extension(ISAExtensions::C)
+                            .with_xlen(Xlen::Rv64)
+                            .with_i()
+                            .with_m()
+                            .with_a()
+                            .with_c()
                             .into(),
                     ),
             },
